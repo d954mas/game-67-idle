@@ -14,14 +14,13 @@ import numpy as np
 from . import bind as B
 from .colliders import round_cone_distance
 from . import body as body_maps
+from .body import RESOLUTION
 from . import model as M
 from . import sim
 from .sidecar import read
 from .sim import EDGE_WARP, classify_edges
 
 REST = "rest"
-# m: below a micron a violation is the float32 storage of the sidecar (its step near 1 m is 6e-8), not content.
-RESOLUTION = 1e-6
 LOOK_WEIGHT = 0.002
 
 
@@ -100,7 +99,8 @@ def clip_gates(data, clip, gates=("G4", "G5", "G6", "G7", "G8", "G10")):
     pose = Pose(data)
     times, matrices = pose.matrices(clip)
     name = clip[0]
-    body_points, body_faces, body_weights, complete = data.body
+    body_points, body_faces, body_weights, complete = data.body[:4]
+    rim_faces = data.body[4] if len(data.body) > 4 else None
     out = {}
     posed_body = M.skin_points(body_points, body_weights, matrices) if {"G4", "G7"} & set(gates) else None
     centres, radii = [], []
@@ -122,7 +122,8 @@ def clip_gates(data, clip, gates=("G4", "G5", "G6", "G7", "G8", "G10")):
         ref = refs[p.id]
         reach = None
         if "G4" in gates or "G7" in gates:
-            reach = [body_maps.reach_violation(ref[k], posed_body[k], body_faces, r, t_fab) for k in range(len(times))]
+            reach = [body_maps.reach_violation(ref[k], posed_body[k], body_faces, r, t_fab, rim_faces)
+                     for k in range(len(times))]
         if "G4" in gates:
             rec = out[("G4", p.id)] = _record("G4", p.id, complete)
             for k, t in enumerate(times):

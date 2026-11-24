@@ -12,7 +12,7 @@ import numpy as np
 TOOLS = Path(__file__).resolve().parents[1] / "tools"
 sys.path.insert(0, str(TOOLS))
 from garment_blob import decode, encode  # noqa: E402
-from garment_cook import cook_mesh  # noqa: E402
+from garment.cook import cook_mesh  # noqa: E402
 from garment.host import Host, Skeleton, ramp  # noqa: E402
 
 LIBRARY = None

@@ -1,6 +1,6 @@
 """The shader's render transfer in numpy: render vertices carried by the sim vertex frames the actor submits.
 
-A row of the `_GARMENT` stream (garment_binding.pack_vertex_binding_u16x4) names up to three 1-based sim vertices and
+A row of the `_GARMENT` stream (garment.bind.pack) names up to three 1-based sim vertices and
 their weights; their sum is the share of the cloth against plain skinning. Each record is the actor's 3x4
 (row 0 = current position and q.x, row 1 = rest position and q.y, row 2 = q.z, q.w): the render vertex keeps its rest
 offset from the blended rest point, turned by the blended unit quaternion, as `render/garment.glsl` does."""

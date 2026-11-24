@@ -62,7 +62,7 @@ def gate_data(outfit, data):
     clips = [(G.REST, None)] + (M.clips(outfit.clips) if outfit.clips else [])
     body = outfit.body
     return G.GateData(sidecar=data, model=str(outfit.model_path),
-                      body=(body.points, body.faces, body.weights, body.complete), shapes=G.shapes_from(colliders),
+                      body=(body.points, body.faces, body.weights, body.complete, body.rim_faces), shapes=G.shapes_from(colliders),
                       fabrics={p.id: outfit.fabrics[p.fabric] for p in outfit.pieces}, clips=clips,
                       looks=[str(p) for p in outfit.looks],
                       seats={clip: np.asarray(planes, float) for clip, planes in outfit.seats.items()})

@@ -363,31 +363,22 @@ def references(pieces, matrices):
 
 
 def g4_failing(body, pieces, clips):
-    """Per clip, (frames, vertices of all pieces): True where the reference is inside the posed skin deeper than its
-    max distance allows (gate G4: sd(ref, skin + thickness) < -r; a pin, r = 0, inside the skin at all). The side is
-    the closest skin point's interpolated normal; a closest point on a hole's rim has no known side and passes."""
-    from garment_proxy import closest_surface_points
-    from . import sim
-    rim = np.zeros(len(body.surface.points), bool)
-    rim[sim.boundary_edges(body.surface.welded).ravel()] = True
-    rim_face = rim[body.surface.welded].any(1)
-    r = np.concatenate([np.zeros(0)] + [p.r for p in pieces])
-    t = np.concatenate([np.zeros(0)] + [np.full(len(p.r), p.thickness) for p in pieces])
+    """Per clip, (frames, vertices of all pieces): True where the reference fails gate G4 (body.reach_violation, its
+    one implementation: inside the posed body deeper than its max distance allows, a pin inside it at all; a closest
+    point on a hole of an incomplete body passes)."""
+    from .body import RESOLUTION, reach_violation
     out = []
     for _, _, matrices in clips:
         refs = references(pieces, matrices)
         skin = M.skin_points(body.points, body.weights, matrices)
         fail = np.zeros(refs.shape[:2], bool)
         for f in range(len(matrices) if refs.shape[1] else 0):
-            tri = skin[f][body.faces]
-            normals = np.zeros_like(skin[f])
-            for col in range(3):
-                np.add.at(normals, body.faces[:, col], np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0]))
-            face, bary, distance = closest_surface_points(refs[f], skin[f], body.faces)
-            closest = np.einsum("nk,nkj->nj", bary, tri[face])
-            normal = np.einsum("nk,nkj->nj", bary, normals[body.faces[face]])
-            sd = np.where(np.einsum("nj,nj->n", refs[f] - closest, normal) < 0, -distance, distance)
-            fail[f] = ~rim_face[face] & np.where(r > 0, sd - t < -r, sd < 0)
+            start = 0
+            for p in pieces:
+                end = start + len(p.r)
+                fail[f, start:end] = reach_violation(refs[f, start:end], skin[f], body.faces, p.r, p.thickness,
+                                                       body.rim_faces) > RESOLUTION
+                start = end
         out.append(fail)
     return out
 

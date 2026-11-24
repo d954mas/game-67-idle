@@ -5,7 +5,9 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
-from garment_cook import BodySurface, body_maps, cook_mesh, top_influences, _tethers
+from garment.body import Body, backstop as backstop_maps
+from garment.cook import _tethers, cook_mesh
+from garment.outfit import top_influences
 
 
 POINTS = [[-0.5, 0, 0], [0.5, 0, 0], [0, 1, 0], [0, 0, 1]]
@@ -54,7 +56,11 @@ class TestCook(unittest.TestCase):
                     a, b, c, d = j * around + i, j * around + (i + 1) % around, (j + 1) * around + i, (j + 1) * around + (i + 1) % around
                     f += [(a, c, b), (b, c, d)] if sign > 0 else [(a, b, c), (b, d, c)]
             n = sign * v * [1, 0, 1] / radius
-            return BodySurface(v, np.array(f), n)
+            return Body(v, np.array(f), n, np.zeros((len(v), 0)), [], complete=True)
+
+        def body_maps(points, faces, r, body, thickness):
+            b, d, R, _ = backstop_maps(points, faces, r, body, thickness)
+            return b, np.column_stack([d, R])
 
         # A small sim patch 2 cm off the surface, facing the cylinder.
         grid = np.array([(0.12, y, z) for y in (-0.02, 0.0, 0.02) for z in (-0.02, 0.0, 0.02)])

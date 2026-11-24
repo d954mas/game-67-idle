@@ -14,66 +14,63 @@ target_link_libraries(game PRIVATE garment_cloth)
 Record the feature source and version from `feature.json` in the consuming
 game's `dependencies.json`.
 
-## Author the model
+## Author the outfit
 
-The cook reads its contract from the garment GLB. Each piece is the set of vertices whose float attribute
-`_CLOTH_PIECE` holds the piece's number (any unique positive integer; 0 or no attribute is not cloth), across every
-primitive. `_CLOTH` = 0 marks the piece's pins: they follow skinning (max distance 0) and anchor the tethers; any
-other value is free. The seam of a piece is its unlabelled side: those vertices are skinned and hold the border, so
-the labelled row next to them may move. A labelled vertex split from an unlabelled one at the same position must be
-a pin, or the render seam would open there. Skin weights reference the body's joints only. They are the cloth's
-reference, the skinned pose its motion is measured from, and are authored like the weights of any skinned garment;
-the feature does not generate them.
-
-Put the feature's `tools/` on the authoring Python path. `garment_paint.baseline_freedom` paints a `_CLOTH` map from
-a piece's geometry (the top seam band and copies of unlabelled vertices are pins); only its zeros matter to the cook.
-A rig that still lists garment joints after the body's drops them with `model.truncate_skin(len(body_joints))`, which
-refuses a vertex still weighted to a dropped joint.
-
-## Cook
-
-`garment_cook.cook_outfit` builds each piece's simulation proxy from the outer sheet of its `source_material`
-primitive, carries the pins and the weights onto it, derives the max-distance and backstop maps, and writes the
-blob. `bind_outfit` binds the render vertices of the model, or of another model wearing the same garment, to the
-proxy, and `stage_model` adds the `_GARMENT` attribute the shader reads:
+The render model labels the vertices each piece moves with the float attribute `_CLOTH_PIECE` (any unique positive
+integer; 0 or no attribute is not cloth) and skins them on the body's joints. Everything the cloth needs beyond that
+is authored in one Python script per outfit against `tools/garment` (put the feature's `tools/` on the path) and built
+into the sidecar `<model>.cloth.glb` beside the model:
 
 ```python
-from garment_cook import bind_outfit, cook_outfit, depfile_text, stage_model
+from garment.outfit import Outfit, stages
 
-piece = dict(id="coat", piece=1, source_material="cloth", outer_surface=None, budget=240,
-             max_distance=dict(rate=0.3, cap_m=0.08),
-             material=dict(density=0.24, stretch=1e-5, bend=0.4, drag=2.0, thickness=0.003, iterations=2, friction=0.4),
-             linear_inertia=0.45, angular_inertia=0.35)
-colliders = [("Hips", [-0.07, 0.9, 0], "Hips", [0.07, 0.9, 0], 0.09, 0.0)]
-blob, sheets, report = cook_outfit("coat", Glb(path), [piece], body_joints, colliders=colliders,
-                                   body_primitives=["skin", "legwear"])
-staged_path.write_bytes(stage_model(Glb(path), bind_outfit(Glb(path), sheets, body_joints)))
-depfile_path.write_text(depfile_text(blob_path, inputs))
+o = Outfit(__file__, GAME, "assets/coat.glb", body="assets/coat.body.glb", fabrics="content/fabrics.json",
+           colliders="assets/coat.cloth-colliders.json", clips="assets/clips/animations.manifest.json")
+coat = o.piece("coat", 1, "wool")
+coat.create("cloth", 240)                                       # the outer sewn sheet, reduced to 240 vertices
+coat.pin(coat.from_render(coat.render.sewn | (coat.render.height <= 0.1)))
+coat.weights_transfer(coat.render.surface(), nearest=4)
+coat.gradient(rate=0.3, cap=0.08)                               # r: 0.3 m per metre of fabric from the pins, 8 cm cap
+coat.backstop_from_body()
+coat.pin_bound(0.1)                                             # the seam's render row follows skinning exactly
+o.write()
 ```
 
 The maps follow from meaning, not from tuning against old frames:
 
-- `r = min(rate x geodesic distance to the pins, cap_m)`: 0 on the pins, growing along the fabric to the hem value
-  the garment allows (a pencil skirt a few centimetres, a loose hem more).
-- the body direction `b` points from each proxy vertex to the closest point of the `body_primitives` surface at rest,
-  smoothed over the proxy; `d` is that distance less the thickness; `R` is the body radius behind the vertex, 1 over
-  the largest principal curvature at the closest point, fitted to the body vertices of the smallest geodesic disc
-  that determines a quadric, among those whose normals face the same side. A backstop is a local model of the body
-  behind the vertex, so the disc does not grow with `r`: one wider than a limb wraps past its side. A flat or concave
-  body gives the plane form `R = +inf`; no determining disc, or `d >= r`, turns the backstop off. `backstop=False` on a piece, or no body primitives, turns it off too.
-- tethers allow the path length to the nearest pin times `1 + max_edge_strain` of the fabric.
+- `r` (max distance) is 0 on the pins and grows along the fabric to the hem value the garment allows;
+  `gradient(start=, base=)` keeps a piece tight to a line and opens it below.
+- `b` points from each sim vertex to the closest point of the declared body at rest, smoothed over the sim mesh; `d`
+  is that distance less the thickness; `R` is the body radius behind the vertex (the plane form `+inf` where the body
+  is flat or concave; 0, off, where `d >= r` or the body has a hole there).
+- weights: the render weights (`weights_transfer`), or the body's under the cloth averaged within `r`
+  (`weights_follow_body`); `Outfit.layer` makes an outer piece and the piece under it ride one skinning.
 
-Colliders are the outfit's one set of round cones in rest model space; the cook stores them as spheres on their
-joints and the cones that join them, shared by every piece. The report lists, per piece, the proxy vertices that lie
-inside a shape at rest and those a shape holds deeper than their `r`. The cook refuses a lost label, a label no recipe
-piece names, `_CLOTH` off a piece, a free vertex split from an unlabelled one, and weights outside the body rig;
-`garment_blob.encode` checks every value the solver trusts and names the outfit, piece and field it rejects. Add the
-blob to the pack with `nt_builder_add_blob`; tools read it back with `garment_blob.decode`.
+`python tools/garment/check.py <script>` rebuilds the sidecar in scratch, compares its bytes with the committed one and
+runs the gates (C.3 of the scheme); `garment.cards` draws what the script authored.
 
-`cook_mesh` remains the low-level step for one surface: invalid winding, repeated or degenerate triangles,
-out-of-bounds indices and capacity overflows fail it, and `wearable=True` requires a pin on every connected piece.
-`tether_slack=1.0` limits each reachable free vertex to the rest edge-path length to its nearest pin; `1.03` adds
-three percent.
+## Cook
+
+`garment.cook.cook(outfit_id, sidecar_bytes, model, fabrics, colliders, inertia)` returns the blob, the `_GARMENT`
+stream of each primitive of the model (the binding grown over the render mesh) and a report; `stage_model` adds the
+stream to a model, `stale(sidecar, root, script)` lists the build inputs whose hash changed since the sidecar was
+built, and `depfile_text` writes the build's dependencies:
+
+```python
+from garment import cook as C, gates as G, model as M, sidecar as S
+
+data = sidecar_path.read_bytes()
+if C.stale(S.read(data), GAME, script):
+    raise SystemExit(f"rebuild the sidecar: python {script}")
+model = M.RenderModel(model_path)
+blob, streams, report = C.cook("coat", data, model, fabrics, colliders, (0.45, 0.35))
+staged_path.write_bytes(C.stage_model(model_path, streams))
+```
+
+The tethers allow the path length to the nearest pin times `1 + max_edge_strain` of the fabric. `garment_blob.encode`
+checks every value the solver trusts and names the outfit, piece and field it rejects. Add the blob to the pack with
+`nt_builder_add_blob`; tools read it back with `garment_blob.decode`. `cook_mesh` is the low-level step for one
+surface: invalid winding, repeated or degenerate triangles, out-of-bounds indices and capacity overflows fail it.
 
 ## Load a cooked outfit
 

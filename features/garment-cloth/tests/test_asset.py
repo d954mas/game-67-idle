@@ -8,7 +8,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 import garment_blob
 from garment_blob import MATERIAL_FIELDS, decode, encode, single
-from garment_cook import cook_mesh
+from garment.cook import cook_mesh
 
 IDENTITY = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0]
 

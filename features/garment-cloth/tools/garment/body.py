@@ -14,6 +14,8 @@ from scipy.sparse.csgraph import dijkstra
 from . import sim
 from .sim import closest_surface_points
 
+# m: below a micron a gate's violation is the float32 storage of the sidecar (its step near 1 m is 6e-8), not content.
+RESOLUTION = 1e-6
 # Below this a cloth vertex sits on the body and its direction to the closest point is noise; the body normal
 # stands in for it.
 ON_BODY_M = 1e-4
@@ -98,6 +100,8 @@ class Body:
         self._rim_edges = {tuple(e) for e in rim.tolist()}
         self._rim_points = np.zeros(len(self.surface.points), bool)
         self._rim_points[rim.ravel()] = True
+        # Per body face: it touches a hole (always False on a complete body).
+        self.rim_faces = self._rim_points[self.surface.welded].any(1)
 
     def closest(self, points):
         """Per point: (face, barycentrics, distance, closest point, interpolated unit normal, on_rim)."""
@@ -180,11 +184,12 @@ def winding(points, triangles, chunk=24):
     return out
 
 
-def reach_violation(points, vertices, faces, r, thickness):
+def reach_violation(points, vertices, faces, r, thickness, rim_faces=None):
     """Gate G4 per point (m, > 0 fails): how far a reference lies deeper in the posed body than its max distance
     allows, sd(ref, body + thickness) < -r; a pin (r = 0) fails only inside the body itself, since it follows
-    skinning and no body collider acts on it. The side is the generalised winding number (exact on a closed body;
-    a hole of a fallback body makes it fractional there). A free vertex with r >= thickness fails only deeper than
+    skinning and no body collider acts on it. The side is the generalised winding number (exact on a closed body).
+    rim_faces: per body face, True where it touches a hole of a fallback body (Body.rim_faces); a point whose closest
+    body point lies there has no known side and passes. A free vertex with r >= thickness fails only deeper than
     r - thickness, so one whose nearest body vertex (an upper bound of its distance) is nearer passes unsigned."""
     from scipy.spatial import cKDTree
     points, r = np.asarray(points, float), np.asarray(r, float)
@@ -193,8 +198,14 @@ def reach_violation(points, vertices, faces, r, thickness):
     need = pins | (r < thickness) | (near > r - thickness)
     out = np.zeros(len(points))
     if need.any():
-        sd = signed_distance(points[need], vertices, faces)
-        out[need] = np.where(pins[need], -sd, -(sd - thickness) - r[need])
+        q = points[need]
+        inside = winding(q, vertices[faces]) > 0.5
+        face, _, distance = closest_surface_points(q, vertices, faces)
+        sd = np.where(inside, -distance, distance)
+        v = np.where(pins[need], -sd, -(sd - thickness) - r[need])
+        if rim_faces is not None:
+            v = np.where(np.asarray(rim_faces)[face], 0.0, v)
+        out[need] = v
     return out
 
 

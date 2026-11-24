@@ -473,10 +473,17 @@ def overlap(outer_x, outer_faces, outer_b, inner_x, inner_faces, inner_b, outer_
     return g_out, g_in
 
 
-def stages():
-    """The content stages a build includes: GARMENT_STAGES, or all of them. A script reads it to choose an input that
-    a later stage changes (the declared body)."""
-    return int(os.environ.get("GARMENT_STAGES", "1000000"))
+def stages(script=None):
+    """The content stages a build includes: GARMENT_STAGES when set (a check or an experiment asks for another
+    stage), else the stage the outfit ships, declared as "stage" in `<script>.json` beside the script, else all of
+    them. A script reads it to choose an input that a later stage changes (the declared body)."""
+    if "GARMENT_STAGES" in os.environ:
+        return int(os.environ["GARMENT_STAGES"])
+    if script is not None:
+        declaration = Path(script).with_suffix(".json")
+        if declaration.is_file():
+            return int(json.loads(declaration.read_text(encoding="utf-8"))["stage"])
+    return 1000000
 
 
 class Outfit:
@@ -522,7 +529,7 @@ class Outfit:
         self.layers = []
         # GARMENT_STAGES=n builds the script's content up to its stage n (`if o.stages >= 2:` blocks), to compare a
         # content fix with what came before it.
-        self.stages = stages()
+        self.stages = stages(script)
         Outfit.instances.append(self)
 
     def _input(self, relative):
@@ -539,6 +546,12 @@ class Outfit:
         piece = Piece(self, piece_id, label, fabric, self.fabrics[fabric]["thickness"], self.model.joints)
         self.pieces.append(piece)
         return piece
+
+    def joint_rest(self, name):
+        """Rest position (model space) of a joint of the model's skin, by its full or short name."""
+        glb = self.model.glb
+        full = next(j for j in self.model.joints if name in (j, j.split(":")[-1]))
+        return glb.world_rest()[glb.node_index(full)][:3, 3].copy()
 
     def get(self, piece_id):
         return next(p for p in self.pieces if p.id == piece_id)
@@ -673,8 +686,7 @@ class Outfit:
         nodes, joints, ibm = sc.skeleton(self.model.glb)
         build = {"script_sha256": sha256(self.script) if self.script and self.script.is_file() else None,
                  "inputs": dict(sorted(self.inputs.items())), "library": LIBRARY_VERSION}
-        if "GARMENT_STAGES" in os.environ:
-            build["stages"] = self.stages
+        build["stages"] = self.stages
         return sc.Sidecar(nodes=nodes, joints=joints, inverse_binds=ibm, pieces=[p.built() for p in self.pieces],
                           build=build, layers=list(self.layers))
 
