@@ -209,9 +209,12 @@ static void test_create_refuses_what_the_scene_lacks(void) {
     const char *texts[] = {
         "scenario x\nscene two_chars_item\np1 grab nothing_here\nexpect no_stuck\n",
         "scenario x\nscene stack10\nguests 1\np1 drop\nexpect no_stuck\n",
+        "scenario x\nscene glass_door\np0 recall floor\nexpect no_stuck\n", /* a static body is never bound */
+        "scenario x\nscene glass_door\np0 remove floor\nexpect no_stuck\n",
+        "scenario x\nscene glass_door\np0 recall rock_a to 0 0.2 500\nexpect no_stuck\n", /* past the scene's bounds */
     };
-    const char *scenes[] = {"two_chars_item", "two_chars_item"};
-    for (int i = 0; i < 2; i++) {
+    const char *scenes[] = {"two_chars_item", "two_chars_item", "glass_door", "glass_door", "glass_door"};
+    for (int i = 0; i < 5; i++) {
         body_sync_error_t error;
         TEST_ASSERT_TRUE_MESSAGE(body_sync_scenario_parse(texts[i], strlen(texts[i]), &scenario, &error), error.text);
         scene_named(scenes[i])->build(&scene);

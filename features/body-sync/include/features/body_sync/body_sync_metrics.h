@@ -84,6 +84,12 @@ extern "C" {
      claim_effects.count claims_format.count claims_ended.count [claims]
      own_ticks.max [ticks]: the worst throw's ticks from its start until the thrower's own world
        draws the body 5 cm from where it was (a throw never drawn so fails a check)
+     late_drops.count [records]: for each recall or removal (the scenario's p0 recall and remove)
+       of a body the guest simulated, the guest's states and records the host's seam dropped as
+       stale or rejected from the host's move until the guest stopped simulating the body, and
+       the run's slowest one-way trip and longest cut, stall or deafness after: the late packets
+       of the old owner. Under reordering an older state of another body of the guest's that
+       arrives in that window counts too
    - claims: a guest's hit and impact claims the host parsed. Each lands in exactly one of
      overflow (its seat's queue for the tick was full), repeat (an impact key judged before),
      rejected (the seam's gate said STALE or REVOKED, or the stand's limits or rules refused it:
@@ -230,6 +236,9 @@ typedef struct body_sync_guest_metrics {
     body_sync_bytes_t to_host;  /* this seat's sends to the host */
     double rtt_ms, loss;        /* the session's last estimate on the host, negative unknown */
     uint32_t refused, stale, rejected; /* the seam's counts on both ends of this path */
+    /* What the host's seam dropped of this seat's bytes (stale or rejected) from each recall or
+       removal of a body it simulated until it stopped and one slowest trip more: its late packets. */
+    uint32_t late_drops;
     uint64_t deferred;                 /* both ends: due records the budget left out */
     uint32_t stale_max_ticks;          /* the worse end */
     uint32_t flush_over_limit;         /* ticks, both directions */

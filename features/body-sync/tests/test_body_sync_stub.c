@@ -1507,6 +1507,84 @@ static void test_a_contact_of_a_rebound_slot_is_stale(void) {
     TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_STALE, body_sync_check_contact(guest.sync, GUEST, ID0, n, target, tick_no, &c));                /* host only */
 }
 
+static float apart_from(b3BodyId body, b3Vec3 q) {
+    b3Vec3 p = b3Body_GetPosition(body);
+    return sqrtf((p.x - q.x) * (p.x - q.x) + (p.y - q.y) * (p.y - q.y) + (p.z - q.z) * (p.z - q.z));
+}
+
+/* A recall mid-flight: the host takes the body back and puts it home, and that placement stays
+   on the host and reaches the guest; the take-over from the owner's newest state comes first. */
+static void test_a_recall_keeps_what_the_host_does_after_it(void) {
+    b3Vec3 home = b3Body_GetPosition(host.bodies[0]);
+    tick_all();
+    grant(&guest, ID0, BODY_SYNC_HOLD_UNTIL_SETTLED);
+    tick_all();
+    b3Body_SetLinearVelocity(guest.bodies[0], (b3Vec3){0.0f, 5.0f, -6.0f}); /* no body lies at negative z */
+    for (int i = 0; i < 8; i++) {
+        tick_all();
+    }
+    TEST_ASSERT_TRUE_MESSAGE(apart_from(host.bodies[0], home) > 0.5f, "the host never showed the flight");
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_assign(host.sync, ID0, BODY_SYNC_SEAT_HOST, BODY_SYNC_HOLD_UNTIL_RELEASE));
+    TEST_ASSERT_TRUE(body_sync_is_local(host.sync, ID0));
+    b3Body_SetTransform(host.bodies[0], home, b3Quat_identity);
+    b3Body_SetLinearVelocity(host.bodies[0], (b3Vec3){0.0f, 0.0f, 0.0f});
+    b3Body_SetAngularVelocity(host.bodies[0], (b3Vec3){0.0f, 0.0f, 0.0f});
+    for (int i = 0; i < 90; i++) {
+        tick_all();
+    }
+    TEST_ASSERT_TRUE_MESSAGE(apart_from(host.bodies[0], home) < 0.01f, "the next apply undid the host's placement");
+    TEST_ASSERT_TRUE_MESSAGE(apart_from(guest.bodies[0], home) < 0.02f, "the guest does not show the body home");
+    TEST_ASSERT_FALSE(body_sync_is_local(guest.sync, ID0));
+}
+
+/* The host removes a guest's body and binds a new one in its slot under the very seat and number
+   the old one had: only the generation tells the guest's late bytes apart, and they are stale. */
+static void test_a_guests_old_generation_is_stale_after_the_host_rebinds(void) {
+    body_sync_id_t old = ID0, fresh = body_sync_id_make(0, 2);
+    tick_all();
+    grant(&guest, old, BODY_SYNC_HOLD_UNTIL_RELEASE);
+    tick_all();
+    body_sync_authority_t was, now;
+    TEST_ASSERT_TRUE(body_sync_authority(host.sync, old, &was));
+    TEST_ASSERT_EQUAL_UINT8(GUEST, was.seat);
+    b3Body_SetTransform(guest.bodies[0], (b3Vec3){0.0f, 3.0f, -4.0f}, b3Quat_identity);
+    b3Body_SetLinearVelocity(guest.bodies[0], (b3Vec3){0.0f, 0.0f, -4.0f}); /* due at once on a budgeted sender too */
+    body_sync_collect(guest.sync, tick_no);
+    uint32_t old_size = 0;
+    TEST_ASSERT_TRUE(body_sync_write_state(guest.sync, BODY_SYNC_SEAT_HOST, packet, CAPACITY, &old_size));
+    uint8_t late[CAPACITY];
+    memcpy(late, packet, old_size);
+    uint32_t late_tick = ++tick_no;
+    uint32_t first = old_size;
+    while (body_sync_write_state(guest.sync, BODY_SYNC_SEAT_HOST, packet, CAPACITY, &old_size)) {
+    }
+#ifdef SEAM_REAL
+    old_size = first;
+#else
+    (void)first;
+    old_size = STUB_HEADER_BYTES + STUB_BODY_BYTES;
+#endif
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_unbind(host.sync, old));
+    body_sync_bind_t bind = {.body = host.bodies[0], .body_class = BODY_SYNC_CLASS_LIGHT, .authority = GUEST, .number = was.number};
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_bind(host.sync, fresh, &bind));
+    b3Vec3 before = b3Body_GetPosition(host.bodies[0]);
+    body_sync_traffic_t t0, t1, t2;
+    body_sync_traffic(host.sync, GUEST, &t0);
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_receive_state(host.sync, GUEST, late_tick, late, old_size));
+    body_sync_traffic(host.sync, GUEST, &t1);
+    TEST_ASSERT_TRUE_MESSAGE(t1.stale > t0.stale, "a state of the old generation was not stale");
+    TEST_ASSERT_EQUAL_UINT32(t0.rejected, t1.rejected);
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_release(guest.sync, old));
+    records(&guest, &host);
+    body_sync_traffic(host.sync, GUEST, &t2);
+    TEST_ASSERT_TRUE_MESSAGE(t2.stale > t1.stale, "a release of the old generation was not stale");
+    TEST_ASSERT_TRUE(body_sync_authority(host.sync, fresh, &now));
+    TEST_ASSERT_EQUAL_UINT8(GUEST, now.seat);
+    TEST_ASSERT_EQUAL_UINT16(was.number, now.number);
+    step(&host);
+    TEST_ASSERT_TRUE_MESSAGE(apart_from(host.bodies[0], before) < 0.01f, "the new body took the old one's state");
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_every_body_reaches_the_guest_within_the_packet_limit);
@@ -1558,5 +1636,7 @@ int main(void) {
     RUN_TEST(test_a_contact_claim_counts_after_its_release);
     RUN_TEST(test_an_ended_flight_is_measured_where_its_seat_left_it);
     RUN_TEST(test_a_contact_of_a_rebound_slot_is_stale);
+    RUN_TEST(test_a_recall_keeps_what_the_host_does_after_it);
+    RUN_TEST(test_a_guests_old_generation_is_stale_after_the_host_rebinds);
     return UNITY_END();
 }

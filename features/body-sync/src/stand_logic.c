@@ -566,7 +566,7 @@ body_sync_stand_kind_t stand_record_kind(stand_record_type_t type) {
 /* ---- names ---- */
 
 const char *stand_verb_name(body_sync_verb_t verb) {
-    static const char *names[] = {"none", "walk", "grab", "throw", "drop", "punch", "wait"};
+    static const char *names[] = {"none", "walk", "grab", "throw", "drop", "punch", "wait", "recall", "remove"};
     return (unsigned)verb < sizeof(names) / sizeof(names[0]) ? names[verb] : "none";
 }
 

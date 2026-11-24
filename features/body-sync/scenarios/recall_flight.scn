@@ -1,0 +1,49 @@
+# A guest throws a rock at glass, and the host recalls the rock while it still shows it flying: a
+# forced move to the host, then a placement at its spawn. What the guest sent of the flight before
+# she heard (her states and her claim of the glass) reaches the host late and is dropped: the glass
+# stands and the rock is home for everyone. She takes the rock again at once, and the host recalls
+# it from her hand.
+scenario recall_flight
+scene glass_door
+seed 3
+guests 1
+settle 6s
+
+net g1 rtt 100ms jitter 20ms loss 2% reorder 10% reorder_delay 40ms
+
+p1 grab rock_a as lift
+at 1s p1 throw glass speed 7 as throw
+# Measured: on the thrower's world the rock meets the glass 22 ticks after the throw, on tick 82.
+# Each way takes at least 3 ticks (50 ms), so a recall from tick 80 to 84 reaches her after her
+# contact, and her claim and release of it reach the host after the recall. On 84 the host's last
+# taken state of the flight lies within the gate's 4 ticks of the contact, so the claim would fit a
+# gate that kept the old number (test_body_sync_claims_mf_recall_keeps_number).
+at 84t p0 recall rock_a as recall
+# Her copy is home a one-way trip and a playback delay (at most 15 ticks) after the recall, within
+# her reach; a lost record's resend fits too.
+at 129t p1 grab rock_a as regrab
+at 189t p0 recall rock_a as home
+
+expect result lift granted
+expect result throw done
+expect result recall done
+expect result regrab granted
+expect result home done
+# The late claim existed and the gate refused it as revoked: nothing came of it.
+expect claims.count >= 1
+expect claims_rejected.count >= 1
+expect claim_effects.count <= 0
+expect moved glass <= 1cm
+# The late states existed and the host dropped them.
+expect late_drops.count >= 1
+# Home for everyone: the host put it at its spawn, and the guest agrees at rest.
+expect moved rock_a <= 1cm
+expect agree_at_rest 5cm 5deg
+expect no_stuck
+expect effects_once
+# No ping-pong. Under interaction her only take is the flight's touch of the glass, refused: its
+# agent, the rock, was the host's by then. The re-take is one grab, granted, and nothing of the
+# host's touches her bodies.
+expect takes.count <= 0
+expect take_refusals.count <= 1
+expect reclaims.count <= 0

@@ -1,0 +1,31 @@
+# A guest carries a rock across the room, and the host recalls it from her hands: she lets go and
+# walks on, nothing is left stuck, and the rock is home for everyone. Her hands are free after: she
+# takes the other rock.
+scenario recall_carry
+scene glass_door
+seed 5
+guests 1
+settle 6s
+
+net g1 rtt 100ms jitter 20ms loss 2% reorder 10% reorder_delay 40ms
+
+p1 grab rock_a as lift
+p1 wait 300ms
+p1 walk -2 2 speed 2 as carry
+at 1s p0 recall rock_a as recall
+p1 walk rock_b
+p1 grab rock_b as other
+p1 wait 300ms
+p1 drop as put
+
+expect result lift granted
+expect result recall done
+expect result carry done
+expect result other granted
+expect result put done
+# She carried it moving when the host took it: her states of it reached the host late, dropped.
+expect late_drops.count >= 1
+expect moved rock_a <= 1cm
+expect agree_at_rest 5cm 5deg
+expect no_stuck
+expect effects_once

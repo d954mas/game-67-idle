@@ -222,7 +222,8 @@ body_sync_result_t body_sync_answer(body_sync_t *sync, const body_sync_claim_eve
    rule). The body continues on `seat` from its newest state, velocities included, with `hold`,
    no holder and a new number; the announcement says it answers no claim, so even a seat whose
    claim of the body was answered or released meanwhile takes it. Pending claims of the body
-   stay pending. */
+   stay pending. A move to the host's own seat takes over within the call, as a claim does: what
+   the caller does to the body from then on (a recall puts it home at rest) is never undone. */
 body_sync_result_t body_sync_assign(body_sync_t *sync, body_sync_id_t id, uint8_t seat, body_sync_hold_t hold);
 
 /* The character carrying a local body; it travels with the body's state. BODY_SYNC_ID_NONE

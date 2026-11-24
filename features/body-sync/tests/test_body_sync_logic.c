@@ -13,7 +13,8 @@ void tearDown(void) {}
 
 static const char *const shipped[] = {"two_walk",       "stack_punch", "pile_throw", "cabinet_carry", "mannequin_hits", "grab_dispute",
                                       "breakables_break", "load_four",  "edge_throw_cut", "edge_stall", "edge_deaf",
-                                      "throw_dummy",      "throw_glass_door", "throw_walker"};
+                                      "throw_dummy",      "throw_glass_door", "throw_walker",
+                                      "recall_flight",    "recall_carry",     "remove_owned"};
 
 static body_sync_scenario_t scenario;
 static body_sync_scene_t scene;
@@ -63,6 +64,25 @@ static void test_parse_reads_the_grammar(void) {
     TEST_ASSERT_EQUAL(BODY_SYNC_EXPECT_METRIC_AT_MOST, scenario.expects[3].kind);
     TEST_ASSERT_TRUE(scenario.expects[3].limit > 29.0 && scenario.expects[3].limit < 31.0);
     TEST_ASSERT_TRUE(fabsf(scenario.expects[1].tolerance_m - 0.05f) < 1e-6f);
+}
+
+static void test_host_rules_parse(void) {
+    body_sync_error_t error;
+    TEST_ASSERT_TRUE_MESSAGE(parse("scenario a\nscene b\nat 2s p0 recall crate to 1 0.5 -2 as back\np0 recall crate\np0 remove crate as gone\n"
+                                   "expect result back done\n",
+                                   &error),
+                             error.text);
+    TEST_ASSERT_EQUAL_UINT32(3, scenario.action_count);
+    const body_sync_action_t *a = &scenario.actions[0];
+    TEST_ASSERT_EQUAL(BODY_SYNC_VERB_RECALL, a->verb);
+    TEST_ASSERT_TRUE(a->timed && a->has_target && a->target.is_body && a->has_home);
+    TEST_ASSERT_EQUAL_STRING("crate", a->target.body);
+    TEST_ASSERT_TRUE(fabsf(a->home[0] - 1.0f) < 1e-6f && fabsf(a->home[1] - 0.5f) < 1e-6f && fabsf(a->home[2] + 2.0f) < 1e-6f);
+    TEST_ASSERT_FALSE(scenario.actions[1].has_home);
+    TEST_ASSERT_EQUAL(BODY_SYNC_VERB_REMOVE, scenario.actions[2].verb);
+    TEST_ASSERT_EQUAL_STRING("gone", scenario.actions[2].label);
+    TEST_ASSERT_EQUAL_STRING("recall", stand_verb_name(BODY_SYNC_VERB_RECALL));
+    TEST_ASSERT_EQUAL_STRING("remove", stand_verb_name(BODY_SYNC_VERB_REMOVE));
 }
 
 static void test_net_items_sorted_by_tick(void) {
@@ -126,6 +146,14 @@ static void test_refusals_name_their_line(void) {
         {"scenario a\nscene b\nat 600s p0 walk 1 1\n", 3},
         {"scenario a\nscene b\nat 600s net g1 loss 2%\n", 3},
         {"scenario a\nscene b\np0 wait 590s\nsettle 20s\n", 4},
+        {"scenario a\nscene b\nguests 1\np1 recall crate\n", 4},
+        {"scenario a\nscene b\nguests 1\np1 remove crate\n", 4},
+        {"scenario a\nscene b\np0 recall\n", 3},
+        {"scenario a\nscene b\np0 recall crate to 1 2\n", 3},
+        {"scenario a\nscene b\np0 recall crate 1 2 3\n", 3},
+        {"scenario a\nscene b\np0 recall crate to 1 2 3000\n", 3},
+        {"scenario a\nscene b\np0 remove crate to 1 2 3\n", 3},
+        {"scenario a\nscene b\np0 remove NAME\n", 3},
     };
     for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
         body_sync_error_t error;
@@ -770,6 +798,7 @@ int main(void) {
     RUN_TEST(test_a_copy_following_its_creeping_owner_is_no_break);
     RUN_TEST(test_shipped_scenarios_parse);
     RUN_TEST(test_parse_reads_the_grammar);
+    RUN_TEST(test_host_rules_parse);
     RUN_TEST(test_net_items_sorted_by_tick);
     RUN_TEST(test_refusals_name_their_line);
     RUN_TEST(test_parser_fuzz);

@@ -190,6 +190,9 @@ typedef struct sync_authority {
     /* A planted defect: a contact's target is judged where the host has it now, credited its
        travel in any direction. Never set outside tests. */
     bool plant_target_rewind_off;
+    /* A planted defect: a recall leaves the recalled seat's number standing for its contact
+       claims, judged OK as if it still owned the body. Never set outside tests. */
+    bool plant_recall_keeps_number;
     /* Host: the shell's measure of a take's evidence (sync_policy_grant_in_t agent_gap, *reach).
        None: every take counts as touching, for the parts tested without a world. */
     float (*take_gap)(void *context, uint8_t seat, uint32_t slot, uint32_t tick, float *reach);

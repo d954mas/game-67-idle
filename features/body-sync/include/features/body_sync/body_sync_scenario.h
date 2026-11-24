@@ -53,6 +53,12 @@ extern "C" {
                                   missed otherwise; on a guest a hit is a claim the host may
                                   reject
      wait <time>                  stand still
+     recall <body> [to <x> <y> <z>]  p0 only, the host's rule: body_sync_assign of the body to the
+                                  host whoever owns it (a carrier lets go, a flight stops), then
+                                  it is put at rest at the point, or at its spawn pose; done at
+                                  once, failed when the body is gone
+     remove <body>                p0 only: the host unbinds and destroys the body whoever owns
+                                  it, and tells every guest; done at once, failed when gone
    An action with `at` starts at that time and cuts off what the player was doing; one without
    it starts when the player's previous action in the file ends, at 0 for the first. A schedule
    that cannot fit in 600 s (a timed start plus the waits after it, a condition's end) is
@@ -125,6 +131,8 @@ typedef enum body_sync_verb {
     BODY_SYNC_VERB_DROP,
     BODY_SYNC_VERB_PUNCH,
     BODY_SYNC_VERB_WAIT,
+    BODY_SYNC_VERB_RECALL,
+    BODY_SYNC_VERB_REMOVE,
 } body_sync_verb_t;
 
 typedef enum body_sync_outcome {
@@ -157,6 +165,8 @@ typedef struct body_sync_action {
     body_sync_target_t target;
     float speed;        /* m/s; zero takes the tuning's */
     uint32_t wait_ticks; /* WAIT */
+    bool has_home;       /* RECALL `to`: where the host puts the body, else its spawn pose */
+    float home[3];
 } body_sync_action_t;
 
 typedef enum body_sync_net_kind {

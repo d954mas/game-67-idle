@@ -214,6 +214,7 @@ void body_sync_plant_approach_from_ring(body_sync_t *s) { s->authority.plant_app
 void body_sync_plant_evidence_age_unbounded(body_sync_t *s) { s->authority.plant_evidence_age_unbounded = true; }
 void body_sync_plant_transform_sleep(body_sync_t *s) { s->plant_transform_sleep = true; }
 void body_sync_plant_end_grace_zero(body_sync_t *s) { s->plant_end_grace_zero = true; }
+void body_sync_plant_recall_keeps_number(body_sync_t *s) { s->authority.plant_recall_keeps_number = true; }
 
 body_sync_t *body_sync_create(const body_sync_config_t *config) {
     if (!config || !b3World_IsValid(config->world) || config->seats < 1 || config->seats > BODY_SYNC_SEATS_MAX ||
@@ -474,7 +475,15 @@ body_sync_result_t body_sync_answer(body_sync_t *s, const body_sync_claim_event_
 }
 body_sync_result_t body_sync_assign(body_sync_t *s, body_sync_id_t id, uint8_t seat, body_sync_hold_t hold) {
     note_live(s, id);
-    return sync_authority_assign(&s->authority, id, seat, hold);
+    body_sync_result_t r = sync_authority_assign(&s->authority, id, seat, hold);
+    /* A move to this side takes over now, from the owner's newest state as the host's claim does,
+       so what the caller does next (a recall puts the body home) is not undone at the next apply. */
+    uint32_t slot = body_sync_id_slot(id);
+    if (r == BODY_SYNC_OK && s->entries[slot].copy_mode && body_sync_is_local(s, id) && b3Body_IsValid(s->entries[slot].body)) {
+        s->entries[slot].keep_own = false;
+        resume(s, slot, true);
+    }
+    return r;
 }
 body_sync_result_t body_sync_set_holder(body_sync_t *s, body_sync_id_t id, body_sync_id_t holder) {
     return sync_authority_set_holder(&s->authority, id, holder);

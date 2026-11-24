@@ -839,7 +839,7 @@ static body_sync_contact_verdict_t ownership_verdict(const sync_authority_t *a, 
         return BODY_SYNC_CONTACT_STALE;
     }
     *ended = e;
-    return e->how == SYNC_END_REVOKED ? BODY_SYNC_CONTACT_REVOKED : BODY_SYNC_CONTACT_OK;
+    return e->how == SYNC_END_REVOKED && !a->plant_recall_keeps_number ? BODY_SYNC_CONTACT_REVOKED : BODY_SYNC_CONTACT_OK;
 }
 
 body_sync_contact_verdict_t sync_authority_check_contact(const sync_authority_t *a, uint8_t seat, body_sync_id_t agent, uint16_t number,

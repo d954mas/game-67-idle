@@ -1,3 +1,4 @@
+#define _CRT_SECURE_NO_WARNINGS
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -26,6 +27,7 @@ static bool plant_sleep;      /* --plant-transform-sleep: guest 1 stops sending 
 static bool plant_ring_approach; /* --plant-approach-from-ring: a contact's approach is the ring's fastest step */
 static bool plant_age;           /* --plant-evidence-age-unbounded: a state stands however long ago the host took it */
 static bool plant_end_grace;     /* --plant-end-grace-zero: no claim counts once the agent's ownership ended */
+static bool plant_recall_number; /* --plant-recall-keeps-number: a recall leaves the old number standing for claims */
 static body_sync_scene_t scene;
 static body_sync_scenario_t scenario;
 static bool third_player; /* the next make() gives the breakables a third player and a rock for it */
@@ -92,6 +94,9 @@ static body_sync_stand_t *make(const char *text, int mode) {
     }
     if (plant_end_grace) {
         body_sync_plant_end_grace_zero(stand_testing_sync(stand, 0));
+    }
+    if (plant_recall_number) {
+        body_sync_plant_recall_keeps_number(stand_testing_sync(stand, 0));
     }
 #endif
     return stand;
@@ -227,6 +232,26 @@ static void guest_throw_breaks_door(int mode) {
     TEST_ASSERT_EQUAL_UINT32_MESSAGE(1, report->guests[0].claims_ended, "the door's claim was not judged after the flight's end");
     body_sync_stand_destroy(stand);
 }
+/* recall_flight as shipped: the host recalls a guest's rock on the tick it meets the glass on her
+   world, and her claim of that contact reaches the host after the recall. The gate refuses it as
+   revoked; a host that kept the old number standing would break the glass. */
+static void recall_drops_the_late_claim(int mode) {
+    static char text[BODY_SYNC_SCENARIO_TEXT_MAX + 1];
+    FILE *f = fopen(BODY_SYNC_SCENARIOS_DIR "/recall_flight.scn", "rb");
+    TEST_ASSERT_NOT_NULL(f);
+    size_t n = fread(text, 1, BODY_SYNC_SCENARIO_TEXT_MAX, f);
+    fclose(f);
+    text[n] = '\0';
+    body_sync_stand_t *stand = make(text, mode);
+    const body_sync_report_t *report = body_sync_stand_run(stand);
+    TEST_ASSERT_TRUE_MESSAGE(guest(stand)->claims >= 1, "no late claim reached the host");
+    TEST_ASSERT_TRUE_MESSAGE(on_host(stand, "glass"), "a claim the recall revoked broke the glass");
+    all_pass(report);
+    body_sync_stand_destroy(stand);
+}
+static void test_a_recall_drops_the_late_claim_host(void) { recall_drops_the_late_claim(MODE_HOST); }
+static void test_a_recall_drops_the_late_claim_interaction(void) { recall_drops_the_late_claim(MODE_INTERACTION); }
+
 static void test_guest_throw_breaks_door_host(void) { guest_throw_breaks_door(MODE_HOST); }
 static void test_guest_throw_breaks_door_interaction(void) { guest_throw_breaks_door(MODE_INTERACTION); }
 static void test_guest_throw_knocks_dummy_interaction(void) { guest_throw_knocks_dummy(MODE_INTERACTION); }
@@ -699,6 +724,8 @@ int main(int argc, char **argv) {
             plant_age = true;
         } else if (strcmp(argv[i], "--plant-end-grace-zero") == 0) {
             plant_end_grace = true;
+        } else if (strcmp(argv[i], "--plant-recall-keeps-number") == 0) {
+            plant_recall_number = true;
         } else if (strcmp(argv[i], "--sweep") == 0) {
             sweep = true;
         }
@@ -725,6 +752,7 @@ int main(int argc, char **argv) {
     RUN_TEST(test_a_gentle_touch_claims_no_hard_hit_host);
     RUN_TEST(test_an_old_contact_tick_has_no_evidence_host);
     RUN_TEST(test_a_carried_rock_follows_its_carrier_host);
+    RUN_TEST(test_a_recall_drops_the_late_claim_host);
     return UNITY_END();
 #endif
     if (sweep) {
@@ -761,5 +789,7 @@ int main(int argc, char **argv) {
     RUN_TEST(test_an_old_contact_tick_has_no_evidence_interaction);
     RUN_TEST(test_a_carried_rock_follows_its_carrier_host);
     RUN_TEST(test_a_carried_rock_follows_its_carrier_interaction);
+    RUN_TEST(test_a_recall_drops_the_late_claim_host);
+    RUN_TEST(test_a_recall_drops_the_late_claim_interaction);
     return UNITY_END();
 }

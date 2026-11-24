@@ -246,6 +246,15 @@ struct body_sync_stand {
     uint32_t plant_declared_endpoint, plant_declared_ticks; /* stand_testing_plant_declared_velocity; 0 ticks none */
     body_sync_id_t plant_declared_body;
     float plant_declared_add[3];
+    /* A recall or removal of a body a guest simulated, per seat: the host's drops of that seat's
+       bytes from the move (base) until the guest stopped simulating the body and the slowest
+       one-way trip more (late_drops). */
+    struct {
+        bool open, stopped;
+        body_sync_id_t id;
+        uint32_t base, stopped_tick;
+    } late[BODY_SYNC_ENDPOINTS_MAX];
+    uint32_t late_drops[BODY_SYNC_ENDPOINTS_MAX];
     effect_t effects[EFFECTS_MAX];
     uint32_t effect_count;
     action_track_t actions[BODY_SYNC_SCENARIO_ACTIONS_MAX];
@@ -560,6 +569,98 @@ static void target_point(body_sync_stand_t *st, endpoint_t *ep, const body_sync_
     memcpy(out, target->point, sizeof(float) * 3);
 }
 
+static uint32_t host_drops(const body_sync_stand_t *st, uint8_t seat) {
+    body_sync_traffic_t t;
+    return body_sync_traffic(st->ep[0].sync, seat, &t) ? t.stale + t.rejected : 0u;
+}
+
+static void close_late(body_sync_stand_t *st, uint8_t seat) {
+    if (st->late[seat].open) {
+        st->late[seat].open = false;
+        st->late_drops[seat] += host_drops(st, seat) - st->late[seat].base;
+    }
+}
+
+static void open_late(body_sync_stand_t *st, body_sync_id_t id) {
+    body_sync_authority_t a;
+    if (!body_sync_authority(st->ep[0].sync, id, &a) || a.seat == BODY_SYNC_SEAT_HOST || a.seat >= st->endpoints) {
+        return;
+    }
+    close_late(st, a.seat);
+    st->late[a.seat].open = true;
+    st->late[a.seat].stopped = false;
+    st->late[a.seat].id = id;
+    st->late[a.seat].base = host_drops(st, a.seat);
+}
+
+/* Packets the old owner sent before it stopped simulating the body reach the host within the
+   slowest one-way trip, a cut, stall or deafness included. */
+static void watch_late(body_sync_stand_t *st) {
+    uint32_t way = (uint32_t)ceilf(st->one_way_max_ms * (float)BODY_SYNC_TICK_HZ / 1000.0f) + st->frozen_max + 2u;
+    for (uint8_t g = 1; g < st->endpoints; g++) {
+        endpoint_t *ep = &st->ep[g];
+        if (!st->late[g].open) {
+            continue;
+        }
+        body_sync_id_t id = st->late[g].id;
+        if (!st->late[g].stopped && (!ep->active || !stand_world_slot(ep->world, id) || !body_sync_is_local(ep->sync, id))) {
+            st->late[g].stopped = true;
+            st->late[g].stopped_tick = st->now;
+        }
+        if (st->late[g].stopped && st->now >= st->late[g].stopped_tick + way) {
+            close_late(st, g);
+        }
+    }
+}
+
+/* p0's recall and removal: the host's own rule over a body whoever owns it. A recall is the
+   forced move to the host, then a placement at rest; the seam's number moves, so the old owner's
+   late states and claims are dropped. A removal is a break with nothing left behind. */
+static void host_rule(body_sync_stand_t *st, endpoint_t *ep, int32_t index) {
+    const body_sync_action_t *a = &st->scenario.actions[index];
+    action_track_t *track = &st->actions[index];
+    uint32_t scene_index = body_sync_scene_find_body(&st->scene, a->target.body);
+    body_sync_id_t id = body_id_by_name(st, ep, a->target.body);
+    stand_slot_t *s = id ? stand_world_slot(ep->world, id) : NULL;
+    if (!s || s->character) {
+        finish_action(st, ep, index, BODY_SYNC_OUTCOME_FAILED);
+        return;
+    }
+    if (!st->local) {
+        open_late(st, id);
+    }
+    if (a->verb == BODY_SYNC_VERB_REMOVE) {
+        drop_if_held(ep, id);
+        body_sync_unbind(ep->sync, id);
+        stand_world_remove(ep->world, id);
+        stand_record_t removal = {.type = STAND_REC_REMOVE, .target = id};
+        broadcast(st, &removal);
+    } else {
+        if (body_sync_assign(ep->sync, id, BODY_SYNC_SEAT_HOST, BODY_SYNC_HOLD_UNTIL_RELEASE) != BODY_SYNC_OK) {
+            finish_action(st, ep, index, BODY_SYNC_OUTCOME_FAILED);
+            return;
+        }
+        /* A carrier on the host lets go too: the recall takes it out of every hand. */
+        drop_if_held(ep, id);
+        body_sync_set_holder(ep->sync, id, BODY_SYNC_ID_NONE);
+        const body_sync_body_desc_t *home = &st->scene.bodies[scene_index];
+        const float *at = a->has_home ? a->home : home->position;
+        b3Body_SetType(s->body, s->desc.motion == BODY_SYNC_MOTION_KINEMATIC ? b3_kinematicBody : b3_dynamicBody);
+        stand_world_set_held(ep->world, body_sync_id_slot(id), false, 0);
+        b3Body_SetTransform(s->body, (b3Vec3){at[0], at[1], at[2]}, (b3Quat){{home->rotation[0], home->rotation[1], home->rotation[2]}, home->rotation[3]});
+        b3Body_SetLinearVelocity(s->body, (b3Vec3){0.0f, 0.0f, 0.0f});
+        b3Body_SetAngularVelocity(s->body, (b3Vec3){0.0f, 0.0f, 0.0f});
+        b3Body_SetAwake(s->body, true);
+        body_sync_authority_t auth;
+        body_sync_authority(ep->sync, id, &auth);
+        track->answer_number = auth.number;
+    }
+    begin_measure(st, index, id);
+    track->shows = true;
+    track->answered_on_host = true;
+    finish_action(st, ep, index, BODY_SYNC_OUTCOME_DONE);
+}
+
 static void start_action(body_sync_stand_t *st, endpoint_t *ep, int32_t index) {
     const body_sync_action_t *a = &st->scenario.actions[index];
     action_track_t *track = &st->actions[index];
@@ -658,6 +759,10 @@ static void start_action(body_sync_stand_t *st, endpoint_t *ep, int32_t index) {
         finish_action(st, ep, index, BODY_SYNC_OUTCOME_DONE);
         return;
     }
+    case BODY_SYNC_VERB_RECALL:
+    case BODY_SYNC_VERB_REMOVE:
+        host_rule(st, ep, index);
+        return;
     }
 }
 
@@ -1562,12 +1667,16 @@ static void track_actions(body_sync_stand_t *st) {
                     shown = moved(at, a->ref_pos[e], MOVED_M);
                 }
                 break;
-            case BODY_SYNC_VERB_GRAB: {
+            case BODY_SYNC_VERB_GRAB:
+            case BODY_SYNC_VERB_RECALL: {
                 body_sync_authority_t auth;
                 shown = a->answered_on_host && body_sync_authority(ep->sync, a->ref_id, &auth) &&
                         (int16_t)(uint16_t)(auth.number - a->answer_number) >= 0;
                 break;
             }
+            case BODY_SYNC_VERB_REMOVE:
+                shown = !s;
+                break;
             case BODY_SYNC_VERB_PUNCH:
                 if (a->outcome == BODY_SYNC_OUTCOME_HIT || is_host_ep(ep)) {
                     if (!s) {
@@ -2570,6 +2679,7 @@ bool body_sync_stand_tick(body_sync_stand_t *st) {
         sample(st);
         plant_jolt(st);
         track_actions(st);
+        watch_late(st);
     }
     record_pace(st);
     st->rest_run = all_at_rest(st) ? st->rest_run + 1 : 0;
@@ -3001,6 +3111,9 @@ static void evaluate(body_sync_stand_t *st) {
     r->rest_tick = st->rest_tick;
     stand_metrics_summarize(&st->metrics, r);
     endpoint_t *host = &st->ep[0];
+    for (uint8_t g = 1; g < st->endpoints; g++) {
+        close_late(st, g);
+    }
     for (uint32_t g = 1; g < st->endpoints; g++) {
         body_sync_guest_metrics_t *gm = &r->guests[g - 1];
         coop_seat_stats_t stats;
@@ -3024,6 +3137,7 @@ static void evaluate(body_sync_stand_t *st) {
         gm->returns = b.returns;
         gm->stale = a.stale + b.stale;
         gm->rejected = a.rejected + b.rejected;
+        gm->late_drops = st->late_drops[g];
         gm->deferred = a.deferred + b.deferred;
         gm->stale_max_ticks = a.stale_max_ticks > b.stale_max_ticks ? a.stale_max_ticks : b.stale_max_ticks;
         gm->flush_over_limit = st->flush_over[g - 1];
@@ -3176,6 +3290,17 @@ static bool check_scenario(const body_sync_stand_t *st, body_sync_error_t *error
             snprintf(text, sizeof(text), "the scene has no body '%s'", a->target.body);
             error_text(error, a->line, text);
             return false;
+        }
+        bool by_host = a->verb == BODY_SYNC_VERB_RECALL || a->verb == BODY_SYNC_VERB_REMOVE;
+        if (by_host && st->scene.bodies[body_sync_scene_find_body(&st->scene, a->target.body)].motion == BODY_SYNC_MOTION_STATIC) {
+            error_text(error, a->line, "a static body is never bound: the host can recall or remove only one that moves");
+            return false;
+        }
+        for (int k = 0; a->has_home && k < 3; k++) {
+            if (!(a->home[k] > st->scene.bounds_min[k] && a->home[k] < st->scene.bounds_max[k])) {
+                error_text(error, a->line, "this point is outside the scene's bounds");
+                return false;
+            }
         }
     }
     for (uint32_t i = 0; i < s->expect_count; i++) {

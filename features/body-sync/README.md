@@ -55,7 +55,9 @@ What a caller of the seam relies on:
 - A claim is told apart by its sequence. The host polls every claim once,
   answers it with `body_sync_answer` (granted with the claim's hold, or
   refused; UNKNOWN means the claim is gone and the event is dropped), and moves
-  a body without a claim with `body_sync_assign`. Only the claimant's newest
+  a body without a claim with `body_sync_assign`; a move to the host's own seat
+  takes over within the call, so what the host does to the body next (a recall
+  puts it home at rest) is never undone by the next apply. Only the claimant's newest
   claim of a body counts; a released claim is withdrawn; a release that crosses
   a grant leaves the body with the host; a release older than a forced move is
   stale. Matching relies on seam records arriving reliably and in order.
@@ -786,6 +788,7 @@ rate <host|gN> <x>hz                 # that endpoint steps x times a second of v
 
 [at <time>] <p0..p3> walk <x> <z> [speed <v>] | walk <body> [as <label>]
 [at <time>] <player> grab <body> | throw <x> <y> <z> [speed <v>] | throw <body> | drop | punch [<body>] | wait <time>
+[at <time>] p0 recall <body> [to <x> <y> <z>] | remove <body>   # the host's rule over a body whoever owns it
 [at <time>] net <g1..g3> [to_host|to_guest] rtt|delay|jitter|reorder_delay <time> loss|dup|reorder <share> rate <B/s>|off
 at <time> cut <guest> for <time>     # nothing passes; 10 s or more disconnects
 at <time> stall <host|gN> for <time> # a long frame, then the missed ticks, 8 a frame
@@ -804,7 +807,11 @@ Units are required: `250ms`, `1.5s`, `90t` (ticks), `5cm`, `0.05m`, `3deg`,
 `2%`, `64KB/s`; `speed` is a bare number in m/s. A positive time that rounds
 to zero ticks is refused. An action with `at` starts then and cuts off what the
 player was doing; one without it starts when the player's previous action
-ends. A grab is optimistic: the action ends at once, and its label's outcome
+ends. `recall` and `remove` are the host's rule, p0's alone: a recall is
+`body_sync_assign` of the body to the host, its carrier letting go, then a
+placement at rest at the point or at its spawn pose; a removal unbinds and
+destroys the body on the host and tells every guest. Both are done at once. A
+grab is optimistic: the action ends at once, and its label's outcome
 becomes `granted` or `refused` when the host's answer arrives. A grab out of
 reach fails; scenarios walk first. An angle written in `agree_at_rest` is
 always a bound, `0deg` included. With `guests 0` the checks that compare a
@@ -1047,12 +1054,16 @@ and pressing a cabinet (`char_push`, real seam; the stub's kinematic copy
 shoving the cabinet is its must-fail contrast), cuts of 0.5 s and 3 s
 (`cut_short`, `cut_long`), a 1.5 s delay dropping to 50 ms (`latency_drop`), 200 ms hitches on a guest and on the host
 (`hitch_guest`, `hitch_host`), a guest stepping at 59.5 Hz and at 50 Hz
-(`rate_mismatch`, `rate_rough`), two guests at 30 and 250 ms (`two_ping`), and hostile
-bytes on every parser (seeded fuzz in the tests). Not yet covered: a grab of
-a body flying under another guest's authority, a revoke in flight with late
-packets, a removal under a guest's authority, a sleeping body moved by the
-host, a reused slot meeting an old packet, more moving bodies than a budget
-allows, a record over the unfragmented limit, a reader that stalls for 10 s,
+(`rate_mismatch`, `rate_rough`), two guests at 30 and 250 ms (`two_ping`), a
+recall of a guest's body in flight and from her hands with her late states and
+claim dropped (`recall_flight`, `recall_carry`), a removal of a guest's body in
+flight (`remove_owned`), and hostile bytes on every parser (seeded fuzz in the
+tests). The stand never reuses a scene body's slot, so an old packet meeting a
+reused slot is covered at the seam only (`test_body_sync_stub`, both
+implementations: a guest's state and release of the old generation after the
+host binds the slot again under her seat and number are stale). Not yet
+covered: a grab of a body flying under another guest's authority, a sleeping
+body moved by the host, more moving bodies than a budget allows, a record over the unfragmented limit, a reader that stalls for 10 s,
 reconnects, joins and the host leaving (the seam has no baseline yet), the
 16-bit packet number wrapping, a guest pushing a stack
 or standing on a host's body, a hit on a target that already moved on the
@@ -1111,7 +1122,9 @@ the velocity, poses of an old grant rejected, flags, motion type and holder
 moving with authority, settled holds ending at a contact and at rest, queues
 that never drop, opaque data both ways, a LIGHT copy its own character walks
 through with its mask restored exactly at the take, and fuzz of both receive
-calls through apply, a step and collect with Box3D's own asserts counted. `test_body_sync_stand` (core) builds
+calls through apply, a step and collect with Box3D's own asserts counted, a recall's placement
+that stays where the host put it, and a guest's old generation stale after the host binds the slot
+again. `test_body_sync_stand` (core) builds
 every catalog scene on four endpoints with equal world hashes, walks the view,
 and runs `two_walk` twice in one process for byte-equal JSON.
 `test_body_sync_policy` (core) runs the authority policy alone and the takes it
@@ -1133,6 +1146,18 @@ spawn missing, a break that lost its spawns, a pause held past the cap, a
 still copy crept off its host body) and requires the check to fail, holds a
 creeping awake host body's end of a rest to a host wake, and checks that the
 world hash sees what it names.
+`late_drops.count` counts what the host's seam dropped of a guest's bytes, as
+stale or rejected, from each recall or removal of a body she simulated until she
+stopped simulating it and the run's slowest one-way trip (and longest cut, stall
+or deafness) after: her late packets. `recall_flight` and `remove_owned` recall
+or remove the rock on tick 84, two ticks after it meets the glass on the
+thrower's world: each way takes at least three ticks, so her claim and release
+reach the host after the move, and the host's last taken state of the flight
+lies within the gate's four ticks of the contact. The claim is refused as
+revoked (a recall) or stale (a removal), the glass stands
+(`mf_recall_claim` must fail on its refusal count), and on a host planted to
+keep the recalled number standing the same claim breaks the glass
+(`test_body_sync_claims_mf_recall_keeps_number`).
 `test_body_sync_two_processes` (core) runs `two_walk` in two processes and
 compares the files; `test_body_sync_two_processes_<name>` (slow) does the same
 for the playback's edge scenarios, on both implementations. `test_body_sync_mf_*` (core) are scenarios that must end

@@ -392,7 +392,7 @@ static const struct {
     {"claims.count", STAND_UNIT_COUNT},          {"claims_rejected.count", STAND_UNIT_COUNT}, {"claims_format.count", STAND_UNIT_COUNT},
     {"claims_repeat.count", STAND_UNIT_COUNT},   {"claim_effects.count", STAND_UNIT_COUNT},   {"claims_overflow.count", STAND_UNIT_COUNT},
     {"claims_idle.count", STAND_UNIT_COUNT},     {"carry_gap.max", STAND_UNIT_LENGTH},       {"claims_ended.count", STAND_UNIT_COUNT},
-    {"own_ticks.max", STAND_UNIT_TICKS},
+    {"own_ticks.max", STAND_UNIT_TICKS},         {"late_drops.count", STAND_UNIT_COUNT},
 };
 
 bool stand_metric_unit(const char *name, stand_metric_unit_t *unit) {
@@ -618,6 +618,8 @@ bool stand_metric_value(const body_sync_report_t *report, const stand_metrics_t 
             v = (double)m->claims_idle;
         } else if (strcmp(name, "claims_ended.count") == 0) {
             v = (double)m->claims_ended;
+        } else if (strcmp(name, "late_drops.count") == 0) {
+            v = (double)m->late_drops;
         } else if (strcmp(name, "step.count") == 0) {
             v = (double)m->step_count;
         } else if (strcmp(name, "snap.count") == 0) {
@@ -1034,8 +1036,10 @@ bool stand_json_write(const body_sync_report_t *r, const stand_metrics_t *m, boo
         number(&j, gm->loss);
         put(&j, "},");
         key(&j, "seam");
-        putf(&j, "{\"refused\":%u,\"stale\":%u,\"rejected\":%u,\"deferred\":%llu,\"stale_max_ticks\":%u,\"flush_over_limit\":%u,\"packets_to_guest\":%u}",
-             gm->refused, gm->stale, gm->rejected, (unsigned long long)gm->deferred, gm->stale_max_ticks, gm->flush_over_limit, gm->packets_to_guest);
+        putf(&j, "{\"refused\":%u,\"stale\":%u,\"rejected\":%u,\"late_drops\":%u,\"deferred\":%llu,\"stale_max_ticks\":%u,"
+                 "\"flush_over_limit\":%u,\"packets_to_guest\":%u}",
+             gm->refused, gm->stale, gm->rejected, gm->late_drops, (unsigned long long)gm->deferred, gm->stale_max_ticks,
+             gm->flush_over_limit, gm->packets_to_guest);
         if (with_series && m) {
             series(&j, m, g);
         }

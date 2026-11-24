@@ -77,7 +77,7 @@ box3d_enable(test_body_sync_claims)
 # The claims suite's host-authority cases on the stub, the contract's reference.
 add_executable(test_body_sync_claims_stub test_body_sync_claims.c)
 target_include_directories(test_body_sync_claims_stub PRIVATE "${BODY_SYNC_DIR}/src")
-target_compile_definitions(test_body_sync_claims_stub PRIVATE CLAIMS_STUB=1)
+target_compile_definitions(test_body_sync_claims_stub PRIVATE CLAIMS_STUB=1 BODY_SYNC_SCENARIOS_DIR="${BODY_SYNC_SCENARIOS}")
 target_link_libraries(test_body_sync_claims_stub PRIVATE body_sync_stand_stub body_sync_stub unity)
 nt_set_warning_flags(test_body_sync_claims_stub)
 nt_set_sanitizer_flags(test_body_sync_claims_stub)
@@ -129,6 +129,11 @@ add_test(NAME test_body_sync_claims_mf_end_grace_zero
     COMMAND "${CMAKE_COMMAND}" -DEXE=$<TARGET_FILE:test_body_sync_claims> -DARGS=--plant-end-grace-zero
             "-DCASES=test_guest_throw_breaks_door_host|test_guest_throw_breaks_door_interaction"
             -P "${CMAKE_CURRENT_LIST_DIR}/expect_unity_fail.cmake")
+# A recall's late claim breaks the glass on a host that keeps the recalled number standing.
+add_test(NAME test_body_sync_claims_mf_recall_keeps_number
+    COMMAND "${CMAKE_COMMAND}" -DEXE=$<TARGET_FILE:test_body_sync_claims> -DARGS=--plant-recall-keeps-number
+            "-DCASES=test_a_recall_drops_the_late_claim_host|test_a_recall_drops_the_late_claim_interaction"
+            -P "${CMAKE_CURRENT_LIST_DIR}/expect_unity_fail.cmake")
 # Honest throws under loss and jitter, over seeds: expensive, so its own slow case.
 add_test(NAME test_body_sync_claims_loss_sweep COMMAND test_body_sync_claims --sweep WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 box3d_enable(test_body_sync_stand)
@@ -140,7 +145,7 @@ set(BODY_SYNC_CORE_SCENARIOS two_walk)
 set(BODY_SYNC_SLOW_SCENARIOS stack_punch pile_throw cabinet_carry mannequin_hits grab_dispute breakables_break load_four
     edge_throw_cut edge_stall edge_deaf load_overflow pile_settle_loss10 throw_catch
     bounce_wall cut_short cut_long hitch_guest hitch_host rate_mismatch rate_rough two_ping latency_drop
-    throw_dummy throw_glass_door throw_walker)
+    throw_dummy throw_glass_door throw_walker recall_flight recall_carry remove_owned)
 # The same scenarios with the second layer on (the real seam; the stub has no layer): their
 # checks hold in both modes. The layer scenes name it themselves.
 set(BODY_SYNC_LAYER_KG 20)
@@ -161,7 +166,8 @@ set(core_tests test_body_sync_logic test_body_sync_playback test_body_sync_soft 
     test_body_sync_authority_mf_approach_from_ring test_body_sync_authority_mf_evidence_age_unbounded
     test_body_sync_authority_mf_teleport_keeps_ring test_body_sync_authority_mf_target_any_ownership
     test_body_sync_authority_mf_target_rewind_off
-    test_body_sync_claims_mf_approach_from_ring test_body_sync_claims_mf_evidence_age_unbounded)
+    test_body_sync_claims_mf_approach_from_ring test_body_sync_claims_mf_evidence_age_unbounded
+    test_body_sync_claims_mf_recall_keeps_number)
 set(slow_tests test_body_sync_free_step test_body_sync_claims_loss_sweep)
 foreach(impl IN LISTS BODY_SYNC_IMPLS)
     string(REPLACE "|" ";" parts "${impl}")
@@ -221,7 +227,7 @@ set(BODY_SYNC_AUTHORITY_SCENARIOS authority_host_push authority_two_guests autho
     authority_three_host authority_three_guest authority_three_cross)
 set(BODY_SYNC_INTERACTION_SCENARIOS layer_bounce layer_pile layer_push layer_rest layer_stand layer_nudge layer_leave pile_throw throw_catch
     load_four char_push edge_throw_cut pile_settle_loss10 breakables_break mannequin_hits cabinet_carry grab_dispute
-    throw_dummy throw_glass_door throw_walker)
+    throw_dummy throw_glass_door throw_walker recall_flight recall_carry remove_owned)
 foreach(scn IN LISTS BODY_SYNC_AUTHORITY_SCENARIOS)
     add_test(NAME test_body_sync_scn_${scn}
         COMMAND body_sync_stand_cli "${BODY_SYNC_SCENARIOS}/${scn}.scn" --out "${CMAKE_CURRENT_BINARY_DIR}/${scn}.json" --quiet)
@@ -280,6 +286,9 @@ body_sync_must_fail(mf_angle_zero 1 "FAIL line 9 agree_at_rest~turned")
 body_sync_must_fail(mf_no_copy 1 "FAIL line 8 metric~no copy was measured")
 body_sync_must_fail(mf_behind 1 "FAIL line 9 metric~behind_ticks.max")
 body_sync_must_fail(mf_layer_off 1 "FAIL line 14 metric~response_ticks.max")
+# The late claim must reach the host (line 13 passes) and leave the glass standing (line 14) for the
+# refusal count to be what fails.
+body_sync_must_fail(mf_recall_claim 1 "FAIL line 15 metric~claims_rejected.count" "FAIL line 1[234] ")
 # The rock must reach the dummy (line 15 passes) for the knockdown check to be what fails.
 body_sync_must_fail(mf_dummy_stands 1 "FAIL line 16 effect~dummy: no effect took it on the host" "FAIL line 1[45] ")
 # The stub takes nothing by interaction, so only the real seam has a take that can lose.

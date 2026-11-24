@@ -296,9 +296,17 @@ body_sync_result_t body_sync_answer(body_sync_t *s, const body_sync_claim_event_
     }
     return sync_authority_answer(&s->authority, claim, granted);
 }
+static void take_over(body_sync_t *s, uint32_t slot);
 body_sync_result_t body_sync_assign(body_sync_t *s, body_sync_id_t id, uint8_t seat, body_sync_hold_t hold) {
     note_live(s, id);
-    return sync_authority_assign(&s->authority, id, seat, hold);
+    body_sync_result_t r = sync_authority_assign(&s->authority, id, seat, hold);
+    /* A move to this side takes over now, so what the caller does next (a recall puts the body
+       home) is not undone by the next apply's take-over. */
+    uint32_t slot = body_sync_id_slot(id);
+    if (r == BODY_SYNC_OK && s->entries[slot].copy_mode && body_sync_is_local(s, id) && b3Body_IsValid(s->entries[slot].body)) {
+        take_over(s, slot);
+    }
+    return r;
 }
 body_sync_result_t body_sync_set_holder(body_sync_t *s, body_sync_id_t id, body_sync_id_t holder) {
     return sync_authority_set_holder(&s->authority, id, holder);
@@ -409,6 +417,30 @@ static b3MotionLocks locks_of(uint8_t bits) {
                            .angularX = (bits & 8u) != 0, .angularY = (bits & 16u) != 0, .angularZ = (bits & 32u) != 0};
 }
 
+/* A body that became local continues from the newest state received: its motion, masks and
+   velocities. */
+static void take_over(body_sync_t *s, uint32_t slot) {
+    sync_authority_body_t *a = auth_of(s, slot);
+    entry_t *e = &s->entries[slot];
+    bool was_copy = e->copy_mode;
+    e->copy_mode = false;
+    a->resume = false;
+    if (e->has_in || was_copy || a->take_motion) {
+        bool kinematic;
+        uint8_t locks;
+        sync_authority_resume_motion(a, e->has_in, e->in.kinematic, e->in.locks, e->bound_type == b3_kinematicBody, locks_bits(e->bound_locks),
+                                     &kinematic, &locks);
+        b3Body_SetType(e->body, kinematic ? b3_kinematicBody : b3_dynamicBody);
+        b3Body_SetMotionLocks(e->body, locks_of(locks));
+        sync_authority_applied(a, kinematic, locks);
+    }
+    sync_masks_restore(&e->masks, e->body);
+    if (e->has_in) {
+        b3Body_SetLinearVelocity(e->body, (b3Vec3){e->in.velocity[0], e->in.velocity[1], e->in.velocity[2]});
+        b3Body_SetAngularVelocity(e->body, (b3Vec3){e->in.angular[0], e->in.angular[1], e->in.angular[2]});
+    }
+}
+
 void body_sync_apply(body_sync_t *s, uint32_t tick) {
     s->now = tick;
     s->authority.now = tick;
@@ -420,23 +452,7 @@ void body_sync_apply(body_sync_t *s, uint32_t tick) {
         }
         if (sync_authority_local(&s->authority, a)) {
             if (e->copy_mode || a->resume) {
-                bool was_copy = e->copy_mode;
-                e->copy_mode = false;
-                a->resume = false;
-                if (e->has_in || was_copy || a->take_motion) {
-                    bool kinematic;
-                    uint8_t locks;
-                    sync_authority_resume_motion(a, e->has_in, e->in.kinematic, e->in.locks, e->bound_type == b3_kinematicBody,
-                                                 locks_bits(e->bound_locks), &kinematic, &locks);
-                    b3Body_SetType(e->body, kinematic ? b3_kinematicBody : b3_dynamicBody);
-                    b3Body_SetMotionLocks(e->body, locks_of(locks));
-                    sync_authority_applied(a, kinematic, locks);
-                }
-                sync_masks_restore(&e->masks, e->body);
-                if (e->has_in) {
-                    b3Body_SetLinearVelocity(e->body, (b3Vec3){e->in.velocity[0], e->in.velocity[1], e->in.velocity[2]});
-                    b3Body_SetAngularVelocity(e->body, (b3Vec3){e->in.angular[0], e->in.angular[1], e->in.angular[2]});
-                }
+                take_over(s, slot);
             }
             continue;
         }

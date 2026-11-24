@@ -371,6 +371,33 @@ static bool action(parser_t *p, const line_words_t *w, uint32_t first, bool time
         if (!time_word(p, w->word[arg], &a.wait_ticks)) {
             return false;
         }
+    } else if (strcmp(verb, "recall") == 0 || strcmp(verb, "remove") == 0) {
+        bool recall = strcmp(verb, "recall") == 0;
+        a.verb = recall ? BODY_SYNC_VERB_RECALL : BODY_SYNC_VERB_REMOVE;
+        a.has_target = true;
+        if (a.player != BODY_SYNC_ENDPOINT_HOST) {
+            return refuse(p, "%s is the host's rule: only p0 may %s", verb, verb);
+        }
+        if (arg >= end) {
+            return refuse(p, "%s needs a body", verb);
+        }
+        if (!body_word(p, w->word[arg], &a.target)) {
+            return false;
+        }
+        arg += 1;
+        if (recall && arg < end) {
+            if (end - arg != 4 || strcmp(w->word[arg], "to") != 0) {
+                return refuse(p, "recall takes a body and at most 'to <x> <y> <z>', not '%s'", w->word[arg]);
+            }
+            for (int i = 0; i < 3; i++) {
+                if (!position_word(p, w->word[arg + 1u + (uint32_t)i], &a.home[i])) {
+                    return false;
+                }
+            }
+            a.has_home = true;
+        } else if (arg != end) {
+            return refuse(p, "remove takes exactly one body, not '%s'", w->word[arg]);
+        }
     } else {
         return refuse(p, "unknown verb '%s'", verb);
     }

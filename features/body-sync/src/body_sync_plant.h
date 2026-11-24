@@ -24,5 +24,8 @@ void body_sync_plant_transform_sleep(body_sync_t *sync);
 /* This host gives a contact claim no grace after the agent's ownership ended: the claim of a
    flight its own release ended, sent behind that release, is refused. */
 void body_sync_plant_end_grace_zero(body_sync_t *sync);
+/* This host keeps a recalled seat's old number standing for its contact claims: a recall (an
+   assign while the seat owned the body) drops none of the claims the seat sent before it heard. */
+void body_sync_plant_recall_keeps_number(body_sync_t *sync);
 
 #endif
