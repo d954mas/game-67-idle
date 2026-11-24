@@ -617,7 +617,10 @@ ignores the mode.
   caught body is never caught back until thrown from a granted grab, and two
   catchers of one throw get it once (`catch_guest_throw_100`,
   `catch_guest_throw_250`, `catch_race`; `test_body_sync_claims`: a forged
-  catcher). The catch is judged on `body_sync_check_contact` of the catcher's
+  catcher). That hold is the host's view only until her states come; then
+  `body_sync_authority` reads the hold she declares, so a game judges a later
+  claim on its own record of what it granted (the stand's granted grab), never
+  on `hold` alone. The catch is judged on `body_sync_check_contact` of the catcher's
   character and the body: the gap within her grab (her reach less the capsule's
   radius) and the measure's own slop for its evidence (`reach` less `slop`, the
   touch's part, which a grab needs none of). A claim the record lane resends

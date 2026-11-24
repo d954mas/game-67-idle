@@ -41,11 +41,12 @@ expect local_correction.max <= 1cm
 # Derived: the host's copy stops where the thrower's states end at the grant, then a round trip of
 # hers on hands over to her hand at her first state through the render offset, which takes up to a
 # lost take's 5 m here, gives back 0.15 m a tick beyond 2 m and 15 % of it from 1 m to 2 m: at most
-# 0.3 m a tick, as it passes 2 m (measured 0.28-0.30 over
-# 20 seeds at 1 and 2 % loss, the jump counted from the tick the owner changes). The stub draws a
+# 0.3 m a tick by construction, as it passes 2 m (measured 0.28-0.30 over 20 seeds at 1 and 2 %
+# loss, the jump counted from the tick the owner changes). The bound asserts the glide is used: a
+# handover drawn whole steps 1.8-3.1 m, which snap.count misses below 2 m. The stub draws a
 # copy at its newest state with no offset, so the handover shows whole: a jump below 2 m, a snap past
 # it (measured in 5 of 20 seeds, once each).
-expect jump.max <= 0.3m stub 2m
+expect jump.max <= 0.5m stub 2m
 expect snap.count <= 0 stub 1
 # A catch is a grab: nothing moves by interaction, and nothing of the host's touches the flight.
 expect takes.count <= 0

@@ -162,7 +162,8 @@ b3BodyId body_sync_body(const body_sync_t *sync, body_sync_id_t id);
 
 /* A local body's opaque bytes (an animation state): up to BODY_SYNC_DATA_MAX, travelling with
    its state until acknowledged, as flags do. INVALID when not local or too long. On a copy,
-   body_sync_data reads them as of the copy's playback time (the stub: as last received).
+   body_sync_data reads them as of the copy's playback time; when the played states carry none,
+   and on the stub, it reads the newest the body's owner sent, which can lead the drawn pose.
    Returns the size written to `out`, at most `capacity`; 0 when none or nothing bound. */
 body_sync_result_t body_sync_set_data(body_sync_t *sync, body_sync_id_t id, const void *data, uint32_t size);
 uint32_t body_sync_data(const body_sync_t *sync, body_sync_id_t id, void *out, uint32_t capacity);
