@@ -50,5 +50,8 @@ void stand_testing_plant_pause(body_sync_stand_t *st, uint32_t tick, uint32_t ti
    speed, never shows. With `copy`, that copy creeps instead, held kinematic and still between the
    moves as stand_testing_plant_wall holds one: a copy crept off its host body at rest. */
 void stand_testing_plant_creep(body_sync_stand_t *st, uint32_t tick, float metres, uint32_t ticks, bool copy);
+/* As stand_testing_plant_creep on the host body, but it turns `radians` about its own centre and
+   the vertical after every tick instead of moving: a turn its position never shows. */
+void stand_testing_plant_turn(body_sync_stand_t *st, uint32_t tick, float radians, uint32_t ticks);
 
 #endif

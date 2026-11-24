@@ -116,6 +116,7 @@ typedef struct endpoint {
        lag-aligned gap's pictures. */
     owner_ring_t *drawn_rings;
     uint8_t *drawn_paused; /* STAND_BODIES_MAX x RING_TICKS, PAUSE_* */
+    float (*drawn_turns)[4]; /* STAND_BODIES_MAX x RING_TICKS: the drawn rotations */
     bool ring_any;
     uint32_t ring_newest; /* the session tick of its last recorded step */
     copy_track_t tracks[STAND_BODIES_MAX];
@@ -161,6 +162,7 @@ typedef struct endpoint {
     uint32_t host_flip[STAND_BODIES_MAX]; /* tick its host body last fell asleep or woke */
     float layer_prev[STAND_BODIES_MAX][3]; /* drawn at the last sample, for the rest measures */
     float rest_here[STAND_BODIES_MAX][3];  /* ...and where its physics lay */
+    float rest_here_q[STAND_BODIES_MAX][4];
     stand_drive_t drives[STAND_BODIES_MAX]; /* every body's last speeds: a driven body's rest */
     uint32_t drive_id[STAND_BODIES_MAX];
     uint8_t spawn_count[STAND_BODIES_MAX];
@@ -212,7 +214,7 @@ struct body_sync_stand {
     float plant_offset_m, plant_offset_rad; /* along x, and about y */
     uint32_t plant_pause_tick, plant_pause_ticks, plant_pause_slot; /* stand_testing_plant_pause; slot + 1, 0 none */
     uint32_t plant_creep_tick, plant_creep_ticks, plant_creep_slot; /* stand_testing_plant_creep; slot + 1, 0 none */
-    float plant_creep_m;
+    float plant_creep_m, plant_creep_turn; /* turn: radians a tick, stand_testing_plant_turn */
     bool plant_creep_copy; /* the creep moves guest 1's copy, held as stand_testing_plant_wall holds one, not the host body */
     uint8_t authority; /* body_sync_authority_mode_t of every seam */
     uint64_t seed;
@@ -1098,7 +1100,7 @@ static uint8_t pause_mark(const body_sync_stand_t *st, const endpoint_t *ep, uin
 
 /* What this endpoint draws of every body after its step, under the session tick k. */
 static void record_drawn(const body_sync_stand_t *st, endpoint_t *ep, uint32_t k) {
-    if (!ep->drawn_rings || !ep->drawn_paused) {
+    if (!ep->drawn_rings || !ep->drawn_paused || !ep->drawn_turns) {
         return;
     }
     for (uint32_t slot = 0; slot < STAND_BODIES_MAX; slot++) {
@@ -1128,6 +1130,7 @@ static void record_drawn(const body_sync_stand_t *st, endpoint_t *ep, uint32_t k
         }
         float rot[4], *at = r->position[k % RING_TICKS];
         drawn_pose(ep, slot, at, rot);
+        memcpy(ep->drawn_turns[(size_t)slot * RING_TICKS + k % RING_TICKS], rot, sizeof(rot));
         if (!is_host_ep(ep) && st->plant_drift != 0.0f && body_sync_is_local(ep->sync, id) && !s->character) {
             at[0] += st->plant_drift;
         }
@@ -1664,41 +1667,52 @@ static float rest_speed(const endpoint_t *ep, uint32_t slot) {
 
 /* The host body's own path over the owner ticks a copy showed in the last REST_TICKS (the pull
    after the seam lets a copy out of the rest hold, and the copy's rest window), as the seam's
-   test of a move reads it: a copy-grid step left within SYNC_SOFT_CREEP_TICKS. */
+   test of a move reads it: a copy-grid step, in place or in turn, left within
+   SYNC_SOFT_CREEP_TICKS. */
 static bool host_moved_at_play(const endpoint_t *host, const endpoint_t *ep, uint32_t slot, body_sync_id_t id) {
     double played = 0.0;
     const owner_ring_t *r = host->drawn_rings ? &host->drawn_rings[slot] : NULL;
-    if (!r || r->id != id || !body_sync_playback(ep->sync, id, &played)) {
+    if (!r || !host->drawn_turns || r->id != id || !body_sync_playback(ep->sync, id, &played)) {
         return false;
     }
-    float path[REST_TICKS + SYNC_SOFT_CREEP_TICKS][3];
+    float path[REST_TICKS + SYNC_SOFT_CREEP_TICKS][3], turns[REST_TICKS + SYNC_SOFT_CREEP_TICKS][4];
     uint32_t count = 0;
     int64_t newest = (int64_t)floor(played);
     for (int64_t k = newest - (int64_t)(REST_TICKS + SYNC_SOFT_CREEP_TICKS) + 1; k <= newest; k++) {
         if (ring_at(r, k, path[count])) {
+            memcpy(turns[count], host->drawn_turns[(size_t)slot * RING_TICKS + (uint64_t)k % RING_TICKS], sizeof(turns[count]));
             count++;
         } else {
             count = 0; /* a gap in the ring: only a run of consecutive ticks is a path */
         }
     }
-    return stand_path_moved((const float (*)[3])path, count, SYNC_SOFT_HOLD_M, SYNC_SOFT_CREEP_TICKS);
+    return stand_path_moved((const float (*)[3])path, count, SYNC_SOFT_HOLD_M, SYNC_SOFT_CREEP_TICKS) ||
+           stand_turns_moved((const float (*)[4])turns, count, SYNC_SOFT_HOLD_RAD, SYNC_SOFT_CREEP_TICKS);
 }
 
 /* An awake host body (a pile against a character, which never sleeps) still enough that its copy
-   at `at` has nothing to follow: over the window host_moved_at_play reads, ending at the copy's
-   playback, the host body never left half a copy-grid step of `at`. A record rounds each axis by
-   at most half a cell, so every record of that window decodes within a step (SYNC_SOFT_HOLD_M) of
-   `at`, and the rest hold keeps the copy where it is: any move of it is the seam's, not the host's. */
-static bool host_held_at_play(const endpoint_t *host, const endpoint_t *ep, uint32_t slot, body_sync_id_t id, const float at[3]) {
+   at `at`, `at_q` has nothing to follow: over the window host_moved_at_play reads, ending at the
+   copy's playback, the host body never left half a copy-grid step of `at` nor half the hold's turn
+   of `at_q`. A record rounds each axis by at most half a cell, and its rotation by at most
+   net_bits_quat_error(9) (0.0097 rad, under half SYNC_SOFT_HOLD_RAD), so every record of that
+   window decodes within a step (SYNC_SOFT_HOLD_M, SYNC_SOFT_HOLD_RAD) of the copy's pose, and the
+   rest hold (drive_copy) keeps the copy
+   where it is: any move of it is the seam's, not the host's. A host body that turns further takes
+   its copy one step of the hold, its rounded position with it, as one that moves further does. */
+static bool host_held_at_play(const endpoint_t *host, const endpoint_t *ep, uint32_t slot, body_sync_id_t id, const float at[3], const float at_q[4]) {
     double played = 0.0;
     const owner_ring_t *r = host->drawn_rings ? &host->drawn_rings[slot] : NULL;
-    if (!r || r->id != id || !body_sync_playback(ep->sync, id, &played)) {
+    if (!r || !host->drawn_turns || r->id != id || !body_sync_playback(ep->sync, id, &played)) {
         return false;
     }
     int64_t newest = (int64_t)ceil(played);
     for (int64_t k = newest - (int64_t)(REST_TICKS + SYNC_SOFT_CREEP_TICKS) + 1; k <= newest; k++) {
-        float p[3];
+        float p[3], turn[3];
         if (!ring_at(r, k, p) || stand_distance3(p, at) > 0.5f * SYNC_SOFT_HOLD_M) {
+            return false;
+        }
+        sync_turn_between(at_q, host->drawn_turns[(size_t)slot * RING_TICKS + (uint64_t)k % RING_TICKS], turn);
+        if (sqrtf(turn[0] * turn[0] + turn[1] * turn[1] + turn[2] * turn[2]) > 0.5f * SYNC_SOFT_HOLD_RAD) {
             return false;
         }
     }
@@ -1808,10 +1822,10 @@ static void sample_layer(body_sync_stand_t *st) {
                 ep->pause_reset[slot] = true;
             }
             ep->offset_prev[slot] = offset_now;
-            float drawn[3], rot[4], host_at[3], here[3];
+            float drawn[3], rot[4], host_at[3], here[3], here_q[4];
             drawn_pose(ep, slot, drawn, rot);
             pose_of(host, slot, host_at, rot);
-            pose_of(ep, slot, here, rot);
+            pose_of(ep, slot, here, here_q);
             /* A render offset still decaying is a correction's tail, not a rest. */
             bool shown = stand_distance3(drawn, here) <= (float)REST_MOVE_M;
             bool host_rests = host_asleep && host_steady, copy_rests = stand_copy_rests(asleep, shown, stand_distance3(drawn, host_at), RESPONSE_M);
@@ -1821,9 +1835,10 @@ static void sample_layer(body_sync_stand_t *st) {
                 stand_metrics_creep(&st->metrics, gi, (double)rest_speed(host, slot));
             }
             /* A body asleep on the host has an exact pose to hold, and so has one kept awake (against
-               a character) that stays within half a step of its copy (host_held_at_play); one that
-               creeps further is followed on the copy grid, its steps the host's own creep. */
-            if (was_rest && (!touched || ep->standing) && (!b3Body_IsAwake(hs->body) || host_held_at_play(host, ep, slot, id, ep->rest_here[slot]))) {
+               a character) that stays within half a step of its copy, in place and in turn
+               (host_held_at_play); one that creeps further is followed on the copy grid, its steps
+               the host's own creep. */
+            if (was_rest && (!touched || ep->standing) && (!b3Body_IsAwake(hs->body) || host_held_at_play(host, ep, slot, id, ep->rest_here[slot], ep->rest_here_q[slot]))) {
                 double move = (double)stand_distance3(drawn, ep->layer_prev[slot]);
                 move = move > REST_MOVE_M ? move : 0.0; /* float noise of a pose read back */
                 stand_metrics_rest(&st->metrics, gi, move, ep->was_resting[slot] && !asleep && host_asleep);
@@ -1831,6 +1846,7 @@ static void sample_layer(body_sync_stand_t *st) {
             ep->was_resting[slot] = asleep;
             memcpy(ep->layer_prev[slot], drawn, sizeof(drawn));
             memcpy(ep->rest_here[slot], here, sizeof(here));
+            memcpy(ep->rest_here_q[slot], here_q, sizeof(here_q));
         }
         if (st->items_done && ep->world_rest_run >= REST_TICKS && !now_rest) {
             stand_metrics_rest_break(&st->metrics, gi, !guest_moved);
@@ -2955,6 +2971,7 @@ void body_sync_stand_destroy(body_sync_stand_t *st) {
         free(ep->rings);
         free(ep->drawn_rings);
         free(ep->drawn_paused);
+        free(ep->drawn_turns);
         if (ep->world) {
             stand_world_destroy(ep->world);
             free(ep->world);
@@ -3031,6 +3048,7 @@ static body_sync_stand_t *create_stand(const body_sync_stand_config_t *config, b
         ep->rings = calloc(STAND_BODIES_MAX, sizeof(*ep->rings));
         ep->drawn_rings = calloc(STAND_BODIES_MAX, sizeof(*ep->drawn_rings));
         ep->drawn_paused = calloc((size_t)STAND_BODIES_MAX * RING_TICKS, 1);
+        ep->drawn_turns = calloc((size_t)STAND_BODIES_MAX * RING_TICKS, sizeof(*ep->drawn_turns));
         if (!ep->world || !ep->rings || !stand_world_build(ep->world, &st->scene, 1u + st->scenario.guests, error)) {
             if (error && !error->text[0]) {
                 error_text(error, 0, "out of memory");
@@ -3286,6 +3304,12 @@ void stand_testing_plant_creep(body_sync_stand_t *st, uint32_t tick, float metre
     st->plant_creep_m = metres;
     st->plant_creep_ticks = ticks;
     st->plant_creep_copy = copy;
+    st->plant_creep_turn = 0.0f;
+}
+
+void stand_testing_plant_turn(body_sync_stand_t *st, uint32_t tick, float radians, uint32_t ticks) {
+    stand_testing_plant_creep(st, tick, 0.0f, ticks, false);
+    st->plant_creep_turn = radians;
 }
 
 /* The first light copy of a host body guest 1 holds (`awake`: one whose host body is awake), as
@@ -3323,7 +3347,11 @@ static void plant_pause_creep(body_sync_stand_t *st) {
     if (st->plant_creep_slot && st->now - st->plant_creep_tick < st->plant_creep_ticks) {
         stand_slot_t *c = &st->ep[st->plant_creep_copy ? 1 : 0].world->slots[st->plant_creep_slot - 1u];
         b3Vec3 p = b3Body_GetPosition(c->body);
-        b3Body_SetTransform(c->body, (b3Vec3){p.x + st->plant_creep_m, p.y, p.z}, b3Body_GetRotation(c->body));
+        b3Quat q = b3Body_GetRotation(c->body);
+        if (st->plant_creep_turn != 0.0f) {
+            q = b3NormalizeQuat(b3MulQuat(b3MakeQuatFromAxisAngle((b3Vec3){0.0f, 1.0f, 0.0f}, st->plant_creep_turn), q));
+        }
+        b3Body_SetTransform(c->body, (b3Vec3){p.x + st->plant_creep_m, p.y, p.z}, q);
         b3Body_SetAwake(c->body, true);
     }
 }

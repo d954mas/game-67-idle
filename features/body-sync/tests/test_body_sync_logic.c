@@ -537,6 +537,18 @@ static void test_a_copy_following_its_creeping_owner_is_no_break(void) {
         TEST_ASSERT_EQUAL_MESSAGE(speed_mm_s > 27, moved, "the seam's creep bound read wrong");
     }
     TEST_ASSERT_FALSE(stand_path_moved((const float (*)[3])path, 8u, 0.0034f, 8u)); /* too short to tell */
+    /* In turn the bound is a rotation step, 0.0195 rad, in 8 ticks: 0.146 rad/s. */
+    float turns[N][4];
+    for (int mrad_s = 50; mrad_s <= 250; mrad_s += 50) {
+        for (int k = 0; k < N; k++) {
+            float half = 0.5f * (float)mrad_s * 0.001f * (float)k / 60.0f;
+            turns[k][0] = turns[k][2] = 0.0f;
+            turns[k][1] = sinf(half);
+            turns[k][3] = cosf(half);
+        }
+        bool moved = stand_turns_moved((const float (*)[4])turns, N, 0.0195f, 8u);
+        TEST_ASSERT_EQUAL_MESSAGE(mrad_s > 146, moved, "the seam's creep bound in turn read wrong");
+    }
     TEST_ASSERT_TRUE_MESSAGE(stand_copy_breaks(true, false, false), "a copy moving off a still host body is no break");
     TEST_ASSERT_FALSE_MESSAGE(stand_copy_breaks(true, false, true), "a copy following its creeping host body is a break");
     TEST_ASSERT_FALSE(stand_copy_breaks(true, true, false));

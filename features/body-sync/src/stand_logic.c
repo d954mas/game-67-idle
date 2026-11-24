@@ -18,6 +18,22 @@ bool stand_path_moved(const float (*path)[3], uint32_t count, float step_m, uint
     return false;
 }
 
+bool stand_turns_moved(const float (*turns)[4], uint32_t count, float step_rad, uint32_t ticks) {
+    for (uint32_t k = ticks; k < count; k++) {
+        const float *a = turns[k - ticks], *b = turns[k];
+        /* conj(a) * b: its vector part's length against its scalar gives the angle without acos's
+           loss near 1, where a step of 0.0195 rad lies. */
+        float x = a[3] * b[0] - a[0] * b[3] - a[1] * b[2] + a[2] * b[1];
+        float y = a[3] * b[1] + a[0] * b[2] - a[1] * b[3] - a[2] * b[0];
+        float z = a[3] * b[2] - a[0] * b[1] + a[1] * b[0] - a[2] * b[3];
+        float w = a[3] * b[3] + a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+        if (2.0f * atan2f(sqrtf(x * x + y * y + z * z), fabsf(w)) > step_rad) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool stand_copy_breaks(bool host_rests, bool copy_rests, bool host_moved_at_play) { return host_rests && !copy_rests && !host_moved_at_play; }
 
 /* ---- a driven body's rest ---- */

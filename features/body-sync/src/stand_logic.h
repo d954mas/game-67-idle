@@ -165,6 +165,9 @@ bool stand_copy_rests(bool slow, bool shown, float host_gap_m, float near_m);
 /* The owner's exact path, oldest first, moved by the seam's test of a move (sync_soft_owner_rests):
    at some tick it was more than `step_m` from where it was `ticks` before. */
 bool stand_path_moved(const float (*path)[3], uint32_t count, float step_m, uint32_t ticks);
+/* ...and its rotations, oldest first: at some tick it had turned more than `step_rad` from its
+   rotation `ticks` before. */
+bool stand_turns_moved(const float (*turns)[4], uint32_t count, float step_rad, uint32_t ticks);
 /* A copy that does not rest while its host body rests ends the world's rest by this guest's doing,
    unless the host body's own path at the owner ticks the copy showed moved (`host_moved_at_play`):
    the seam takes a copy of an owner moving that fast out of the rest hold and pulls it after, so

@@ -503,6 +503,36 @@ static void test_a_creeping_host_body_ends_the_rest_as_a_host_wake(void) {
     body_sync_stand_destroy(crept);
 }
 
+/* As run_creep, the host body turning about its centre instead (stand_testing_plant_turn). */
+static body_sync_stand_t *run_turn(float radians, uint32_t ticks) {
+    body_sync_error_t error;
+    TEST_ASSERT_TRUE_MESSAGE(body_sync_scenario_parse(creep_pile_text, strlen(creep_pile_text), &scenario, &error), error.text);
+    scene_named(scenario.scene)->build(&scene);
+    body_sync_stand_config_t config = {.scene = &scene, .scenario = &scenario};
+    body_sync_stand_t *stand = body_sync_stand_create(&config, &error);
+    TEST_ASSERT_NOT_NULL_MESSAGE(stand, error.text);
+    stand_testing_plant_turn(stand, 700, radians, ticks);
+    body_sync_stand_run(stand);
+    return stand;
+}
+
+/* One of the awake host boxes turns, 0.008 rad a tick: three times the seam's creep bound in turn
+   (a rotation step, 0.0195 rad, in 8 ticks) and past half that step of its copy within 2 ticks,
+   while its position stays within the half step. The seam follows it a step of the hold, the
+   record's rounded position with it, then lets the copy out: the host's motion, so the rest
+   ends as a host wake, never her break, and none of the copy's moves is jitter. */
+static void test_a_turning_host_body_ends_the_rest_as_a_host_wake(void) {
+    body_sync_stand_t *clean = run_creep(0, false), *turned = run_turn(0.008f, 120);
+    const body_sync_guest_metrics_t *c = &body_sync_stand_report(clean)->guests[0], *p = &body_sync_stand_report(turned)->guests[0];
+    TEST_ASSERT_TRUE_MESSAGE(body_sync_stand_report(clean)->passed, "the clean run broke its rest");
+    TEST_ASSERT_TRUE(p->rest_ticks > 0);
+    TEST_ASSERT_EQUAL_UINT32_MESSAGE(c->rest_breaks, p->rest_breaks, "a turning host body's copy counted as her break");
+    TEST_ASSERT_TRUE_MESSAGE(p->host_wakes > c->host_wakes, "the turning host body never ended a rest");
+    TEST_ASSERT_TRUE_MESSAGE(p->rest_jitter_max_m <= c->rest_jitter_max_m, "a turning host body's copy counted as rest jitter");
+    body_sync_stand_destroy(clean);
+    body_sync_stand_destroy(turned);
+}
+
 /* Her copy of an awake, still host box creeps instead, slow and drawn where it is: only its
    distance to the host body tells it from a rest. Past the 1 cm a resting copy keeps to its host
    body (RESPONSE_M, 13 ticks of the creep) the rest ends, her doing: rest_breaks sees it. */
@@ -606,6 +636,7 @@ int main(void) {
     RUN_TEST(test_rest_breaks_fails_on_a_held_copy_churned_in_steps);
     RUN_TEST(test_rest_jitter_fails_on_a_copy_of_an_awake_still_host_body);
     RUN_TEST(test_a_creeping_host_body_ends_the_rest_as_a_host_wake);
+    RUN_TEST(test_a_turning_host_body_ends_the_rest_as_a_host_wake);
     RUN_TEST(test_rest_breaks_fails_on_a_still_copy_crept_off_its_host_body);
     RUN_TEST(test_pause_window_fails_on_a_pause_held_past_the_cap);
     RUN_TEST(test_aligned_gap_fails_on_states_shown_a_tick_early);
