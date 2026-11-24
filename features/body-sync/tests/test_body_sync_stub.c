@@ -320,6 +320,34 @@ static void test_claims_answers_and_holds(void) {
 }
 
 /* A release that crosses the host's grant leaves the body with the host. */
+/* A host state that arrives in the same poll as the grant belongs to the ownership before it: once
+   the guest gives the body back, its copy plays nothing (body_sync_playback false) until a host
+   state sent after the return comes. */
+static void test_a_state_beside_the_grant_is_never_played_after_the_return(void) {
+    tick_all();
+    tick_all();
+    tick_no++;
+    step(&host);
+    state(&host, &guest); /* a host state, not yet applied */
+    grant(&guest, ID0, BODY_SYNC_HOLD_UNTIL_RELEASE);
+    step(&guest);
+    TEST_ASSERT_TRUE(body_sync_is_local(guest.sync, ID0));
+    for (int i = 0; i < 5; i++) {
+        tick_all();
+    }
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_release(guest.sync, ID0));
+    tick_no++;
+    step(&guest);
+    double played = 0.0;
+    TEST_ASSERT_FALSE(body_sync_is_local(guest.sync, ID0));
+    TEST_ASSERT_FALSE_MESSAGE(body_sync_playback(guest.sync, ID0, &played), "a copy plays a state of the ownership before the grant");
+    records(&guest, &host);
+    for (int i = 0; i < 4 && !body_sync_playback(guest.sync, ID0, &played); i++) {
+        tick_all();
+    }
+    TEST_ASSERT_TRUE_MESSAGE(body_sync_playback(guest.sync, ID0, &played), "the host's states since the return never play");
+}
+
 static void test_a_release_crossing_the_grant_stays_with_the_host(void) {
     tick_all();
     body_sync_claim(guest.sync, ID0, BODY_SYNC_HOLD_UNTIL_RELEASE);
@@ -1845,6 +1873,7 @@ int main(void) {
     RUN_TEST(test_copy_is_driven_over_one_step);
     RUN_TEST(test_an_older_state_is_stale);
     RUN_TEST(test_claims_answers_and_holds);
+    RUN_TEST(test_a_state_beside_the_grant_is_never_played_after_the_return);
     RUN_TEST(test_a_release_crossing_the_grant_stays_with_the_host);
     RUN_TEST(test_a_released_claim_is_withdrawn);
     RUN_TEST(test_the_owner_keeps_its_hold_through_the_grant);

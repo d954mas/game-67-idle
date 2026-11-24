@@ -242,7 +242,6 @@ body_sync_t *body_sync_create(const body_sync_config_t *config) {
     if (!config || !b3World_IsValid(config->world) || config->seats < 1 || config->seats > BODY_SYNC_SEATS_MAX ||
         config->seat >= config->seats || config->tick_hz < 1 || config->tick_hz > 1000 || config->delay_min > 60 || config->delay_max > 60 ||
         !(config->light_mass_max >= 0.0f && config->light_mass_max <= 1e6f) || config->authority > BODY_SYNC_AUTHORITY_INTERACTION ||
-        config->flight_end > BODY_SYNC_FLIGHT_END_REST ||
         (config->authority == BODY_SYNC_AUTHORITY_INTERACTION && !(config->light_mass_max > 0.0f)) ||
         (config->delay_min && config->delay_max && config->delay_min > config->delay_max)) {
         return NULL;
@@ -268,7 +267,6 @@ body_sync_t *body_sync_create(const body_sync_config_t *config) {
     s->authority.take_gap = take_gap;
     s->authority.take_context = s;
     s->authority.mode = config->authority == BODY_SYNC_AUTHORITY_INTERACTION ? SYNC_POLICY_INTERACTION : SYNC_POLICY_HOST;
-    s->authority.flight_until_rest = config->flight_end == BODY_SYNC_FLIGHT_END_REST;
     sync_sender_init(&s->sender, &s->codec, (uint8_t)config->seats, config->state_budget);
     sync_receiver_init(&s->receiver, config->tick_hz, config->max_speed);
     sync_playback_init(&s->playback, config->tick_hz, config->delay_min, config->delay_max);

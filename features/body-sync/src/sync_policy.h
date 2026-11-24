@@ -7,7 +7,7 @@
 
      host         (BODY_SYNC_AUTHORITY_HOST) the host owns every free body. A body a guest threw
                   or dropped (a hold until settled) goes back to the host at its first touch of a
-                  body that is not static, or when it sleeps (flight_end REST: only then).
+                  body that is not static, when it sleeps, or after SYNC_POLICY_AGE_TICKS of flight.
      interaction  (BODY_SYNC_AUTHORITY_INTERACTION) the seat whose action sets a light body moving
                   owns it, and through it whatever that body sets moving, until they rest; the
                   others show it through playback. A take is optimistic: the guest simulates the
@@ -74,9 +74,9 @@ typedef enum sync_policy_priority {
    four times the derived bound and stays inside that empty band. */
 #define SYNC_POLICY_TAKE_SLOP_M 0.15f
 
-/* A thrown or dropped body's flight (a hold until settled), after a step. Held until rest, a flight
-   that never sleeps (rolling, pressed awake) goes back after SYNC_POLICY_AGE_TICKS as a body owned
-   by interaction does with no agent on it: no throw owns a body for ever. */
+/* A thrown or dropped body's flight (a hold until settled), after a step. One that never sleeps and
+   meets nothing but static bodies (rolling on a floor) goes back after SYNC_POLICY_AGE_TICKS of
+   flight, as a body owned by interaction does with no agent on it: no throw owns a body for ever. */
 typedef enum sync_flight {
     SYNC_FLIGHT_ON = 0,    /* keeps flying under its thrower */
     SYNC_FLIGHT_RETURNS,   /* back to the host (on the host: the hold ends) */
@@ -88,8 +88,7 @@ typedef struct sync_policy_flight_in {
     bool asleep;
     bool touched_body;       /* began touching a body that is neither static nor its last holder */
     bool touched_untakable;  /* ...one of which this seat may not take (heavy, a character, owned elsewhere) */
-    bool until_rest;         /* body_sync_config_t.flight_end REST: a touch ends no flight */
-    uint32_t age;            /* ticks this side has flown it */
+    uint32_t age;            /* ticks in a row this side has flown it */
 } sync_policy_flight_in_t;
 sync_flight_t sync_policy_flight(const sync_policy_flight_in_t *in);
 

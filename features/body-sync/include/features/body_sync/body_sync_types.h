@@ -65,9 +65,9 @@ typedef enum body_sync_class {
 typedef enum body_sync_hold {
     BODY_SYNC_HOLD_UNTIL_RELEASE = 0, /* carried: authority stays until body_sync_release */
     /* Thrown or punched by its owner: the seam itself returns it to the host on its first
-       contact with a non-static body other than its last holder (config flight_end CONTACT), or
-       when it falls asleep, so one side judges its contacts. Contacts are seen only on shapes
-       with contact events on. */
+       contact with a non-static body other than its last holder, when it falls asleep, or after
+       600 ticks of flight (10 s at 60 Hz: one rolling for ever), so one side judges its contacts.
+       Contacts are seen only on shapes with contact events on. */
     BODY_SYNC_HOLD_UNTIL_SETTLED,
     /* Owned by interaction (config authority INTERACTION): the seat whose action set it moving
        simulates it until it and what it touches rest, then the seam hands it back to the host;
@@ -81,14 +81,6 @@ typedef enum body_sync_authority_mode {
     BODY_SYNC_AUTHORITY_HOST = 0,    /* the host, but for what a guest carries or threw in flight */
     BODY_SYNC_AUTHORITY_INTERACTION, /* the seat whose action set it moving, until it rests */
 } body_sync_authority_mode_t;
-
-/* When a thrown or dropped body's flight (a hold until settled) ends (body_sync_config_t.flight_end).
-   Under INTERACTION a flight that meets a body its thrower may take goes on as owned by interaction
-   in both. */
-typedef enum body_sync_flight_end {
-    BODY_SYNC_FLIGHT_END_CONTACT = 0, /* at its first contact with a body that is not static, or asleep */
-    BODY_SYNC_FLIGHT_END_REST,        /* once asleep, or after 10 s awake: its thrower judges every contact until then */
-} body_sync_flight_end_t;
 
 typedef struct body_sync_authority {
     uint8_t seat;    /* the seat that simulates the body */

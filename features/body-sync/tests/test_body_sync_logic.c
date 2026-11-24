@@ -264,9 +264,6 @@ static void test_refusals_name_their_line(void) {
         {"scenario a\nscene b\nguests 1\np0 recall crate on p1\n", 4},
         {"scenario a\nscene b\nguests 1\nat 1s p0 recall crate on p1 rock contact glass\n", 4},
         {"scenario a\nscene b\nguests 1\np1 drop as d\np0 recall crate on d +1s +1s\n", 5},
-        {"scenario a\nscene b\nflight_end soon\np0 wait 1s\n", 3},
-        {"scenario a\nscene b\nflight_end\np0 wait 1s\n", 3},
-        {"scenario a\nscene b\nflight_end rest\nflight_end rest\np0 wait 1s\n", 4},
     };
     for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
         body_sync_error_t error;
@@ -288,10 +285,6 @@ static void test_refusals_name_their_line(void) {
     char with_nul[] = "scenario a\nscene b\0\n";
     TEST_ASSERT_FALSE(body_sync_scenario_parse(with_nul, sizeof(with_nul) - 1, &scenario, &error));
     TEST_ASSERT_FALSE(body_sync_scenario_load("no/such/file.scn", &scenario, &error));
-    TEST_ASSERT_TRUE_MESSAGE(parse("scenario a\nscene b\nflight_end rest\np0 wait 1s\n", &error), error.text);
-    TEST_ASSERT_EQUAL_UINT8(BODY_SYNC_FLIGHT_END_REST, scenario.flight_end);
-    TEST_ASSERT_TRUE_MESSAGE(parse("scenario a\nscene b\np0 wait 1s\n", &error), error.text);
-    TEST_ASSERT_EQUAL_UINT8(BODY_SYNC_FLIGHT_END_CONTACT, scenario.flight_end);
 }
 
 /* Truncations, bit flips and random bytes: every input is refused or parsed, never a crash. */

@@ -106,7 +106,7 @@ static bool local_slot(const body_sync_t *s, uint32_t slot) { return sync_author
 body_sync_t *body_sync_create(const body_sync_config_t *config) {
     if (!config || !b3World_IsValid(config->world) || config->seats < 1 || config->seats > BODY_SYNC_SEATS_MAX ||
         config->seat >= config->seats || config->tick_hz < 1 || config->tick_hz > 1000 || !(isfinite(config->max_speed) && config->max_speed > 0.0f) ||
-        !(isfinite(config->max_spin) && config->max_spin > 0.0f) || config->flight_end > BODY_SYNC_FLIGHT_END_REST) {
+        !(isfinite(config->max_spin) && config->max_spin > 0.0f)) {
         return NULL;
     }
     for (int i = 0; i < 3; i++) {
@@ -496,6 +496,9 @@ static void take_over(body_sync_t *s, uint32_t slot) {
     a->resume = false;
     bool has_in = e->has_in && !e->in_old;
     e->in_old = false;
+    /* What came before the take-over is the old ownership's: a copy this body turns back into
+       plays none of it. */
+    e->in_fresh = false;
     bool unheard_end = a->released && has_in && !e->in.asleep && (int32_t)(a->released_tick - e->in_tick) > 0;
     a->released = false;
     if (has_in || was_copy || a->take_motion) {
@@ -646,7 +649,7 @@ void body_sync_collect(body_sync_t *s, uint32_t tick) {
             /* The stub takes nothing by interaction: the host policy's rule, every touch untakable. */
             bool touched = touched_moving(&events, e->body, ignore);
             sync_policy_flight_in_t in = {.mode = SYNC_POLICY_HOST, .asleep = o->asleep, .touched_body = touched, .touched_untakable = touched,
-                                          .until_rest = s->config.flight_end == BODY_SYNC_FLIGHT_END_REST, .age = e->flight_ticks};
+                                          .age = e->flight_ticks};
             if (sync_policy_flight(&in) == SYNC_FLIGHT_RETURNS) {
                 uint8_t hold = sync_authority_settled(&s->authority, o->id);
                 if (is_host(s)) {

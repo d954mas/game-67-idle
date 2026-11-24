@@ -625,21 +625,19 @@ ignores the mode.
   may take stays the thrower's, owned by interaction; one that touches a body
   it may not take (heavy, a character, owned elsewhere) goes back to the host
   as under HOST.
-- **When a flight ends** (`body_sync_config_t.flight_end`, both policies, the
-  stub too). CONTACT, the default, ends it at its first contact with a body that
-  is not static (above), or when it sleeps; REST only when it sleeps, its thrower
-  judging every contact until then, and the host holding it dynamic as a copy
-  meanwhile. A REST flight that never sleeps (rolling, pressed awake) goes back
-  after 600 ticks of flight, the 10 s a body owned by interaction is kept with
-  no agent on it (`SYNC_POLICY_AGE_TICKS`), so no throw owns a body for ever. Every endpoint uses the same. Measured against each other on the
-  stand's random sweep (a pile and light and heavy tables, 100 and 300 ms): REST hands the
-  pictures back at rest, about 1 mm of `return_jump` where CONTACT shows the
-  hand-over's glide (p50 0.13 to 0.21 m, past 2 m at 300 ms), but the host's
-  bodies then answer a dynamic copy a delay late instead of the throw itself: a
-  third of the struck tables moved less than half as far as solo, one 1.15 m
-  more, where under CONTACT the host's table moves as solo to 0.1 mm. Under
-  INTERACTION a light target makes the two the same: the flight is owned by
-  interaction either way.
+- **When a flight ends.** At its first contact with a body that is not
+  static (above), when it sleeps, or after 600 ticks of flight (10 s at 60 Hz,
+  `SYNC_POLICY_AGE_TICKS`, the bound a body owned by interaction has with no
+  agent on it): one rolling on a floor for ever goes back too. Ending a flight
+  only at rest instead was measured on the stand's random sweep and left out:
+  under HOST it keeps the thrower judging contacts with the host's bodies, which
+  the host meets through a copy a delay late, so one side no longer judges a
+  contact (a third of the struck tables moved less than half as far as solo,
+  one 1.15 m more, where the first contact keeps them as solo to 0.1 mm); under
+  INTERACTION with a takable target it is the same rule already. What it gained,
+  pictures handed back at rest (about 1 mm of `return_jump` where the first
+  contact shows the hand-over's glide, p50 0.13 to 0.21 m), is the glide's to
+  fix.
 - **Conflicts.** The host first: a body the host's agents touch is the
   host's until it rests (a hold until rest there), and no guest may take it;
   the host's agent touching a guest's body owned by interaction takes it back
@@ -891,14 +889,13 @@ metrics name which (`implementation`: "real 0.6.0" or "stub 0.6.0"), so one
 scenario and seed compare the two. A game's own stand target links
 `body_sync_stand` (the real seam) or `body_sync_stand_stub`.
 
-`body_sync_stand <scenario> [--seed N] [--light-mass KG] [--authority host|interaction] [--flight-end contact|rest] [--out metrics.json] [--no-series] [--quiet]`
+`body_sync_stand <scenario> [--seed N] [--light-mass KG] [--authority host|interaction] [--out metrics.json] [--no-series] [--quiet]`
 prints a line per guest and per check, writes the metrics (default
 `<scenario>.json` in the current folder) and exits 0 when every check passed,
 1 when one failed, 2 when the input was refused, the run could not start or
 the metrics could not be written. `--list-scenes` names the scenes. `--seed`
-overrides the scenario's seed for sweeps, and `--light-mass`, `--authority` and
-`--flight-end` the scenario's `light_mass`, `authority` and `flight_end`, so one
-scenario runs in every mode.
+overrides the scenario's seed for sweeps, and `--light-mass` and `--authority`
+the scenario's `light_mass` and `authority`, so one scenario runs in every mode.
 
 A run has three phases. Before tick 0 every guest connects and is seated in
 seat g; that is not measured. Then the scenario's items run, within 600 s of
@@ -1208,12 +1205,18 @@ vector, the move of what the picture plays: a copy's owner path when its owner
 sends to it directly (at the owner change, the new owner's move over one owner
 tick at the tick it shows), otherwise the body's own step. A placement the
 render offset takes moves nothing drawn; the offset's glide counts tick by tick.
-`return_jump` takes the largest over 1 s from the tick each picture (the
-host's, the thrower's, another guest's: the JSON keeps the three apart) shows
-the host as the owner again, that tick counted: by then a round trip, a
-playback delay and a tick have passed at the stand's 300 ms. `switch_jump` is
-the host's picture at the tick a body it simulated turns into a guest's copy (a
-grab, a take). A guest with neither measured fails a check of it.
+`return_jump` takes the largest from the tick each picture (the host's, the
+thrower's, another guest's: the JSON keeps the three apart) shows the host as
+the owner again, that tick counted, until 16 ticks after the picture first plays
+a host-owned state with no render offset left: its playback clock may still be
+closing onto the new timeline, at most 1.25 times the owner's rate over the
+15-tick delay range. A sample after several steps at once measures no move but
+still opens or keeps a window. A window closed before its picture settled (the
+run's end, the body gone or taken again) is unmeasured (`return_unsettled` in
+the JSON) and fails a check of `return_jump.max`, as a guest with none measured
+does: it may have closed before the jump showed. `switch_jump` is the host's
+picture at the tick a body it simulated turns into a guest's copy (a grab, a
+take); a guest with none fails a check of it.
 `return_rest` derives a 1 cm bound for a return at rest; planted in
 `test_body_sync_checks`, a return that draws the host's or the thrower's picture
 10 cm off fails it by the plant.
@@ -1387,9 +1390,8 @@ scenario word `authority`, `>=` in metric checks, the CLI and viewer flag
 `--authority`, `body_sync_is_pull_paused`, `aligned_gap`, `local_correction`, `local_turn` and the take counts in the
 metrics, `body_sync_old_owner_drops`, `body_sync_teleported`, the host's rebind quarantine, the scenario
 verbs `recall` and `remove`, the `on` trigger and `late_drops`, the scenario
-check `expect moved ... solo [interaction ...]` and the scene `mug_tables`, `flight_end` (a config field
-after `authority`) with the scenario word `flight_end` and the CLI and viewer flag `--flight-end`, the
-metrics `return_jump` and `switch_jump`, a guest's flight on
+check `expect moved ... solo [interaction ...]` and the scene `mug_tables`, the
+metrics `return_jump` and `switch_jump`, a flight's age bound, a guest's flight on
 the host driven no faster than its owner and taken back without its unheard
 contact, and the catch:
 `body_sync_answer_as` (a grant under another hold than the claimed one),

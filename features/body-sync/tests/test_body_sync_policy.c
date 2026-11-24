@@ -36,24 +36,15 @@ static void test_a_flight_that_meets_a_takable_body_stays_its_throwers(void) {
     TEST_ASSERT_EQUAL(SYNC_FLIGHT_RETURNS, sync_policy_flight(&in));
 }
 
-/* flight_end REST: no touch ends a flight, only sleep; a takable touch under interaction still
-   turns it into a body owned by interaction. */
-static void test_a_flight_held_until_rest_ends_only_asleep(void) {
+/* A flight that touches nothing but static bodies and never sleeps goes back at the age bound,
+   under either policy. */
+static void test_a_flight_that_never_sleeps_goes_back_at_the_age_bound(void) {
     for (int mode = SYNC_POLICY_HOST; mode <= SYNC_POLICY_INTERACTION; mode++) {
-        sync_policy_flight_in_t in = {.mode = (sync_policy_mode_t)mode, .touched_body = true, .touched_untakable = true, .until_rest = true};
+        sync_policy_flight_in_t in = {.mode = (sync_policy_mode_t)mode, .age = SYNC_POLICY_AGE_TICKS - 1u};
         TEST_ASSERT_EQUAL(SYNC_FLIGHT_ON, sync_policy_flight(&in));
-        in.asleep = true;
+        in.age = SYNC_POLICY_AGE_TICKS;
         TEST_ASSERT_EQUAL(SYNC_FLIGHT_RETURNS, sync_policy_flight(&in));
     }
-    sync_policy_flight_in_t in = {.mode = SYNC_POLICY_INTERACTION, .touched_body = true, .until_rest = true};
-    TEST_ASSERT_EQUAL(SYNC_FLIGHT_INTERACTS, sync_policy_flight(&in));
-    /* One that never sleeps goes back at the age bound, and only held until rest. */
-    in = (sync_policy_flight_in_t){.mode = SYNC_POLICY_HOST, .until_rest = true, .age = SYNC_POLICY_AGE_TICKS - 1u};
-    TEST_ASSERT_EQUAL(SYNC_FLIGHT_ON, sync_policy_flight(&in));
-    in.age = SYNC_POLICY_AGE_TICKS;
-    TEST_ASSERT_EQUAL(SYNC_FLIGHT_RETURNS, sync_policy_flight(&in));
-    in.until_rest = false;
-    TEST_ASSERT_EQUAL(SYNC_FLIGHT_ON, sync_policy_flight(&in));
 }
 
 static void test_a_guest_takes_a_free_light_body_its_moving_agent_touches(void) {
@@ -820,7 +811,7 @@ static void test_a_take_withdraws_the_seats_pending_claim(void) {
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_a_flight_that_meets_a_takable_body_stays_its_throwers);
-    RUN_TEST(test_a_flight_held_until_rest_ends_only_asleep);
+    RUN_TEST(test_a_flight_that_never_sleeps_goes_back_at_the_age_bound);
     RUN_TEST(test_a_guest_takes_a_free_light_body_its_moving_agent_touches);
     RUN_TEST(test_the_host_grants_free_bodies_only);
     RUN_TEST(test_the_hosts_agents_come_first);

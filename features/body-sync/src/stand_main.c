@@ -6,7 +6,7 @@
 #include "stand_logic.h"
 
 static int usage(void) {
-    fprintf(stderr, "usage: body_sync_stand <scenario.scn> [--seed N] [--light-mass KG] [--authority host|interaction] [--flight-end contact|rest] [--out metrics.json] [--no-series] [--quiet]\n"
+    fprintf(stderr, "usage: body_sync_stand <scenario.scn> [--seed N] [--light-mass KG] [--authority host|interaction] [--out metrics.json] [--no-series] [--quiet]\n"
                     "       body_sync_stand --list-scenes\n");
     return 2;
 }
@@ -67,8 +67,8 @@ void body_sync_stand_print_report(const body_sync_report_t *report, bool failure
 int body_sync_stand_main(int argc, char **argv, const body_sync_scene_entry_t *extra, uint32_t extra_count) {
     const char *scenario_path = NULL;
     const char *out_path = NULL;
-    bool quiet = false, series = true, override_seed = false, override_light = false, override_authority = false, override_flight_end = false;
-    uint8_t authority = BODY_SYNC_AUTHORITY_HOST, flight_end = BODY_SYNC_FLIGHT_END_CONTACT;
+    bool quiet = false, series = true, override_seed = false, override_light = false, override_authority = false;
+    uint8_t authority = BODY_SYNC_AUTHORITY_HOST;
     uint64_t seed = 0;
     float light = 0.0f;
     for (int i = 1; i < argc; i++) {
@@ -105,13 +105,6 @@ int body_sync_stand_main(int argc, char **argv, const body_sync_scene_entry_t *e
             }
             authority = strcmp(mode, "interaction") == 0 ? BODY_SYNC_AUTHORITY_INTERACTION : BODY_SYNC_AUTHORITY_HOST;
             override_authority = true;
-        } else if (strcmp(arg, "--flight-end") == 0 && i + 1 < argc) {
-            const char *end = argv[++i];
-            if (strcmp(end, "contact") != 0 && strcmp(end, "rest") != 0) {
-                return usage();
-            }
-            flight_end = strcmp(end, "rest") == 0 ? BODY_SYNC_FLIGHT_END_REST : BODY_SYNC_FLIGHT_END_CONTACT;
-            override_flight_end = true;
         } else if (strcmp(arg, "--out") == 0 && i + 1 < argc) {
             out_path = argv[++i];
         } else if (strcmp(arg, "--no-series") == 0) {
@@ -148,8 +141,7 @@ int body_sync_stand_main(int argc, char **argv, const body_sync_scene_entry_t *e
     entry->build(scene);
     body_sync_stand_config_t config = {.scene = scene, .scenario = scenario, .override_seed = override_seed, .seed = seed, .series = series,
                                        .override_light_mass = override_light, .light_mass_max = light,
-                                       .override_authority = override_authority, .authority = authority,
-                                       .override_flight_end = override_flight_end, .flight_end = flight_end};
+                                       .override_authority = override_authority, .authority = authority};
     stand = body_sync_stand_create(&config, &error);
     if (!stand) {
         /* Line 0 is a refusal of the scene, which is C data, not of a scenario line. */

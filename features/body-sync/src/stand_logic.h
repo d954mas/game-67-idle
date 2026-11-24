@@ -311,6 +311,7 @@ typedef struct stand_metrics {
        windows; the host's switch of a body it simulated to a guest's copy, likewise. */
     double return_jump[BODY_SYNC_GUESTS_MAX][3];
     uint32_t return_jumps[BODY_SYNC_GUESTS_MAX];
+    uint32_t return_unsettled[BODY_SYNC_GUESTS_MAX];
     double switch_jump[BODY_SYNC_GUESTS_MAX];
     uint32_t switch_jumps[BODY_SYNC_GUESTS_MAX];
     stand_hist_t aligned[BODY_SYNC_GUESTS_MAX], prediction[BODY_SYNC_GUESTS_MAX], flight_pause[BODY_SYNC_GUESTS_MAX];
@@ -357,6 +358,8 @@ typedef enum stand_picture {
 } stand_picture_t;
 /* One return window's largest per-tick jump of one picture (body_sync_metrics.h return_jump). */
 void stand_metrics_return_jump(stand_metrics_t *metrics, uint32_t guest, stand_picture_t picture, double jump_m);
+/* A return window that closed before its picture played the host with no offset left. */
+void stand_metrics_return_unsettled(stand_metrics_t *metrics, uint32_t guest);
 /* The host's picture at the tick a body it simulated turns into this guest's copy. */
 void stand_metrics_switch_jump(stand_metrics_t *metrics, uint32_t guest, double jump_m);
 /* One sample of the lag-aligned gap (body_sync_metrics.h), `predicted` of a copy the layer predicts. */

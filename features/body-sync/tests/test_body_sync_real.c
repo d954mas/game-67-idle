@@ -519,12 +519,6 @@ static void test_create_refuses_limits_too_wide_for_the_wire(void) {
     ok = body_sync_create(&config);
     TEST_ASSERT_NOT_NULL(ok);
     body_sync_destroy(ok);
-    config.flight_end = (body_sync_flight_end_t)(BODY_SYNC_FLIGHT_END_REST + 1);
-    TEST_ASSERT_NULL(body_sync_create(&config));
-    config.flight_end = BODY_SYNC_FLIGHT_END_REST;
-    ok = body_sync_create(&config);
-    TEST_ASSERT_NOT_NULL(ok);
-    body_sync_destroy(ok);
     TEST_ASSERT_EQUAL_STRING("real 0.8.0", body_sync_implementation());
 }
 

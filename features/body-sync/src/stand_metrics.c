@@ -133,6 +133,12 @@ void stand_metrics_return_jump(stand_metrics_t *metrics, uint32_t guest, stand_p
     }
 }
 
+void stand_metrics_return_unsettled(stand_metrics_t *metrics, uint32_t guest) {
+    if (guest < metrics->guests) {
+        metrics->return_unsettled[guest]++;
+    }
+}
+
 void stand_metrics_switch_jump(stand_metrics_t *metrics, uint32_t guest, double jump_m) {
     if (guest < metrics->guests && isfinite(jump_m)) {
         metrics->switch_jump[guest] = jump_m > metrics->switch_jump[guest] ? jump_m : metrics->switch_jump[guest];
@@ -371,6 +377,7 @@ void stand_metrics_summarize(const stand_metrics_t *metrics, body_sync_report_t 
         out->return_jump_max_m = out->return_jump_host_m > out->return_jump_own_m ? out->return_jump_host_m : out->return_jump_own_m;
         out->return_jump_max_m = out->return_jump_other_m > out->return_jump_max_m ? out->return_jump_other_m : out->return_jump_max_m;
         out->return_jumps = metrics->return_jumps[g];
+        out->return_unsettled = metrics->return_unsettled[g];
         out->switch_jump_max_m = metrics->switch_jump[g];
         out->switch_jumps = metrics->switch_jumps[g];
         out->aligned_samples = (uint32_t)metrics->aligned[g].count;
@@ -595,6 +602,14 @@ bool stand_metric_value(const body_sync_report_t *report, const stand_metrics_t 
             v = m->jump_max_m;
         } else if (strcmp(name, "return_jump.count") == 0) {
             v = (double)m->return_jumps;
+        } else if (strcmp(name, "return_jump.max") == 0 && m->return_unsettled > 0) {
+            /* A window cut short may have closed before the jump showed. */
+            if (detail && detail_size) {
+                snprintf(detail, detail_size, "g%u: %u return windows closed before their picture played the host", (unsigned)m->seat,
+                         (unsigned)m->return_unsettled);
+            }
+            *value = (double)INFINITY;
+            return true;
         } else if ((strcmp(name, "return_jump.max") == 0 && m->return_jumps == 0) || (strcmp(name, "switch_jump.max") == 0 && m->switch_jumps == 0)) {
             /* No handover measured is no evidence of a smooth one. */
             if (detail && detail_size) {
@@ -846,9 +861,6 @@ bool stand_json_write(const body_sync_report_t *r, const stand_metrics_t *m, boo
     key(&j, "authority");
     put(&j, r->authority == BODY_SYNC_AUTHORITY_INTERACTION ? "\"interaction\"" : "\"host\"");
     put(&j, ",");
-    key(&j, "flight_end");
-    put(&j, r->flight_end == BODY_SYNC_FLIGHT_END_REST ? "\"rest\"" : "\"contact\"");
-    put(&j, ",");
     key(&j, "ticks");
     putf(&j, "%u", r->ticks);
     put(&j, ",");
@@ -929,6 +941,9 @@ bool stand_json_write(const body_sync_report_t *r, const stand_metrics_t *m, boo
         put(&j, ",");
         key(&j, "return_jumps");
         putf(&j, "%u", gm->return_jumps);
+        put(&j, ",");
+        key(&j, "return_unsettled");
+        putf(&j, "%u", gm->return_unsettled);
         put(&j, ",");
         key(&j, "switch_jump_max");
         number(&j, gm->switch_jump_max_m);

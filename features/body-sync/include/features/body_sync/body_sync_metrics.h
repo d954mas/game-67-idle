@@ -49,9 +49,12 @@ extern "C" {
      at the one it shows); for a body the endpoint simulates, or a copy with no owner path to
      play, its own step. A placement the render offset takes moves nothing drawn and is no jump;
      the offset's glide is, tick by tick. return_jump is the largest over a return window: from
-     the tick a picture's owner of a body turns from a guest to the host, that tick counted, for
-     1 s; host, thrower and other guests each draw their own. switch_jump is the host's at the
-     tick a body it simulated turns into a guest's copy.
+     the tick a picture's owner of a body turns from a guest to the host, that tick counted, until
+     16 ticks after the picture first plays a host-owned state with no render offset left (its
+     playback clock closing onto the new timeline: 1.25 times the owner's rate over the 15-tick
+     delay range); host, thrower and other guests each draw their own. A window closed before
+     that (the run's end, the body gone or taken again) is unmeasured and fails a check of it.
+     switch_jump is the host's at the tick a body it simulated turns into a guest's copy.
    - jerk: for each copy the guest draws, |d(t) - d(t-1)| where d(t) is the drawn position's
      move over tick t: a sudden change of motion. Bodies at rest on both ticks are skipped.
    - own delay: ticks from a player's action on its own endpoint until the host's world shows
@@ -81,7 +84,7 @@ extern "C" {
      deferred.count [records]: records due that a packet's budget left out, both directions
      lag_divergence.max lag_divergence.p95 path_error.max path_error.p95 jump.max [m]
      return_jump.max switch_jump.max [m]   return_jump.count [windows]: a handover's jump (below);
-       a guest with none measured fails a check of the max
+       a guest with none measured, or with a return window unmeasured, fails a check of the max
      step.count offset_step.count snap.count [body-ticks]   behind_ticks.max behind_ticks.p95 [ticks]
      response_ticks.max response_ticks.p95 [ticks]   response_misses.count [hits]   rest_jitter.max [m]
      rest_wakes.count [body-ticks]   rest_breaks.count [breaks]   host_wakes.count [wakes]   rest_lag_ticks.max [ticks]   soft_places.max [placements]
@@ -204,6 +207,7 @@ typedef struct body_sync_guest_metrics {
        turns into this guest's copy (a grab, a take). */
     double return_jump_max_m, return_jump_host_m, return_jump_own_m, return_jump_other_m;
     uint32_t return_jumps;
+    uint32_t return_unsettled; /* windows closed before their picture played the host: a check of return_jump fails */
     double switch_jump_max_m;
     uint32_t switch_jumps;
     /* The lag-aligned gap: each picture of a moving body against its owner's own picture at the
@@ -302,7 +306,6 @@ typedef struct body_sync_report {
     uint32_t tick_hz;
     float light_mass_max;  /* the second layer run, kilograms; 0 off */
     uint8_t authority;     /* body_sync_authority_mode_t the seams ran */
-    uint8_t flight_end;    /* body_sync_flight_end_t the seams ran */
     uint32_t ticks;        /* scenario ticks run */
     uint32_t rest_tick;    /* first tick the host's world was at rest after the last item; UINT32_MAX: never */
     uint32_t guest_count;
