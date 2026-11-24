@@ -3,10 +3,11 @@ each model that wears it.
 
 The sidecar holds everything authored (sim meshes, pins as r = 0, weights, maps, fabric names, layer pairs); the
 cook adds only what is derived: edges with their rest angles and warp/weft kind, tethers to the nearest pin, the
-outfit's bones and body shapes, and the binding grown over the render mesh. `stale` compares the sidecar's build
-hash with the current script and inputs."""
+outfit's bones and body shapes, and the binding grown over the render mesh. `stale` names every input of the
+sidecar's build record that changed."""
 import hashlib
 import heapq
+import json
 import math
 from numbers import Integral
 from pathlib import Path
@@ -140,16 +141,37 @@ def depfile_text(target, dependencies):
     return escape(target) + ": " + " ".join(escape(p) for p in sorted(dependencies, key=str)) + "\n"
 
 
-def stale(sidecar, root, script):
-    """The build inputs whose hash no longer matches the sidecar's record ([] when it is current)."""
-    build = sidecar.build
-    out = []
-    if build.get("script_sha256") != hashlib.sha256(Path(script).read_bytes()).hexdigest():
-        out.append(str(script))
-    for relative, digest in build.get("inputs", {}).items():
-        path = Path(root) / relative
-        if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != digest:
-            out.append(relative)
+def stale(sidecar, root, script, colliders=None):
+    """The build inputs that no longer match the sidecar's record, each named ([] when it is current): the script,
+    every recorded input file, the set and content of the modules the script imports, the numpy and scipy versions,
+    the library version; with `colliders` (a file relative to root) the body its shapes were fitted on; per baked
+    corrective the runtime sources, the files its bake read and the pieces it was baked on."""
+    from . import build as Bd
+    from . import host as H
+    from .corrective import state_digest
+    root, build = Path(root), sidecar.build
+    current = dict(build, script_sha256=Bd.sha256(script),
+                   inputs={k: (Bd.sha256(root / k) if (root / k).is_file() else "missing") for k in build.get("inputs", {})},
+                   modules=Bd.module_hashes(script, root), versions=Bd.versions(), library=Bd.LIBRARY_VERSION)
+    out = [d.replace("script_sha256", f"script {script}", 1) if d.startswith("script_sha256") else d
+           for d in Bd.differences(build, current)]
+    if colliders is not None:
+        recorded = json.loads((root / colliders).read_text(encoding="utf-8")).get("body_sha256")
+        body = build.get("body")
+        body_file = root / (body if isinstance(body, str) else build["model"])
+        if recorded != Bd.sha256(body_file):
+            out.append(f"colliders {colliders}: fitted on body {recorded}, the sidecar's body "
+                       f"{body_file.relative_to(root).as_posix()} is {Bd.sha256(body_file)}")
+    digest = state_digest(sidecar.pieces) if sidecar.correctives else None
+    for c in sidecar.correctives:
+        key = c.get("key", {})
+        if key.get("runtime_sha256") != H.runtime_sha256():
+            out.append(f"corrective {c['name']}: the runtime sources changed since its bake")
+        for name, recorded in key.get("inputs", {}).items():
+            if not (root / name).is_file() or Bd.sha256(root / name) != recorded:
+                out.append(f"corrective {c['name']}: input {name}")
+        if key.get("pieces_sha256") != digest:
+            out.append(f"corrective {c['name']}: the pieces differ from those it was baked on")
     return out
 
 

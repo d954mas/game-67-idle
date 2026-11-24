@@ -141,6 +141,16 @@ class FileTest(unittest.TestCase):
             np.testing.assert_allclose(t.center, s.center, atol=1e-6)
             self.assertAlmostEqual(t.radius, s.radius, delta=1e-6)
 
+    def test_a_degenerate_segment_and_a_non_finite_shape_are_refused(self):
+        # Two joints at one rest position give a cone without an axis.
+        rig = C.Rig(JOINTS, [(0, Y1, 0), (0, Y1, 0)])
+        with self.assertRaisesRegex(ValueError, "share a rest position"):
+            C.fit(limb(0.08, 0.05), rig, SEGMENTS, [], CLIPS)
+        shapes = C.fit(limb(0.08, 0.05), RIG, SEGMENTS, [], CLIPS)
+        shapes.spheres[0].radius = float("nan")
+        with tempfile.TemporaryDirectory() as folder, self.assertRaisesRegex(ValueError, "not finite"):
+            C.write(Path(folder) / "x.cloth-colliders.json", shapes, "ab" * 32)
+
 
 if __name__ == "__main__":
     unittest.main()

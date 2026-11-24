@@ -134,15 +134,12 @@ def torn(binding, positions, faces, take):
     return links[bad], excess[bad]
 
 
-def seam_breaks(binding, faces, labelled, kinematic):
-    """Labelled render vertices next to an unlabelled one (the seam) bound to a triangle with a free corner (G2):
-    they would move away from the skinned vertex beside them. Returns (vertices, their amount)."""
-    seam = np.zeros(len(labelled), bool)
-    for tri in faces:
-        if labelled[tri].any() and not labelled[tri].all():
-            seam[tri[labelled[tri]]] = True
+def seam_breaks(binding, must, kinematic):
+    """Render vertices that must follow skinning (`must`: the seam beside unlabelled vertices and the split copies of
+    them) bound to a triangle with a free corner (G2): they would move away from the skinned vertex beside them.
+    Returns (vertices, their amount)."""
     amount = binding.amount(kinematic)
-    bad = np.flatnonzero(seam & (binding.triangle >= 0) & (amount > 0))
+    bad = np.flatnonzero(np.asarray(must, bool) & (binding.triangle >= 0) & (amount > 0))
     return bad, amount[bad]
 
 

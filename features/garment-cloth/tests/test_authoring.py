@@ -1,7 +1,9 @@
 """The authoring library on synthetic shapes: a sheet, a tube over a cylinder body, and a split sheet.
 
-Each operation keeps its invariant, each map rule gives its meaning on a shape whose answer is known, and the
-sidecar reads back byte for byte."""
+Each operation keeps its invariant, each map rule gives its meaning on a shape whose answer is known, the derived maps
+do not depend on the order a script declares them in, every gate fails on a known failure and refuses to pass with
+nothing measured, the build record names each input that changed, and the sidecar reads back byte for byte."""
+import json
 import sys
 import tempfile
 import unittest
@@ -13,6 +15,8 @@ HERE = Path(__file__).resolve().parent
 sys.path[:0] = [str(HERE.parent / "tools"), str(HERE)]
 from synthetic import glb, grid, tube  # noqa: E402
 from garment import body as B  # noqa: E402
+from garment import build as Bd  # noqa: E402
+from garment import gates  # noqa: E402
 from garment import sidecar as sc  # noqa: E402
 from garment import sim  # noqa: E402
 from garment.model import Surface  # noqa: E402
@@ -33,10 +37,24 @@ def lanes(n, joint):
     return ids, w
 
 
-def cylinder_scene(hole=None):
+def closed_cylinder(radius, y0, y1, around=32, rows=41):
+    """A tube capped at both ends, faces out: a closed body."""
+    points, faces = tube(0.0, radius, y0, y1, around=around, rows=rows)
+    n = len(points)
+    points = np.vstack([points, [[0, y0, 0], [0, y1, 0]]])
+    caps = []
+    for i in range(around):
+        caps.append((n, i, (i + 1) % around))
+        top = (rows - 1) * around
+        caps.append((n + 1, top + (i + 1) % around, top + i))
+    return points, np.vstack([faces, caps])
+
+
+def cylinder_scene(hole=None, split=False):
     """A body cylinder (radius 0.10, y 0..1, 32 x 41) and a skirt tube (radius 0.13, y 0.40..0.90) whose top row is
     the unlabelled waistband it is sewn to; the skirt's lower half is weighted to `left`. hole: (y0, y1) where the
-    body's faces are deleted, as an outfit generator deletes skin under cloth."""
+    body's faces are deleted, as an outfit generator deletes skin under cloth. split: the waistband is a primitive of
+    its own and the skirt is labelled to its top row, joined to the band only by coincident positions."""
     body_p, body_f = tube(0.0, BODY_R, 0.0, 1.0, around=32, rows=41)
     if hole:
         centre = body_p[body_f].mean(1)[:, 1]
@@ -45,8 +63,23 @@ def cylinder_scene(hole=None):
     label = np.where(cloth_p[:, 1] < 0.899, 1.0, 0.0)
     ids, w = lanes(len(cloth_p), 0)
     ids[cloth_p[:, 1] < 0.65, 0] = 1
-    return glb([("skin", body_p, body_f, *lanes(len(body_p), 0), {}),
-                ("cloth", cloth_p, cloth_f, ids, w, {"_CLOTH_PIECE": label})], JOINTS)
+    prims = [("skin", body_p, body_f, *lanes(len(body_p), 0), {})]
+    if split:
+        band_p, band_f = tube(0.0, CLOTH_R, 0.90, 0.95, around=24, rows=2)
+        prims.append(("band", band_p, band_f, *lanes(len(band_p), 0), {}))
+        label = np.ones(len(cloth_p))
+    prims.append(("cloth", cloth_p, cloth_f, ids, w, {"_CLOTH_PIECE": label}))
+    return glb(prims, JOINTS)
+
+
+def body_scene():
+    """The skirt over a closed body cylinder declared as a complete body file."""
+    data = cylinder_scene()
+    points, faces = closed_cylinder(BODY_R, 0.0, 1.0)
+    body = glb([("skin", points, faces, *lanes(len(points), 0), {})], JOINTS)
+    scene = Scene(data)
+    (scene.root / "body.glb").write_bytes(body)
+    return scene
 
 
 class Scene:
@@ -55,8 +88,9 @@ class Scene:
         self.root = Path(self.dir.name)
         (self.root / "model.glb").write_bytes(data)
 
-    def outfit(self):
-        return Outfit(None, self.root, "model.glb", body=["skin"], fabrics={"plain": FABRIC})
+    def outfit(self, body=("skin",), **kwargs):
+        return Outfit(None, self.root, "model.glb", body=list(body) if isinstance(body, tuple) else body,
+                      fabrics={"plain": FABRIC}, **kwargs)
 
     def close(self):
         self.dir.cleanup()
@@ -68,7 +102,6 @@ def skirt(outfit, vertices=200):
     p.pin(p.from_render(~p.render.labelled | (p.render.height <= 0.1)))
     p.weights_transfer(p.render.surface(), nearest=4)
     p.gradient(rate=0.5, cap=0.2)
-    p.backstop_from_body()
     return p
 
 
@@ -80,17 +113,42 @@ def split_sheet(n=9):
     return sim.cut(points, faces, path), path
 
 
+def gate_data(outfit, data=None, stage=2, shapes=None, seats=None, complete=None):
+    data = sc.write(outfit.built()) if data is None else data
+    body = outfit.body
+    return gates.GateData(sidecar=data, model=str(outfit.model_path),
+                          body=(body.points, body.faces, body.weights, body.complete if complete is None else complete,
+                                body.rim_faces),
+                          shapes=shapes or dict(spheres=[], cones=[]), fabrics={p.id: FABRIC for p in outfit.pieces},
+                          clips=[], seats=seats or {}, stage=stage)
+
+
+def posed(outfit, matrices):
+    """Sidecar bytes of the outfit carrying a zero corrective keyed on a pose, and the clip spec that poses it: the
+    per-frame gates then see the reference in that pose."""
+    built = outfit.built()
+    for p in built.pieces:
+        p.correctives["pose"] = (np.zeros_like(p.points), np.zeros_like(p.points))
+    record = dict(name="pose", pose=dict(joints=JOINTS, matrices=np.asarray(matrices, float).tolist()))
+    built.correctives = [record]
+    return sc.write(built), (gates.CORRECTIVE + "pose", None, record)
+
+
 class TestSidecar(unittest.TestCase):
     def test_round_trip_is_byte_for_byte_with_correctives_and_the_plane_form(self):
         scene = Scene(cylinder_scene())
         try:
             o = scene.outfit()
             p = skirt(o)
-            p.R[np.flatnonzero(~p.pins)[:3]] = np.inf
-            p.correctives["sit"] = (np.where(p.pins[:, None], 0.0, np.full_like(p.x, 0.01)), np.zeros_like(p.x))
-            from garment.corrective import state_digest
-            o.corrective_records["sit"] = dict(name="sit", clip="sit", t=1.5, pieces_sha256=state_digest([p.built()]))
-            data = sc.write(o.built())
+            plane = np.zeros(len(p.x), bool)
+            plane[np.flatnonzero(~p.pins)[:3]] = True
+            p.paint("R", plane, np.inf)
+            built = o.built()
+            piece = built.piece("skirt")
+            piece.correctives["sit"] = (np.where(piece.r[:, None] == 0, 0.0, np.full_like(piece.points, 0.01)),
+                                        np.zeros_like(piece.points))
+            built.correctives = [dict(name="sit", clip="sit", t=1.5)]
+            data = sc.write(built)
             back = sc.read(data)
             self.assertEqual(sc.write(back), data)
             piece = back.piece("skirt")
@@ -102,8 +160,12 @@ class TestSidecar(unittest.TestCase):
             np.testing.assert_allclose(piece.weights.sum(1), 1, atol=1e-6)
             self.assertEqual(back.build["inputs"].keys(), {"model.glb"})
             path = o.write()
-            self.assertEqual(path.read_bytes(), data)
+            self.assertEqual(sc.read(path.read_bytes()).piece("skirt").points.tobytes(), piece.points.tobytes())
             self.assertEqual(path.name, "model.cloth.glb")
+            record = json.loads(path.with_name("model.cloth.provenance.json").read_text(encoding="utf-8"))
+            self.assertEqual(record["sha256"], Bd.sha256(path))
+            self.assertEqual(record["integrity"], dict(sha256=Bd.sha256(path), bytes=path.stat().st_size))
+            self.assertTrue(record["license"] and record["origin"])
         finally:
             scene.close()
 
@@ -154,9 +216,18 @@ class TestOperations(unittest.TestCase):
             length = np.linalg.norm(p.x[e[:, 0]] - p.x[e[:, 1]], axis=1)
             self.assertLessEqual(length[inside[e].all(1)].max(), 4 / 3 * 0.030 + 1e-9)
             np.testing.assert_allclose(p.w.sum(1), 1)
-            self.assertTrue(np.isnan(p.d).all())
+            self.assertTrue(np.isnan(p.r[~p.pins]).all())
             # The pins kept their places: the edit was below them.
             np.testing.assert_allclose(np.sort(p.x[p.pins], axis=0), np.sort(before, axis=0))
+        finally:
+            scene.close()
+
+    def test_density_refuses_to_merge_a_pin_with_a_free_vertex(self):
+        scene = Scene(cylinder_scene())
+        try:
+            p = skirt(scene.outfit(), vertices=150)
+            with self.assertRaisesRegex(ValueError, "merge pins"):
+                p.density(p.f.all, edge_mm=120)
         finally:
             scene.close()
 
@@ -210,33 +281,61 @@ class TestMaps(unittest.TestCase):
 
     def test_backstop_on_a_cylinder_points_in_and_measures_the_limb(self):
         o = self.scene.outfit()
-        p = skirt(o)
+        skirt(o)
+        p = o.resolved_piece("skirt")
         free = ~p.pins
         radial = p.x * [1, 0, 1]
         radial /= np.linalg.norm(radial, axis=1, keepdims=True)
         self.assertGreater(np.min(-np.einsum("ij,ij->i", p.b, radial)), 0.97)
         gap = np.linalg.norm(p.x[:, [0, 2]], axis=1) - BODY_R
-        acting = free & (p.R > 0)
         np.testing.assert_allclose(p.d[free], np.maximum(gap[free] - FABRIC["thickness"], 0), atol=2e-3)
-        self.assertTrue(acting.any())
-        np.testing.assert_allclose(p.R[acting], BODY_R, rtol=0.06)
-        self.assertTrue(np.all(p.R[free & (p.d >= p.r)] == 0))
+        # The body radius is known behind every free vertex, also where the authored r is shorter than d: the runtime
+        # may grow r, and a zero R would leave the backstop off there.
+        self.assertTrue((free & (p.d >= p.r)).any())
+        np.testing.assert_allclose(p.R[free], BODY_R, rtol=0.06)
+        self.assertTrue(np.all(p.R[p.pins] == 0))
+
+    def test_the_backstop_does_not_depend_on_the_order_the_script_wrote_r(self):
+        # The order trap of the review: a backstop measured while r is small, then r opened by a second gradient,
+        # left R = 0 where the cloth could now reach the body. The build derives the backstop from the final state.
+        def build(open_after):
+            scene = Scene(cylinder_scene())
+            try:
+                o = scene.outfit()
+                p = o.piece("skirt", 1, "plain")
+                p.create("cloth", 200)
+                p.pin(p.from_render(~p.render.labelled | (p.render.height <= 0.1)))
+                p.weights_transfer(p.render.surface(), nearest=4)
+                p.gradient(rate=0.02, cap=0.004)
+                p.paint("R", p.f.y > 0.85, 0.5)
+                if open_after:
+                    p.gradient(rate=0.5, cap=0.08)
+                return sc.read(sc.write(o.built()))
+            finally:
+                scene.close()
+        late = build(True).piece("skirt")
+        reach = (late.r > 0) & (late.d < late.r)
+        self.assertTrue(reach.any())
+        self.assertTrue(np.all(late.R[reach & (late.points[:, 1] <= 0.85)] > 0))
+        # The override comes after the derivation whatever line wrote it.
+        np.testing.assert_allclose(late.R[(late.points[:, 1] > 0.85) & (late.r > 0)], 0.5)
+        early = build(False).piece("skirt")
+        np.testing.assert_array_equal(early.R, late.R)
+        np.testing.assert_array_equal(early.d, late.d)
 
     def test_backstop_is_off_over_a_hole_of_the_body(self):
         scene = Scene(cylinder_scene(hole=(0.45, 0.75)))
         try:
             o = scene.outfit()
-            p = o.piece("skirt", 1, "plain")
-            p.create("cloth", 200)
-            p.pin(p.from_render(~p.render.labelled | (p.render.height <= 0.1)))
-            p.weights_transfer(p.render.surface(), nearest=4)
-            p.gradient(rate=0.5, cap=0.2)
-            holes = p.backstop_from_body()
+            skirt(o)
+            p = o.resolved_piece("skirt")
             over = (p.f.y > 0.47) & (p.f.y < 0.73) & ~p.pins
-            self.assertGreater(holes, 0)
+            self.assertTrue(over.any())
             self.assertTrue(np.all(p.R[over] == 0))
-            covered = (p.f.y < 0.42) & ~p.pins & (p.d < p.r)
+            covered = (p.f.y < 0.42) & ~p.pins
             self.assertTrue(np.all(p.R[covered] > 0))
+            holes, = gates.holes(sc.read(sc.write(o.built())), o.body)
+            self.assertGreater(holes["counts"]["free_over_hole"], 0)
         finally:
             scene.close()
 
@@ -249,12 +348,11 @@ class TestMaps(unittest.TestCase):
         outer.pin(outer.f.y > 0.879)
         outer.weights_transfer(Surface(inner.x, inner.faces, inner.w, inner.joints))
         outer.gradient(rate=0.5, cap=0.2)
-        outer.backstop_from_body()
         r_before = inner.r.copy()
+        # Declared before the weights it reads: the build applies it after them.
+        o.layer("over", "skirt")
         outer.weights_set(outer.f.all, "right", 1.0)
-        counts = o.layer("over", "skirt")
-        self.assertGreater(counts["outer"], 0)
-        self.assertGreater(counts["inner"], 0)
+        outer, inner = o.resolved_piece("over"), o.resolved_piece("skirt")
         t = 2 * FABRIC["thickness"]
         hit = ~outer.pins & (outer.f.y > 0.6)
         g = np.linalg.norm(outer.x[hit][:, [0, 2]], axis=1) - CLOTH_R
@@ -347,22 +445,35 @@ class TestWeightsFollowBody(unittest.TestCase):
         finally:
             scene.close()
 
-    def test_follow_body_takes_the_body_weights_and_keeps_the_pins(self):
+    def test_follow_body_takes_the_body_weights_and_keeps_the_final_pins(self):
         scene = Scene(cylinder_scene())
         try:
             o = scene.outfit()
             p = skirt(o)
             own = p.w.copy()
             p.weights_follow_body()
+            with self.assertRaisesRegex(ValueError, "follows the body"):
+                p.weights_set(p.f.all, "left", 1.0)
+            # A pin added after the declaration keeps its own weights too: the build reads the final pins.
+            late = (~p.pins) & (p.f.y < 0.45)
+            p.pin(late)
+            got = o.resolved_piece("skirt")
             # The body is weighted to `root` alone, so every free vertex follows it; the pins keep their weights.
-            np.testing.assert_allclose(p.f.w["root"][~p.pins], 1)
-            np.testing.assert_array_equal(p.w[p.pins], own[p.pins])
-            self.assertTrue(np.any(own[~p.pins, 1] > 0.5))
+            np.testing.assert_allclose(got.f.w["root"][~got.pins], 1)
+            np.testing.assert_array_equal(got.w[got.pins], own[got.pins])
+            self.assertTrue(np.any(own[late, 1] > 0.5))
         finally:
             scene.close()
 
 
-class TestSideGate(unittest.TestCase):
+class TestGates(unittest.TestCase):
+    def setUp(self):
+        self.scene = Scene(cylinder_scene())
+        self.o = self.scene.outfit()
+
+    def tearDown(self):
+        self.scene.close()
+
     def test_a_reference_past_the_limb_axis_fails_and_one_turning_with_it_passes(self):
         from garment.gates import Limb
         rest = np.eye(4)[None]
@@ -377,6 +488,141 @@ class TestSideGate(unittest.TestCase):
         turn[:3, :3] = [[0, 0, 1], [0, 1, 0], [-1, 0, 0]]
         np.testing.assert_allclose(limb.crossing(points @ turn[:3, :3].T, turn[None], r, 0.004), 0)
 
+    def test_g5_fails_on_a_ninety_degree_blend_of_two_joints(self):
+        p = skirt(self.o)
+        p.gradient(rate=0.05, cap=0.01)
+        quarter = np.eye(4)
+        # `left` (the skirt's lower half) turned 90 degrees about the x axis through the joint line y = 0.65.
+        quarter[:3, :3] = [[1, 0, 0], [0, 0, -1], [0, 1, 0]]
+        quarter[:3, 3] = [0, 0.65, 0.65]
+        data, spec = posed(self.o, [np.eye(4), quarter, np.eye(4)])
+        still = gates.clip_gates(gate_data(self.o, data), (gates.REST, None), ("G5",))[("G5", "skirt")]
+        turned = gates.clip_gates(gate_data(self.o, data), spec, ("G5",))[("G5", "skirt", "pose")]
+        self.assertFalse(still["failed"])
+        self.assertTrue(turned["failed"])
+        self.assertGreater(turned["worst"]["value_mm"], 10)
+
+    def test_g4_and_g7_fail_on_a_reference_held_inside_the_body_and_a_shape(self):
+        skirt(self.o).gradient(rate=0.05, cap=0.01)
+        # The joint of the lower half pulled 9 cm toward the body axis: those references go deep into the body.
+        inward = np.eye(4)
+        inward[:3, 3] = [-0.09, 0, 0]
+        data, spec = posed(self.o, [np.eye(4), inward, np.eye(4)])
+        shapes = dict(spheres=[("root", (0.0, 0.2, 0.0), BODY_R), ("root", (0.0, 0.9, 0.0), BODY_R)], cones=[(0, 1)])
+        out = gates.clip_gates(gate_data(self.o, data, complete=True, shapes=shapes), spec, ("G4", "G7"))
+        self.assertTrue(out[("G4", "skirt", "pose")]["failed"])
+        # Where G4 decides (a complete body at an enforced stage) a sample deeper in the skin than r is G4's alone.
+        self.assertGreater(out[("G7", "skirt", "pose")]["masked_by_g4"], 0)
+        reported = gates.clip_gates(gate_data(self.o, data, stage=1, complete=False, shapes=shapes), spec, ("G4", "G7"))
+        self.assertEqual(reported[("G7", "skirt", "pose")]["masked_by_g4"], 0)
+        self.assertTrue(reported[("G7", "skirt", "pose")]["failed"])
+
+    def test_g10_needs_twice_the_covering_fabric_between_body_and_seat(self):
+        skirt(self.o)
+        built = self.o.built()
+        gap = gates.seat_gap(self.o.body, built, {p.id: FABRIC for p in built.pieces})
+        covered = np.isfinite(gap)
+        y = self.o.body.points[:, 1]
+        self.assertTrue(np.all(covered[(y > 0.45) & (y < 0.85)]) and not covered[y < 0.3].any())
+        np.testing.assert_allclose(gap[covered], 2 * FABRIC["thickness"])
+
+        def worst(top):
+            # A seat whose top is the plane y = top, under the body from below.
+            seats = {gates.REST: np.array([[0, 1.0, 0, -top], [0, -1.0, 0, top - 1.0]])}
+            gd = gate_data(self.o, sc.write(built), seats=seats)
+            gd.seat_gap = gap
+            return gates.clip_gates(gd, (gates.REST, None), ("G10",))[("G10", "body")]
+        # The body column stands in the seat up to y = 0.5: the covered body under that top is inside it.
+        self.assertTrue(worst(0.5)["failed"])
+        self.assertFalse(worst(0.40 - 0.01)["failed"])
+
+    def test_a_gate_with_nothing_to_measure_is_not_run_and_fails_where_enforced(self):
+        skirt(self.o)
+        over = self.o.piece("over", 2, "plain")
+        x, f = tube(0.0, 0.15, 0.1, 0.2, around=12, rows=3)
+        over.set_mesh(x, f)
+        over.pin(over.f.y > 0.199)
+        over.weights_transfer(Surface(x, f, np.tile([1.0, 0, 0], (len(x), 1)), JOINTS))
+        over.gradient(rate=0.5, cap=0.05)
+        # A layer pair whose outer never lies over the inner, and no body shapes at all.
+        self.o.over("over", "skirt")
+        out = gates.merge([gates.clip_gates(gate_data(self.o), (gates.REST, None), ("G6", "G7", "G8"))])
+        findings = gates.decide(list(out.values()), stage=2, complete=True)
+        for f in findings:
+            self.assertTrue(f.get("not_run"), f)
+            self.assertTrue(f["failed"] and f["enforced"], f)
+        reported = gates.decide([dict(f, failed=False) for f in out.values()], stage=1, complete=True)
+        self.assertTrue(all(f["not_run"] and not f["failed"] and not f["enforced"] for f in reported))
+        # A reach gate on the fallback body cannot be decided: not run, failed where enforced.
+        g4 = gates.decide([gates.clip_gates(gate_data(self.o), (gates.REST, None), ("G4",))[("G4", "skirt")]], 2, False)
+        self.assertTrue(g4[0]["failed"] and "fallback" in g4[0]["undecided"])
+
+    def test_unknown_clips_and_seats_are_refused(self):
+        skirt(self.o)
+        gd = gate_data(self.o)
+        built = sc.read(gd.sidecar)
+        with self.assertRaisesRegex(ValueError, "unknown clips"):
+            gates.run(gd, self.o.model, self.o.body, built, {"G4"}, clip_names={"wlak"})
+        gd.seats = {"sit": np.zeros((1, 4))}
+        with self.assertRaisesRegex(ValueError, "seats declared for clips"):
+            gates.run(gd, self.o.model, self.o.body, built, {"G10"})
+
+    def test_bake_residual_fails_and_is_enforced_at_every_stage(self):
+        skirt(self.o)
+        built = self.o.built()
+        built.correctives = [dict(name="in", pose=dict(joints=JOINTS, matrices=np.tile(np.eye(4), (3, 1, 1)).tolist()),
+                                  drift_mm={"skirt": 9.0}, thickness_mm={"skirt": 4.0}, passes=24, converged=False)]
+        bake, = gates.decide(gates.bake_findings(built), stage=1, complete=False)
+        self.assertEqual((bake["gate"], bake["failed"], bake["enforced"]), ("bake", True, True))
+
+    def test_g2_sees_a_seam_joined_only_by_coincident_positions(self):
+        scene = Scene(cylinder_scene(split=True))
+        try:
+            o = scene.outfit()
+            p = o.piece("skirt", 1, "plain")
+            p.create("cloth", 200)
+            marks = o.model.marks(1)[o.model.primitive("cloth")]
+            # The cloth primitive has no unlabelled corner: its seam is the split row alone.
+            self.assertFalse(marks["seam"].any())
+            self.assertTrue(marks["split"].any())
+            # Held below the seam row, so the row binds to triangles with free corners.
+            p.pin((p.f.y > 0.80) & (p.f.y < 0.86))
+            p.weights_transfer(p.render.surface(), nearest=4)
+            p.gradient(rate=0.5, cap=0.2)
+            g2 = [f for f in gates.g2_g3(o.model, sc.read(sc.write(o.built()))) if f["gate"] == "G2"]
+            self.assertTrue(g2[0]["failed"] and g2[0]["counts"]["render_vertices"] > 0)
+            p.pin_bound(-1.0)
+            g2 = [f for f in gates.g2_g3(o.model, sc.read(sc.write(o.built()))) if f["gate"] == "G2"]
+            self.assertFalse(g2[0]["failed"])
+        finally:
+            scene.close()
+
+    def test_the_bind_gate_measures_a_render_vertex_far_from_its_triangle(self):
+        p = skirt(self.o)
+        model = self.o.model
+        k = model.primitive("cloth")
+        built = sc.read(sc.write(self.o.built()))
+        near = [f for f in gates.g2_g3(model, built) if f["gate"] == "bind"][0]
+        self.assertFalse(near["failed"])
+        self.assertGreater(near["samples"], 0)
+        # The same render vertices bound to a sim mesh shrunk to half its radius lie far outside their triangles.
+        piece = built.piece("skirt")
+        piece.points = (piece.points * [0.5, 1, 0.5]).astype(piece.points.dtype)
+        far = [f for f in gates.g2_g3(model, built) if f["gate"] == "bind"][0]
+        self.assertTrue(far["failed"])
+        self.assertGreater(far["counts"]["farthest_mm"], 40)
+        self.assertTrue(np.isin(far["worst"]["render_vertices"], np.flatnonzero(model.labels[k] == 1)).all())
+        del p
+
+    def test_g1_includes_the_cooks_structural_checks(self):
+        skirt(self.o)
+        built = sc.read(sc.write(self.o.built()))
+        self.assertFalse(gates.g1_maps(built, {"skirt": FABRIC})[0]["failed"])
+        piece = built.piece("skirt")
+        piece.faces = np.vstack([piece.faces, piece.faces[:1]])
+        bad = gates.g1_maps(built, {"skirt": FABRIC})[0]
+        self.assertTrue(bad["failed"] and "duplicate or degenerate" in bad["structure"])
+
 
 class TestCook(unittest.TestCase):
     def setUp(self):
@@ -389,7 +635,7 @@ class TestCook(unittest.TestCase):
     def test_blob_carries_the_sidecar_and_the_binding_follows_the_pins(self):
         from garment import cook as C
         from garment_blob import decode
-        p = skirt(self.o)
+        skirt(self.o)
         data = sc.write(self.o.built())
         blob, streams, report = C.cook("synthetic", data, self.o.model, {"plain": FABRIC}, None, (0.45, 0.35))
         piece = decode(blob)["pieces"][0]
@@ -406,20 +652,20 @@ class TestCook(unittest.TestCase):
         self.assertIn(b"_GARMENT", staged[:4096])
 
     def test_pin_bound_makes_the_seam_follow_skinning(self):
-        from garment import bind as Bd, gates
-        p = skirt(self.o)
-        k = self.o.model.primitive("cloth")
+        p = self.o.piece("skirt", 1, "plain")
+        p.create("cloth", 200)
+        # Held below the seam row, so the row binds to triangles with free corners.
+        p.pin((p.f.y > 0.80) & (p.f.y < 0.86))
+        p.weights_transfer(p.render.surface(), nearest=4)
+        p.gradient(rate=0.5, cap=0.2)
+        before = [f for f in gates.g2_g3(self.o.model, sc.read(sc.write(self.o.built()))) if f["gate"] == "G2"]
+        self.assertTrue(before[0]["failed"])
         added = p.pin_bound(-1.0)
-        stored = sc.read(sc.write(self.o.built())).piece("skirt")
-        binding = Bd.grow(self.o.model.positions[k], self.o.model.faces[k], self.o.model.labels[k] == 1,
-                          stored.points.astype(float), stored.faces, stored.r == 0)
-        seam, _ = Bd.seam_breaks(binding, self.o.model.faces[k], self.o.model.labels[k] == 1, stored.r == 0)
-        self.assertGreaterEqual(added, 0)
-        self.assertEqual(len(seam), 0)
-        self.assertTrue(all(not f["failed"] for f in gates.g2_g3(self.o.model, sc.read(sc.write(self.o.built())))))
+        self.assertGreater(added, 0)
+        after = gates.g2_g3(self.o.model, sc.read(sc.write(self.o.built())))
+        self.assertTrue(all(not f["failed"] for f in after if f["gate"] in ("G2", "G3")))
 
     def test_layer_keeps_the_order_at_rest(self):
-        from garment import gates
         inner = skirt(self.o)
         outer = self.o.piece("over", 2, "plain")
         x, f = tube(0.0, 0.16, 0.55, 0.88, around=24, rows=8)
@@ -427,37 +673,25 @@ class TestCook(unittest.TestCase):
         outer.pin(outer.f.y > 0.879)
         outer.weights_transfer(Surface(inner.x, inner.faces, inner.w, inner.joints))
         outer.gradient(rate=0.5, cap=0.2)
-        outer.backstop_from_body()
-        data = sc.write(self.o.built())
-        body = (self.o.body.points, self.o.body.faces, self.o.body.weights, False)
-        gd = gates.GateData(sidecar=data, model=str(self.scene.root / "model.glb"), body=body,
-                            shapes=dict(spheres=[], cones=[]), fabrics={"skirt": FABRIC, "over": FABRIC}, clips=[])
         self.o.over("over", "skirt")
-        before = gates.clip_gates(gates.GateData(**{**gd.__dict__, "sidecar": sc.write(self.o.built())}),
-                                  (gates.REST, None), ("G8",))
+        before = gates.clip_gates(gate_data(self.o), (gates.REST, None), ("G8",))
         self.assertTrue(before[("G8", "over>skirt")]["failed"])
         self.o.layer("over", "skirt")
-        after = gates.clip_gates(gates.GateData(**{**gd.__dict__, "sidecar": sc.write(self.o.built())}),
-                                 (gates.REST, None), ("G8",))
+        after = gates.clip_gates(gate_data(self.o), (gates.REST, None), ("G8",))
         self.assertFalse(after[("G8", "over>skirt")]["failed"], after[("G8", "over>skirt")]["worst"])
 
-
     def test_a_corrective_is_gated_at_its_key_with_the_reference_it_gives(self):
-        from garment import gates
-        from garment.corrective import state_digest
-        p = skirt(self.o)
+        skirt(self.o)
+        built = self.o.built()
         # A corrective that draws the free cloth halfway into the body: the plain reference passes the reach gate, the
         # corrected one at its key does not, and its record names the corrective.
-        inward = np.where(p.pins[:, None], 0.0, (p.x * [1, 0, 1]) * -(CLOTH_R - 0.5 * BODY_R) / CLOTH_R)
-        p.correctives["in"] = (inward, np.zeros_like(p.x))
-        record = dict(name="in", pose=dict(joints=JOINTS, matrices=np.tile(np.eye(4), (3, 1, 1)).tolist()),
-                      pieces_sha256=state_digest([p.built()]), drift_mm={"skirt": 9.0}, thickness_mm={"skirt": 4.0},
-                      passes=24, converged=False)
-        self.o.corrective_records["in"] = record
-        data = sc.write(self.o.built())
-        body = (self.o.body.points, self.o.body.faces, self.o.body.weights, True)
-        gd = gates.GateData(sidecar=data, model=str(self.scene.root / "model.glb"), body=body,
-                            shapes=dict(spheres=[], cones=[]), fabrics={"skirt": FABRIC}, clips=[])
+        piece = built.piece("skirt")
+        free = piece.r[:, None] > 0
+        inward = np.where(free, (piece.points * [1, 0, 1]) * -(CLOTH_R - 0.5 * BODY_R) / CLOTH_R, 0.0)
+        piece.correctives["in"] = (inward.astype(np.float32), np.zeros_like(piece.points))
+        built.correctives = [dict(name="in", pose=dict(joints=JOINTS, matrices=np.tile(np.eye(4), (3, 1, 1)).tolist()))]
+        data = sc.write(built)
+        gd = gate_data(self.o, data, complete=True)
         plain = gates.clip_gates(gd, (gates.REST, None), ("G4",))
         self.assertFalse(plain[("G4", "skirt")]["failed"])
         spec, = gates.corrective_specs(sc.read(data), [])
@@ -465,8 +699,71 @@ class TestCook(unittest.TestCase):
         self.assertEqual(set(corrected), {("G4", "skirt", "in")})
         self.assertTrue(corrected[("G4", "skirt", "in")]["failed"])
         self.assertEqual(corrected[("G4", "skirt", "in")]["corrective"], "in")
-        bake, = gates.bake_findings(sc.read(data))
-        self.assertEqual((bake["gate"], bake["failed"], bake["enforced"]), ("bake", True, False))
+
+    def test_a_seated_clip_without_a_seat_is_refused(self):
+        (self.scene.root / "clips.json").write_text(json.dumps({"animations": [
+            {"name": "sit", "resource": "model.glb", "game": {"state": "seated"}},
+            {"name": "walk", "resource": "model.glb"}]}), encoding="utf-8")
+        (self.scene.root / "colliders.json").write_text("{}", encoding="utf-8")
+        o = self.scene.outfit(colliders="colliders.json", clips="clips.json")
+        skirt(o)
+        with self.assertRaisesRegex(ValueError, "seated clip"):
+            o.corrective("sit", clip="sit", t=1.0)
+        with self.assertRaisesRegex(ValueError, "no clip"):
+            o.corrective("run", clip="run", t=1.0)
+        o.corrective("sit", clip="sit", t=1.0, convexes=[])
+        o.corrective("walk", clip="walk", t=0.5)
+        self.assertEqual([r["convexes"] for r in o.corrective_requests], [[], []])
+
+
+class TestStale(unittest.TestCase):
+    """The build record names each input that changed; the cook refuses on any of them."""
+
+    def test_every_input_of_the_record_is_compared_and_named(self):
+        from garment import cook as C
+        scene = Scene(cylinder_scene())
+        try:
+            root = scene.root
+            (root / "helper.py").write_text("SCALE = 0.5\n", encoding="utf-8")
+            (root / "fabrics.json").write_text(json.dumps({"fabrics": {"plain": FABRIC}}), encoding="utf-8")
+            script = root / "outfit.py"
+            script.write_text(
+                "import sys\nfrom pathlib import Path\nsys.path[:0] = [str(Path(__file__).parent)]\nimport helper\n"
+                "from garment.outfit import Outfit\n"
+                "o = Outfit(__file__, Path(__file__).parent, 'model.glb', body=['skin'], fabrics='fabrics.json')\n"
+                "p = o.piece('skirt', 1, 'plain')\np.create('cloth', 120)\n"
+                "p.pin(p.from_render(~p.render.labelled | (p.render.height <= 0.1)))\n"
+                "p.weights_transfer(p.render.surface(), nearest=4)\np.gradient(rate=helper.SCALE, cap=0.2)\no.write()\n",
+                encoding="utf-8")
+            import runpy
+            runpy.run_path(str(script), run_name="__main__")
+            built = sc.read((root / "model.cloth.glb").read_bytes())
+            self.assertTrue(any(name.endswith("helper.py") for name in built.build["modules"]))
+            self.assertEqual(C.stale(built, root, script), [])
+            self.assertEqual(set(built.build["versions"]), {"numpy", "scipy"})
+            colliders = root / "colliders.json"
+            colliders.write_text(json.dumps(dict(body_sha256=Bd.sha256(root / "model.glb"))), encoding="utf-8")
+            self.assertEqual(C.stale(built, root, script, "colliders.json"), [])
+            colliders.write_text(json.dumps(dict(body_sha256="0" * 64)), encoding="utf-8")
+            self.assertTrue(any("fitted on body" in s for s in C.stale(built, root, script, "colliders.json")))
+            (root / "fabrics.json").write_text(json.dumps({"fabrics": {"plain": dict(FABRIC, thickness=0.005)}}),
+                                               encoding="utf-8")
+            self.assertEqual(C.stale(built, root, script), ["input fabrics.json"])
+            old = dict(built.build, versions=dict(built.build["versions"], numpy="0.0"), library="0.0.0")
+            built.build = old
+            named = C.stale(built, root, script)
+            self.assertIn("version numpy 0.0 -> " + np.__version__, named)
+            self.assertTrue(any(s.startswith("library 0.0.0") for s in named))
+            script.write_text(script.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+            self.assertTrue(any(s.startswith("script") for s in C.stale(built, root, script)))
+        finally:
+            scene.close()
+
+    def test_imported_modules_are_found_from_the_import_statements(self):
+        found = Bd.imported_modules(HERE.parent / "tools/garment/check.py", [HERE.parent])
+        names = {f.name for f in found}
+        self.assertTrue({"outfit.py", "gates.py", "cards.py", "build.py", "garment_blob.py"} <= names)
+        self.assertNotIn("check.py", names)
 
 
 class TestBody(unittest.TestCase):
@@ -478,6 +775,37 @@ class TestBody(unittest.TestCase):
         np.testing.assert_allclose(w, [1, 0, 1], atol=1e-9)
         sd = B.signed_distance([[0.5, 0.5, 0.2], [0.5, 0.5, 1.3]], corners, faces)
         np.testing.assert_allclose(sd, [-0.2, 0.3], atol=1e-9)
+
+    def test_the_proof_catches_what_corrupts_the_winding_number(self):
+        points, faces = closed_cylinder(0.1, 0.0, 1.0, around=16, rows=6)
+        self.assertEqual(B.prove(points, faces), [])
+        flipped = faces.copy()
+        flipped[3] = flipped[3][::-1]
+        self.assertTrue(any("orientation" in f for f in B.prove(points, flipped)))
+        self.assertTrue(any("negative volume" in f for f in B.prove(points, faces[:, ::-1])))
+        self.assertTrue(any("open edges" in f for f in B.prove(points, faces[:-1])))
+        # A second copy of the surface turned through it: one part, triangles crossing.
+        turned = points @ np.array([[1, 0, 0], [0, 0, 1], [0, -1, 0]]).T + [0, 0.5, 0.5]
+        both = np.vstack([points, turned])
+        crossing = B.prove(both, np.vstack([faces, faces + len(points)]))
+        self.assertFalse(any("cross" in f for f in crossing))  # two closed parts may overlap
+        wedge = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0.2, 0.2, -0.5], [0.2, 0.2, 0.5], [0.9, 0.9, 0.0]])
+        tris = np.array([[0, 1, 2], [3, 4, 5]])
+        self.assertTrue(any("cross" in f for f in B.prove(wedge, np.vstack([tris, [[0, 2, 3], [2, 3, 5]]]))))
+
+    def test_an_outfit_refuses_a_body_file_that_is_not_proven_complete(self):
+        scene = body_scene()
+        try:
+            o = scene.outfit(body="body.glb")
+            self.assertTrue(o.body.complete)
+            points, faces = closed_cylinder(BODY_R, 0.0, 1.0)
+            faces = faces.copy()
+            faces[5] = faces[5][::-1]
+            (scene.root / "body.glb").write_bytes(glb([("skin", points, faces, *lanes(len(points), 0), {})], JOINTS))
+            with self.assertRaisesRegex(ValueError, "not a proven complete body"):
+                scene.outfit(body="body.glb")
+        finally:
+            scene.close()
 
 
 if __name__ == "__main__":

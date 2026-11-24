@@ -59,7 +59,8 @@ class TestCook(unittest.TestCase):
             return Body(v, np.array(f), n, np.zeros((len(v), 0)), [], complete=True)
 
         def body_maps(points, faces, r, body, thickness):
-            b, d, R, _ = backstop_maps(points, faces, r, body, thickness)
+            b, d, R, _, unfit = backstop_maps(points, faces, np.asarray(r) == 0, body, thickness)
+            self.assertFalse(unfit.any())
             return b, np.column_stack([d, R])
 
         # A small sim patch 2 cm off the surface, facing the cylinder.
@@ -79,8 +80,9 @@ class TestCook(unittest.TestCase):
         for shape in ((24, 13), (64, 41)):
             np.testing.assert_allclose(body_maps(grid, faces, np.full(9, 0.2), cylinder(*shape), 0.002)[1][:, 1], 0.1,
                                        rtol=0.05)
-        # Where the cloth is farther from the body than r, the backstop can never act: off.
-        self.assertTrue(np.all(body_maps(grid, faces, np.full(9, 0.01), cylinder(64, 41), 0.002)[1][:, 1] == 0))
+        # Farther from the body than its authored r the backstop still knows the body: the runtime may grow r.
+        np.testing.assert_allclose(body_maps(grid, faces, np.full(9, 0.01), cylinder(64, 41), 0.002)[1][:, 1], 0.1,
+                                   rtol=0.05)
 
     def test_tether_path_follows_edges_and_leaves_free_islands(self):
         points = np.asarray([(0,0,0), (0,1,0), (1,1,0), (1,0,0), (0,0,2)])

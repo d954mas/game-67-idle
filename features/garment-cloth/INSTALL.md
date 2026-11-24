@@ -28,12 +28,11 @@ o = Outfit(__file__, GAME, "assets/coat.glb", body="assets/coat.body.glb", fabri
            colliders="assets/coat.cloth-colliders.json", clips="assets/clips/animations.manifest.json")
 coat = o.piece("coat", 1, "wool")
 coat.create("cloth", 240)                                       # the outer sewn sheet, reduced to 240 vertices
-coat.pin(coat.from_render(coat.render.sewn | (coat.render.height <= 0.1)))
-coat.weights_transfer(coat.render.surface(), nearest=4)
-coat.gradient(rate=0.3, cap=0.08)                               # r: 0.3 m per metre of fabric from the pins, 8 cm cap
-coat.backstop_from_body()
 coat.pin_bound(0.1)                                             # the seam's render row follows skinning exactly
-o.write()
+coat.gradient(rate=0.3, cap=0.08)                               # r: 0.3 m per metre of fabric from the pins, 8 cm cap
+coat.weights_transfer(coat.render.surface(), nearest=4)         # the render weights, which the pins keep
+coat.weights_follow_body()                                      # derived by the build once pins and r are final
+o.write()                                                       # resolves the derived maps, writes sidecar + record
 ```
 
 The maps follow from meaning, not from tuning against old frames:
@@ -41,13 +40,15 @@ The maps follow from meaning, not from tuning against old frames:
 - `r` (max distance) is 0 on the pins and grows along the fabric to the hem value the garment allows;
   `gradient(start=, base=)` keeps a piece tight to a line and opens it below.
 - `b` points from each sim vertex to the closest point of the declared body at rest, smoothed over the sim mesh; `d`
-  is that distance less the thickness; `R` is the body radius behind the vertex (the plane form `+inf` where the body
-  is flat or concave; 0, off, where `d >= r` or the body has a hole there).
+  is that distance less the thickness; `R` is the body radius behind every free vertex (the plane form `+inf` where
+  the body is flat or concave; 0, off, on a pin and where the body has a hole). The build derives them for every
+  piece; `paint("R", mask, 0)` turns the backstop off where no body lies behind a piece (a ribbon).
 - weights: the render weights (`weights_transfer`), or the body's under the cloth averaged within `r`
   (`weights_follow_body`); `Outfit.layer` makes an outer piece and the piece under it ride one skinning.
 
-A pose that holds the legs far from the rest (sitting) gets a corrective, baked last in the script by the runtime
-itself through the `garment_host` library (build it with `node ai_studio/feature_testing/run.mjs`):
+A pose that holds the legs far from the rest (sitting) gets a corrective, baked by the build after every map is final,
+by the runtime itself through the `garment_host` library (build it with `node ai_studio/feature_testing/run.mjs`); a
+committed corrective whose recorded inputs all match is kept without a bake:
 
 ```python
 o.corrective("sit", clip="sit", t=2.0)   # the drape in that key, on the seat the outfit declares for the clip
@@ -63,15 +64,18 @@ runs the gates (C.3 of the scheme); `garment.cards` draws what the script author
 
 `garment.cook.cook(outfit_id, sidecar_bytes, model, fabrics, colliders, inertia)` returns the blob, the `_GARMENT`
 stream of each primitive of the model (the binding grown over the render mesh) and a report; `stage_model` adds the
-stream to a model, `stale(sidecar, root, script)` lists the build inputs whose hash changed since the sidecar was
-built, and `depfile_text` writes the build's dependencies:
+stream to a model, `stale(sidecar, root, script, colliders)` names every build input that changed since the sidecar
+was built (files, imported modules, numpy and scipy, the library, the colliders' body, a corrective's runtime), and
+`depfile_text` writes the build's dependencies. `gates.gate_data` and `gates.run` give the cook the gates its stage
+enforces (`gates.enforced_gates(stage)`), the same table `check.py` exits by:
 
 ```python
 from garment import cook as C, gates as G, model as M, sidecar as S
 
 data = sidecar_path.read_bytes()
-if C.stale(S.read(data), GAME, script):
-    raise SystemExit(f"rebuild the sidecar: python {script}")
+changed = C.stale(S.read(data), GAME, script, "assets/coat.cloth-colliders.json")
+if changed:
+    raise SystemExit(f"rebuild the sidecar ({'; '.join(changed)}): python {script}")
 model = M.RenderModel(model_path)
 blob, streams, report = C.cook("coat", data, model, fabrics, colliders, (0.45, 0.35))
 staged_path.write_bytes(C.stage_model(model_path, streams))

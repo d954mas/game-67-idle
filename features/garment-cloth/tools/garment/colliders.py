@@ -219,12 +219,16 @@ def write(path, shapes, body_sha256):
     """Write a set as garment.colliders.v1: {schema, body_sha256, spheres: [{name, bone, center, radius}], cones}."""
     if len(shapes.spheres) > SHAPES_MAX or len(shapes.cones) > SHAPES_MAX:
         raise ValueError(f"{len(shapes.spheres)} spheres, {len(shapes.cones)} cones: the runtime takes {SHAPES_MAX} each")
+    bad = [s.name for s in shapes.spheres
+           if not (np.all(np.isfinite(s.center)) and math.isfinite(s.radius) and s.radius >= 0)]
+    if bad:
+        raise ValueError(f"spheres {bad}: a centre or radius is not finite, or a radius is negative")
     doc = {"schema": SCHEMA, "body_sha256": body_sha256,
            # Full precision: a cut cone ends exactly where G7 allows, and rounding could move it inside a vertex.
            "spheres": [{"name": s.name, "bone": s.bone, "center": [float(v) for v in s.center],
                         "radius": float(s.radius)} for s in shapes.spheres],
            "cones": [[int(a), int(b)] for a, b in shapes.cones]}
-    Path(path).write_text(json.dumps(doc, indent=1) + "\n", encoding="utf-8")
+    Path(path).write_text(json.dumps(doc, indent=1, allow_nan=False) + "\n", encoding="utf-8")
     return doc
 
 
@@ -481,6 +485,11 @@ def fit(body, rig, segments, pieces, clips, g4=None):
     every garment worn on this body; clips: clip_poses(...) output, the rest pose included; g4: g4_failing(...) when
     already computed. Returns a ColliderSet whose log lists first the G4 failures per clip that the fit did not fit
     around, then per segment its vertices, the covering cone, the samples it held and what it gave up."""
+    for seg in segments:
+        a, b = (rig.position(j) for j in seg.joints)
+        # The cone's axis is the segment: with both joints at one rest position it has no direction.
+        if not np.linalg.norm(b - a) > 1e-9:
+            raise ValueError(f"segment {seg.name!r}: joints {seg.joints[0]} and {seg.joints[1]} share a rest position")
     owner = belonging(body, rig, segments)
     area = vertex_areas(body.points, body.faces)
     g4 = g4_failing(body, pieces, clips) if g4 is None else g4

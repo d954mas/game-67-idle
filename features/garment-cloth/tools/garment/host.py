@@ -24,6 +24,20 @@ BUILD = "node ai_studio/feature_testing/run.mjs"
 # The runtime the default library is built from: a library older than any of them steps another runtime than the game's.
 RUNTIME = [*sorted((FEATURE / "src").glob("*.c")), *sorted((FEATURE / "include/garment").glob("*.h")),
            FEATURE / "tools/host/garment_host.c"]
+
+
+def runtime_sha256():
+    """One hash of the runtime sources: a corrective is an equilibrium of this solver, so a change of any of them makes
+    every baked corrective stale."""
+    import hashlib
+    from .build import sha256
+    h = hashlib.sha256()
+    for path in RUNTIME:
+        h.update(path.relative_to(STUDIO).as_posix().encode())
+        h.update(sha256(path).encode())
+    return h.hexdigest()
+
+
 SIM_HZ = 180
 POSE_HZ = 30
 CONVEX_PLANES = 48

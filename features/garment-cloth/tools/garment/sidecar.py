@@ -5,9 +5,10 @@ skinned mesh `piece:<id>` (`extras`: label, fabric) whose primitive carries
 - POSITION (rest, model space), JOINTS_0 (u16) and WEIGHTS_0 on the model's skin joints;
 - _MAX_DISTANCE r, _BACKSTOP_DISTANCE d, _BACKSTOP_RADIUS R (0 off, +inf the plane form), _BODY_DIRECTION b;
 - one morph target per corrective (POSITION and _BODY_DIRECTION deltas), named by `extras.targetNames`.
-The root `extras` hold `build` (the hash of the script and its inputs, and the library version), `layers`
-([outer, inner] piece ids) and `correctives`: per corrective, in the order every piece's morph targets follow, the
-record of its bake (name, source key pose, convexes, passes, residual drift per piece). `write(read(data)) == data`
+The root `extras` hold `build` (the hash of every input, see garment.build), `layers` ([outer, inner] piece ids),
+`correctives`: per corrective, in the order every piece's morph targets follow, the record of its bake (name, source
+key pose, convexes, passes, residual drift per piece, the hashes it was baked from), `check` (what the gates read
+besides the sidecar: colliders, clips, looks, seats) and `findings` (what the build could not do as its rule says). `write(read(data)) == data`
 for every file `write` produced."""
 import json
 import struct
@@ -49,6 +50,8 @@ class Sidecar:
     build: dict
     layers: list = field(default_factory=list)
     correctives: list = field(default_factory=list)
+    check: dict = field(default_factory=dict)
+    findings: list = field(default_factory=list)
 
     @property
     def corrective_names(self):
@@ -147,7 +150,9 @@ def write(sidecar):
     skin = {"joints": list(sidecar.joints), "inverseBindMatrices": buf.add(sidecar.inverse_binds, FLOAT, "MAT4")}
     doc = {"asset": {"version": "2.0", "generator": "garment-cloth sidecar"},
            "extras": {"build": sidecar.build, "layers": [list(pair) for pair in sidecar.layers],
-                      **({"correctives": list(sidecar.correctives)} if sidecar.correctives else {})},
+                      **({"correctives": list(sidecar.correctives)} if sidecar.correctives else {}),
+                      **({"check": sidecar.check} if sidecar.check else {}),
+                      **({"findings": list(sidecar.findings)} if sidecar.findings else {})},
            "scene": 0, "scenes": [{"nodes": roots + list(range(len(sidecar.nodes), len(nodes)))}],
            "nodes": nodes, "meshes": meshes, "skins": [skin],
            "accessors": buf.accessors, "bufferViews": buf.views, "buffers": [{"byteLength": len(buf.data)}]}
@@ -220,4 +225,5 @@ def read(data):
     return Sidecar(nodes=doc["nodes"][:first], joints=skins[0]["joints"],
                    inverse_binds=accessor(skins[0]["inverseBindMatrices"]), pieces=pieces,
                    build=extras.get("build", {}), layers=[tuple(pair) for pair in extras.get("layers", [])],
-                   correctives=list(extras.get("correctives", [])))
+                   correctives=list(extras.get("correctives", [])), check=dict(extras.get("check", {})),
+                   findings=list(extras.get("findings", [])))

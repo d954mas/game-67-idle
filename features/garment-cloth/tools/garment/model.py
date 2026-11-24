@@ -17,9 +17,12 @@ LABEL = "_CLOTH_PIECE"
 COINCIDENT_M = 1e-6
 
 
+SHARED_GLB = STUDIO / "ai_studio/assets/tools/blender/lib/glb.py"
+
+
 def _shared_glb():
     # Loaded under its own name: game tools put another module called `glb` on the path.
-    spec = importlib.util.spec_from_file_location("garment_shared_glb", STUDIO / "ai_studio/assets/tools/blender/lib/glb.py")
+    spec = importlib.util.spec_from_file_location("garment_shared_glb", SHARED_GLB)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -160,8 +163,11 @@ class RenderPiece:
             raise ValueError(f"{model.path}: piece label {label} has no {model.materials[k]!r} triangles")
         marks = model.marks(label)[k]
         self.height, self.split, self.seam = marks["height"], marks["split"], marks["seam"]
-        self.sheet_points, self.sheet_faces, self.sheet_render, _ = sewn_sheet(
-            self.positions, outer_faces(self.positions, self.region, outer))
+        outer_region = outer_faces(self.positions, self.region, outer)
+        self.sheet_points, self.sheet_faces, self.sheet_render, kept = sewn_sheet(self.positions, outer_region)
+        # The sheet is the largest sewn component; the rest (piping, an overlaid detail) still binds to the sim mesh,
+        # so the build reports it and the bind gate measures how far it lies from what carries it.
+        self.sheet_dropped = int(len(outer_region) - len(kept))
         self.weights = model.weights(k)
 
     @property

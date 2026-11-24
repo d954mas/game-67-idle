@@ -6,13 +6,14 @@ the key, raise the convexes (a seat) from below, settle with the pose frozen, an
 an equilibrium of the runtime around itself: where max distance held cloth during the bake, the drape leans on the
 old reference. So the bake repeats until it is one: reset onto the corrected reference, hold, take the drape again,
 until the cloth stays within its fabric's thickness of the corrected reference (the drift). The residual drift and
-the pass count are recorded with the corrective; a bake that does not converge within `max_passes` keeps the pass
-with the smallest drift and says so in its record, which `check.py` reports.
+the pass count are recorded with the corrective; a bake that does not converge within `max_passes` stops the build
+(the record would describe a drape the game cannot hold).
 
 What an author needs: the garment_host library built from the current runtime (`node
 ai_studio/feature_testing/run.mjs`), the outfit's collider set and clip manifest declared on the Outfit."""
 import hashlib
 import json
+from pathlib import Path
 
 import numpy as np
 
@@ -123,43 +124,59 @@ def key_of(outfit, record):
     return skeleton.pose({n: m[0] for n, m in worlds.items()}), worlds
 
 
-def outfit_corrective(outfit, name, clip=None, t=None, pose=None, convexes=None, max_passes=MAX_PASSES):
-    """Outfit.corrective: bake the named corrective of every piece and store it on them (see Outfit.corrective)."""
-    if (clip is None) == (pose is None) or (clip is not None and t is None):
-        raise ValueError(f"corrective {name!r}: give the key as clip and t, or as a pose")
-    if outfit.colliders is None:
-        raise ValueError(f"corrective {name!r}: the bake collides with the outfit's body shapes; declare its colliders")
+def bake_inputs(outfit, request):
+    """{relative path: sha256} of the files a bake reads besides the pieces: the colliders, and for a clip key the clip
+    manifest and the clip."""
+    outfit._input(outfit.colliders)
+    if "clip" in request:
+        outfit._input(dict(outfit.clip_paths())[request["clip"]])
+    names = [Path(outfit.colliders).resolve().relative_to(outfit.root).as_posix()]
+    if "clip" in request:
+        names += [Path(outfit.clips).resolve().relative_to(outfit.root).as_posix(),
+                  Path(dict(outfit.clip_paths())[request["clip"]]).resolve().relative_to(outfit.root).as_posix()]
+    return {n: outfit.inputs[n] for n in names}
+
+
+def resolve(outfit, pieces, records, request, committed):
+    """Outfit.resolve's last step for one declared corrective: store it on the resolved pieces and return its record.
+    Its key is everything the bake reads: the pieces as built without correctives, the runtime sources, the files
+    (bake_inputs) and the request. A committed sidecar holding a corrective of that name with the same key gives its
+    deltas as they are, so a check needs no host and no re-bake; otherwise the bake runs, and one that does not
+    converge stops the build."""
+    name = request["name"]
+    for p in pieces:
+        p.correctives[name] = (np.zeros_like(p.x), np.zeros_like(p.x))
+    sc = outfit.sidecar(pieces, records + [dict(name=name)])
+    key = json.loads(json.dumps(dict(pieces_sha256=state_digest(sc.pieces), runtime_sha256=H.runtime_sha256(),
+                                      inputs=bake_inputs(outfit, request),
+                                      request={k: v for k, v in request.items() if k != "name"})))
+    previous = next((c for c in committed.correctives if c["name"] == name), None) if committed else None
+    if previous is not None and previous.get("key") == key and             [p.id for p in committed.pieces] == [p.id for p in pieces]:
+        for p in pieces:
+            dx, db = committed.piece(p.id).correctives[name]
+            p.correctives[name] = (dx.astype(float), db.astype(float))
+        return previous
     model, glb = outfit.model, outfit.model.glb
     skeleton = H.Skeleton.from_glb(glb)
-    if clip is not None:
-        source = dict(clip=clip, t=float(t))
+    if "clip" in request:
+        source = dict(clip=request["clip"], t=request["t"])
     else:
-        pose = np.asarray(pose, float)
-        if pose.shape != (len(skeleton.names), 4, 4):
-            raise ValueError(f"corrective {name!r}: a pose is ({len(skeleton.names)}, 4, 4) model-space matrices")
-        source = dict(pose=dict(joints=skeleton.names, matrices=pose.tolist()))
-    key, worlds = key_of(outfit, dict(name=name, **source))
-    if clip is not None:
-        outfit.input(dict(M.clips(outfit.clips))[clip])
-    if convexes is None:
-        convexes = [outfit.seats[clip]] if clip in outfit.seats else []
-    convexes = [np.asarray(c, float).reshape(-1, 4) for c in convexes]
-    outfit.input(outfit.colliders)
-    for p in outfit.pieces:
-        p.correctives.setdefault(name, (np.zeros_like(p.x), np.zeros_like(p.x)))
-    sc = outfit.built(check_correctives=False)
-    sc.correctives = sc.correctives + [dict(name=name)]
+        source = dict(pose=dict(joints=skeleton.names, matrices=request["pose"]["matrices"]))
+    key_pose, worlds = key_of(outfit, dict(name=name, **source))
+    convexes = [np.asarray(c, float).reshape(-1, 4) for c in request["convexes"]]
     blob = outfit_blob(outfit, sc)
     body = posed_body(outfit.body, glb, model.joints, worlds)
     thicknesses = [outfit.fabrics[p.fabric]["thickness"] for p in sc.pieces]
-    shapes, record = bake(blob, sc.corrective_names.index(name), skeleton, H.rest_pose(glb, skeleton), key, convexes,
-                          body, thicknesses, max_passes=max_passes)
-    for p, (delta, turn) in zip(outfit.pieces, shapes):
+    shapes, record = bake(blob, sc.corrective_names.index(name), skeleton, H.rest_pose(glb, skeleton), key_pose, convexes,
+                          body, thicknesses, max_passes=request["max_passes"])
+    if not record["converged"]:
+        raise ValueError(f"corrective {name!r} did not converge in {record['passes']} passes: drift "
+                         f"{record['drift_mm']} mm against fabric thickness {record['thickness_mm']} mm; the drape is "
+                         "not an equilibrium of the runtime (see the shapes and the seat, G7 and G10)")
+    for p, (delta, turn) in zip(pieces, shapes):
         p.correctives[name] = (delta, turn)
-    record = dict(name=name, **source, convexes=[c.tolist() for c in convexes], floor=FLOOR.tolist(), **record,
-                  pieces_sha256=state_digest(sc.pieces))
-    outfit.corrective_records[name] = record
-    return record
+    return json.loads(json.dumps(dict(name=name, **source, convexes=request["convexes"], floor=FLOOR.tolist(), **record,
+                                      key=key)))
 
 
 def outfit_blob(outfit, sc):

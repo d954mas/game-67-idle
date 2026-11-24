@@ -1,13 +1,23 @@
 """The gates of spec C.3 on a built sidecar: what the authored data must satisfy before the runtime sees it.
 
 Each gate returns findings, one per piece (or pair), as plain dicts:
-    {gate, piece, enforced, failed, worst: {clip, t, value_mm, vertices}, frames_failed, frames, clips: {clip: mm}}
+    {gate, piece, enforced, failed, worst: {clip, t, value_mm, vertices}, frames_failed, frames, samples,
+     clips: {clip: mm}}
 `value_mm` is the largest violation in that frame (how far the inequality is broken) and `vertices` the sim vertices
-breaking it there, worst first. A gate against the fallback body (B.3) is reported, not enforced.
+breaking it there, worst first. `samples` counts what the gate measured; a gate that measured nothing did not run
+(`not_run` gives the reason), and fails where it is enforced.
+
+Which gates are enforced is one table (`ENFORCED_FROM`), read by `check.py` and the cook alike, so the exit code of a
+check is the cook's decision for the outfit's declared stage. Stage 1 is the content shipped before the professional
+scheme: it is held to what the runtime needs to load it and draw it without tearing (the rebuild, G1, G3, G9 and the
+bake of any corrective it ships); every other gate reports on it. From stage 2 every gate is enforced, and a reach
+gate needs the complete body (B.3) to be decided at all.
 
 Thresholds are meanings, not tuned numbers: the fabric thickness, its strain limit, a triangle's longest edge."""
 import math
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
+import os
 from pathlib import Path
 
 import numpy as np
@@ -25,12 +35,32 @@ REST = "rest"
 LOOK_WEIGHT = 0.002
 # A clip spec ("corrective:<name>", clip path or None, record) is the corrected reference at the corrective's key.
 CORRECTIVE = "corrective:"
+PER_FRAME = ("G4", "G5", "G6", "G7", "G8", "G10")
+ALL_GATES = ("G1", "G2", "G3", "bind") + PER_FRAME + ("G9",)
+# The first declared stage at which a finding fails the check and the cook; absent: a report.
+ENFORCED_FROM = {"rebuild": 1, "stale": 1, "G1": 1, "G3": 1, "G9": 1, "bake": 1,
+                 "G2": 2, "bind": 2, "G4": 2, "G5": 2, "G6": 2, "G7": 2, "G8": 2, "G10": 2, "derive": 2}
+# Gates decided against the body surface itself: on the fallback body (with holes) they cannot be decided.
+NEEDS_COMPLETE_BODY = ("G4", "G10")
+# Gates the cook runs from the sidecar and the models alone; the per-frame gates need the body and the clips.
+STATIC = ("G1", "G2", "G3", "bind", "G9")
+CHUNK = 16
+
+
+def enforced(gate, stage):
+    """Whether a failed `gate` finding stops the check and the cook of an outfit declared at `stage`."""
+    return gate in ENFORCED_FROM and stage >= ENFORCED_FROM[gate]
+
+
+def enforced_gates(stage):
+    return {g for g in ALL_GATES if enforced(g, stage)}
 
 
 @dataclass
 class GateData:
     """Everything the gates read, picklable for worker processes: the sidecar bytes, the model path, the body
-    (points, faces, weights, complete), the body shapes, the fabrics per piece and the clips [(name, path)]."""
+    (points, faces, weights, complete, rim faces), the body shapes, the fabrics per piece, the clips [(name, path)],
+    the declared stage and, per body vertex, the gap a seat must leave under it (NaN where no garment covers it)."""
     sidecar: bytes
     model: str
     body: tuple
@@ -39,6 +69,8 @@ class GateData:
     clips: list
     looks: list = field(default_factory=list)
     seats: dict = field(default_factory=dict)
+    stage: int = 1000000
+    seat_gap: np.ndarray = None
 
 
 def shapes_from(colliders):
@@ -85,13 +117,15 @@ class Pose:
         return times, M.skin_matrices(self.glb, self.joints, self.ibm, M.clip_worlds(self.glb, animation, times))
 
 
-def _record(gate, piece, enforced):
-    return dict(gate=gate, piece=piece, enforced=enforced, failed=False, worst=None, frames_failed=0, frames=0, clips={})
+def _record(gate, piece, enforced=False):
+    return dict(gate=gate, piece=piece, enforced=enforced, failed=False, worst=None, frames_failed=0, frames=0,
+                samples=0, clips={})
 
 
 def _frame(record, clip, t, violation, vertices=None):
     """Fold one frame's per-vertex (or per-edge) violation in metres into a record."""
     record["frames"] += 1
+    record["samples"] += int(np.size(violation))
     worst = float(np.max(violation, initial=-np.inf))
     if worst <= RESOLUTION:
         return
@@ -112,9 +146,10 @@ def corrective_specs(sc, clips):
     return [(CORRECTIVE + c["name"], paths.get(c.get("clip")), c) for c in sc.correctives]
 
 
-def clip_gates(data, clip, gates=("G4", "G5", "G6", "G7", "G8", "G10")):
+def clip_gates(data, clip, gates=PER_FRAME):
     """The per-frame gates over one clip (or the rest pose), or over a corrective's corrected reference at its key:
-    {(gate, piece[, corrective]): record}."""
+    {(gate, piece[, corrective]): record}. Every gate asked for gets a record, so one that has nothing to measure here
+    (no body shapes, no layer hit) shows as not run instead of passing."""
     pose = Pose(data)
     times, matrices = pose.matrices(clip)
     name = clip[0]
@@ -125,6 +160,8 @@ def clip_gates(data, clip, gates=("G4", "G5", "G6", "G7", "G8", "G10")):
         name = f"{clip[2].get('clip', 'pose')} with {corrective}"
     body_points, body_faces, body_weights, complete = data.body[:4]
     rim_faces = data.body[4] if len(data.body) > 4 else None
+    # A G7 sample whose reference is already deeper in the skin than its r is G4's finding, but only where G4 decides.
+    g4_decides = enforced("G4", data.stage) and complete
     out = {}
     posed_body = M.skin_points(body_points, body_weights, matrices) if {"G4", "G7"} & set(gates) else None
     centres, radii = [], []
@@ -153,11 +190,11 @@ def clip_gates(data, clip, gates=("G4", "G5", "G6", "G7", "G8", "G10")):
             reach = [body_maps.reach_violation(ref[k], posed_body[k], body_faces, r, t_fab, rim_faces)
                      for k in range(len(times))]
         if "G4" in gates:
-            rec = out[("G4", p.id)] = _record("G4", p.id, complete)
+            rec = out[("G4", p.id)] = _record("G4", p.id)
             for k, t in enumerate(times):
                 _frame(rec, name, t, reach[k])
         if "G5" in gates:
-            rec = out[("G5", p.id)] = _record("G5", p.id, True)
+            rec = out[("G5", p.id)] = _record("G5", p.id)
             e = sim.edges(p.faces)
             free = ~(pins[e[:, 0]] & pins[e[:, 1]])
             e = e[free]
@@ -170,8 +207,11 @@ def clip_gates(data, clip, gates=("G4", "G5", "G6", "G7", "G8", "G10")):
                 span = np.linalg.norm(ref[k][e[:, 0]] - ref[k][e[:, 1]], axis=1)
                 violation = span - r[e[:, 0]] - r[e[:, 1]] - length * (1 + limit)
                 _frame(rec, name, t, violation, vertices=e)
-        if "G7" in gates and radii:
-            rec = out[("G7", p.id)] = _record("G7", p.id, True)
+        if "G7" in gates:
+            rec = out[("G7", p.id)] = _record("G7", p.id)
+            if not radii:
+                rec["not_run"] = "the outfit declares no body shapes"
+                continue
             for k, t in enumerate(times):
                 sd = np.full(len(r), np.inf)
                 for a, b in data.shapes["cones"]:
@@ -182,15 +222,16 @@ def clip_gates(data, clip, gates=("G4", "G5", "G6", "G7", "G8", "G10")):
                 # As the runtime's held measure: a shape holds a vertex, pin or not, deeper than r inside its surface
                 # grown by the fabric thickness.
                 violation = -(sd - t_fab) - r
-                # A reference that is itself inside the skin deeper than its r fails G4, not the shape (as the
-                # collider fit counts it).
-                masked = (reach[k] > RESOLUTION) & (violation > RESOLUTION)
+                masked = (reach[k] > RESOLUTION) & (violation > RESOLUTION) if g4_decides else np.zeros(len(r), bool)
                 rec["masked_by_g4"] = rec.get("masked_by_g4", 0) + int(masked.sum())
                 _frame(rec, name, t, np.where(masked, 0.0, violation))
-    if "G6" in gates and radii:
+    if "G6" in gates:
         _, rest_m = pose.matrices((REST, None))
         for p in pose.sc.pieces:
-            rec = out[("G6", p.id)] = _record("G6", p.id, True)
+            rec = out[("G6", p.id)] = _record("G6", p.id)
+            if not radii:
+                rec["not_run"] = "the outfit declares no body shapes"
+                continue
             r = p.r.astype(float)
             t_fab = float(data.fabrics[p.id]["thickness"])
             limbs = side_limbs(data.shapes, pose.joints, rest_m[0], p.points.astype(float), r, t_fab)
@@ -200,22 +241,24 @@ def clip_gates(data, clip, gates=("G4", "G5", "G6", "G7", "G8", "G10")):
                     violation = np.maximum(violation, limb.crossing(refs[p.id][k], matrices[k], r, t_fab))
                 _frame(rec, name, t, violation)
     if "G10" in gates and name in data.seats:
-        # The game's seat check: in a seated clip the posed body must not sink into the seat deeper than the
-        # fabric that lies between them (the thickest of the outfit's).
+        # The game's seat check: where a garment covers the body, the posed body must stay above the seat top by the
+        # room the runtime keeps for the fabric between them (seat_gap: twice the covering fabric's thickness).
         planes = np.asarray(data.seats[name], float).reshape(-1, 4)
-        thickness = max(float(f["thickness"]) for f in data.fabrics.values())
-        rec = out[("G10", "body")] = _record("G10", "body", True)
+        covered = np.flatnonzero(np.isfinite(data.seat_gap)) if data.seat_gap is not None else np.zeros(0, int)
+        rec = out[("G10", "body")] = _record("G10", "body")
         posed = M.skin_points(body_points, body_weights, matrices)
         for k, t in enumerate(times):
-            depth = -np.max(posed[k] @ planes[:, :3].T + planes[:, 3], axis=1)
-            _frame(rec, name, t, depth - thickness)
+            # Distance outside the convex: the largest plane distance (negative inside).
+            outside = np.max(posed[k][covered] @ planes[:, :3].T + planes[:, 3], axis=1, initial=-np.inf)
+            _frame(rec, name, t, data.seat_gap[covered] - outside, vertices=covered)
     if "G8" in gates:
         for outer_id, inner_id in pose.sc.layers:
             o, i = pose.sc.piece(outer_id), pose.sc.piece(inner_id)
-            rec = out[("G8", f"{outer_id}>{inner_id}")] = _record("G8", f"{outer_id}>{inner_id}", True)
+            rec = out[("G8", f"{outer_id}>{inner_id}")] = _record("G8", f"{outer_id}>{inner_id}")
             hit_t, hit_face, hit_bary = layer_hits(o, i, data.body)
             hit = np.flatnonzero(np.isfinite(hit_t))
             if not len(hit):
+                rec["not_run"] = "no outer vertex lies over the inner piece at rest"
                 continue
             corners = i.faces[hit_face[hit]]
             r_in = np.einsum("nk,nk->n", hit_bary[hit], i.r.astype(float)[corners])
@@ -234,18 +277,48 @@ def clip_gates(data, clip, gates=("G4", "G5", "G6", "G7", "G8", "G10")):
     return out
 
 
+def seat_gap(body, sc, fabrics):
+    """Per body vertex the gap a seat top must leave under it: the runtime keeps a cloth vertex one fabric thickness
+    outside the body shapes (and its backstop at the body plus that thickness) and one thickness above a convex, so a
+    garment between body and seat needs twice its thickness. A body vertex is covered by a piece when the ray along its
+    normal meets the piece's sim mesh at rest; layered pieces each need their own room, so the thickest covering one
+    decides. NaN where no garment covers the vertex."""
+    points, normals = np.asarray(body.points, float), np.asarray(body.normals, float)
+    out = np.full(len(points), np.nan)
+    for p in sc.pieces:
+        hit = sim.ray_hits(points, normals, p.points.astype(float), p.faces)[0]
+        covered = np.isfinite(hit)
+        out[covered] = np.fmax(out[covered], 2 * float(fabrics[p.id]["thickness"]))
+    return out
+
+
 def bake_findings(sc):
-    """Per corrective and piece the bake's residual drift (reported): the cloth reset onto the corrected reference and
-    held must stay within the fabric's thickness of it, or the drape is not an equilibrium of the runtime and the game
-    will see it move off the corrective."""
+    """Per corrective and piece the bake's residual drift: the cloth reset onto the corrected reference and held must
+    stay within the fabric's thickness of it, or the drape is not an equilibrium of the runtime and the game will see
+    it move off the corrective. Every corrective in a sidecar ships, so the table enforces this at every stage."""
     out = []
     for c in sc.correctives:
         for piece, drift_mm in c.get("drift_mm", {}).items():
             limit = c["thickness_mm"][piece]
-            out.append(dict(gate="bake", piece=piece, corrective=c["name"], enforced=False, failed=drift_mm > limit,
+            failed = drift_mm > limit or not c.get("converged", False)
+            out.append(dict(gate="bake", piece=piece, corrective=c["name"], enforced=False, failed=failed,
                             worst=dict(clip=c.get("clip", "pose"), t=c.get("t"), value_mm=drift_mm, vertices=[]),
-                            passes=c["passes"], converged=c["converged"], thickness_mm=limit, frames=1,
-                            frames_failed=int(drift_mm > limit), clips={}))
+                            passes=c["passes"], converged=c["converged"], thickness_mm=limit, frames=1, samples=1,
+                            frames_failed=int(failed), clips={}))
+    return out
+
+
+def derive_findings(sc):
+    """What the build could not do as its rule says (the sidecar's `findings`): free vertices whose body radius no disc
+    determines (their backstop is off), inner vertices the layer rule made kinematic and outer vertices it left no
+    room (a gap thinner than the two fabrics). Render triangles the sim sheet leaves out are reported as `sheet`; the
+    bind gate measures how far they lie from what carries them."""
+    out = []
+    for f in sc.findings:
+        gate = "sheet" if f["kind"] == "sheet_dropped" else "derive"
+        out.append(dict(gate=gate, piece=f["piece"], kind=f["kind"], enforced=False, failed=True, frames=1, samples=1,
+                        frames_failed=1, counts=dict(count=f["count"]), clips={},
+                        worst=dict(clip=REST, t=0.0, value_mm=None, vertices=f.get("vertices", []))))
     return out
 
 
@@ -346,17 +419,38 @@ def merge(records):
                 continue
             acc = out[key]
             acc["frames"] += rec["frames"]
+            acc["samples"] += rec.get("samples", 0)
             acc["frames_failed"] += rec["frames_failed"]
             acc["failed"] |= rec["failed"]
             acc["clips"].update(rec["clips"])
+            if rec.get("not_run") and not acc.get("not_run"):
+                acc["not_run"] = rec["not_run"]
             if rec["worst"] and (acc["worst"] is None or rec["worst"]["value_mm"] > acc["worst"]["value_mm"]):
                 acc["worst"] = rec["worst"]
     return out
 
 
-def g1_maps(sc):
-    """G1: r, d, R negative or non-finite (R = +inf is the plane form), r > 1 m; a component with fewer than two
-    kinematic vertices; a free vertex without a tether path (a component with no pin)."""
+def decide(findings, stage, complete):
+    """Apply the enforcement table to findings of an outfit declared at `stage` (complete: its body is the declared
+    complete body). A gate that measured nothing is not run, and fails where it is enforced; a gate that needs the
+    complete body fails where it is enforced and the body is the fallback."""
+    for f in findings:
+        f["enforced"] = enforced(f["gate"], stage)
+        if f["gate"] in ALL_GATES and not f.get("samples"):
+            f["not_run"] = f.get("not_run") or "nothing to measure"
+        if f["gate"] in NEEDS_COMPLETE_BODY and not complete:
+            # What it measured stays as a report; it decides nothing.
+            f["undecided"] = "the body is the fallback with holes, not a complete body"
+        if f["enforced"] and (f.get("not_run") or f.get("undecided")):
+            f["failed"] = True
+    return findings
+
+
+def g1_maps(sc, fabrics=None):
+    """fabrics: {piece id: fields}. G1: r, d, R negative or non-finite (R = +inf is the plane form), r > 1 m; a component with fewer than two
+    kinematic vertices; a free vertex without a tether path (a component with no pin); and every structural check
+    the cook makes of the sim mesh (vertex and edge capacity, non-manifold edges, winding, degenerate triangles)."""
+    from .cook import cook_mesh
     out = []
     for p in sc.pieces:
         rec = _record("G1", p.id, True)
@@ -366,9 +460,18 @@ def g1_maps(sc):
         pins = np.bincount(comp, weights=(r == 0), minlength=comp.max() + 1)
         few = pins[comp] < 2
         untethered = (pins[comp] == 0) & (r > 0)
-        rec.update(frames=1, failed=bool(bad.any() or few.any()),
+        structure = None
+        try:
+            slack = 1 + float((fabrics or {}).get(p.id, {}).get("max_edge_strain", 0.0))
+            cook_mesh(p.id, p.points.astype(np.float64), p.faces, np.flatnonzero(r == 0), wearable=True,
+                      tether_slack=slack, max_distance=r, backstop=np.column_stack([d, R]))
+        except ValueError as error:
+            structure = str(error)
+        rec.update(frames=1, samples=len(r), failed=bool(bad.any() or few.any() or structure),
                    counts=dict(bad_values=int(bad.sum()), in_components_with_under_two_pins=int(few.sum()),
                                without_tether_path=int(untethered.sum())))
+        if structure:
+            rec["structure"] = structure
         if rec["failed"]:
             rec["frames_failed"] = 1
             rec["worst"] = dict(clip=REST, t=0.0, value_mm=None, vertices=np.flatnonzero(bad | few)[:12].tolist())
@@ -384,35 +487,58 @@ def render_bindings(model, piece):
 
 
 def g2_g3(model, sc):
-    """G2 (seam) and G3 (cut) on the grown binding of each piece, per primitive with its label."""
+    """G2 (seam), G3 (cut) and the bind distance on the grown binding of each piece, per primitive with its label."""
     out = []
     for p in sc.pieces:
+        marks = model.marks(p.label)
+        found = []
         for k, binding in render_bindings(model, p):
-            out += _g2_g3(model, p, k, binding)
+            found += _g2_g3(model, p, k, binding, marks[k])
+        # A primitive with nothing sewn in it has no G2 to check; a piece sewn nowhere is a G2 that did not run.
+        seams = [f for f in found if f["gate"] == "G2"]
+        if seams and not any(f["samples"] for f in seams):
+            seams[0]["not_run"] = "no render vertex of the piece must follow skinning (no seam, no split copy)"
+        out += [f for f in found if f["gate"] != "G2" or f["samples"] or f is seams[0]]
     return out
 
 
-def _g2_g3(model, p, k, binding):
+def _g2_g3(model, p, k, binding, marks):
     take = model.labels[k] == p.label
     where = f"{p.id}/{model.materials[k]}"
-    seam, amount = B.seam_breaks(binding, model.faces[k], take, p.r == 0)
+    # The render vertices that must follow skinning: the seam inside the primitive and the split copies of
+    # unlabelled vertices in any primitive, the set pin_bound pins (without its height band).
+    must = marks["labelled"] & (marks["seam"] | marks["split"])
+    seam, amount = B.seam_breaks(binding, must, p.r == 0)
     g2 = _record("G2", where, True)
-    g2.update(frames=1, failed=bool(len(seam)), counts=dict(render_vertices=int(len(seam))))
+    g2.update(frames=1, samples=int(must.sum()), failed=bool(len(seam)), counts=dict(render_vertices=int(len(seam))))
     if len(seam):
         corners = np.unique(p.faces[binding.triangle[seam]])
         g2["frames_failed"] = 1
         g2["worst"] = dict(clip=REST, t=0.0, value_mm=None, amount_max=round(float(amount.max()), 3),
                            render_vertices=seam[:12].tolist(), vertices=corners[p.r[corners] > 0][:12].tolist())
+    links = B.render_links(model.positions[k], model.faces[k], take)
     edges, excess = B.torn(binding, model.positions[k], model.faces[k], take)
     g3 = _record("G3", where, True)
-    g3.update(frames=1, failed=bool(len(edges)), counts=dict(render_edges=int(len(edges))))
+    g3.update(frames=1, samples=int(len(links)), failed=bool(len(edges)), counts=dict(render_edges=int(len(edges))))
     if len(edges):
         worst = int(np.argmax(excess))
         corners = p.faces[binding.triangle[edges[worst]]]
         g3["frames_failed"] = 1
         g3["worst"] = dict(clip=REST, t=0.0, value_mm=round(float(excess[worst]) * 1000, 1),
                            render_edge=edges[worst].tolist(), vertices=np.unique(corners).tolist())
-    return [g2, g3]
+    # The transfer carries a render vertex in the frame of its bound triangle: beyond the triangle's own size from it
+    # the vertex is swung by that frame rather than carried with the surface.
+    rec = _record("bind", where)
+    bound = np.flatnonzero(take & (binding.triangle >= 0))
+    corners = p.points.astype(float)[p.faces[binding.triangle[bound]]]
+    distance = np.linalg.norm(model.positions[k][bound] - np.einsum("nk,nkj->nj", binding.bary[bound], corners), axis=1)
+    _frame(rec, REST, 0.0, distance - binding.longest[binding.triangle[bound]], vertices=bound)
+    if rec["worst"]:
+        rec["worst"]["render_vertices"] = rec["worst"].pop("vertices")
+        rec["worst"]["vertices"] = np.unique(p.faces[binding.triangle[rec["worst"]["render_vertices"]]]).tolist()
+    rec["counts"] = dict(render_vertices=int(np.sum(distance > binding.longest[binding.triangle[bound]] + RESOLUTION)),
+                         farthest_mm=round(float(distance.max(initial=0)) * 1000, 1))
+    return [g2, g3, rec]
 
 
 def holes(sc, body):
@@ -455,8 +581,73 @@ def g9_looks(model, looks):
         else:
             differ += [k for k in base.keys() & look.keys()
                        if base[k][0] != look[k][0] or np.abs(base[k][1] - look[k][1]).max() > LOOK_WEIGHT]
-        rec.update(frames=1, failed=bool(differ), counts=dict(positions=len(differ)))
+        rec.update(frames=1, samples=len(base), failed=bool(differ), counts=dict(positions=len(differ)))
         if differ:
             rec["worst"] = dict(clip=REST, t=0.0, value_mm=None, vertices=[], positions=[str(k) for k in differ[:5]])
         out.append(rec)
     return out
+
+
+def gate_data(data, root, body=None):
+    """(GateData, model, body, sidecar) of built sidecar bytes from what its build recorded: the model and body in
+    `extras.build`, the colliders, clips, looks, seats and fabrics in `extras.check`. The cook and check.py both start
+    here, so both gate the same inputs. body: an already loaded Body of the outfit."""
+    import json
+    from .outfit import load_body
+    root = Path(root)
+    sc = read(data)
+    model = M.RenderModel(root / sc.build["model"])
+    spec = sc.build["body"]
+    if body is None:
+        body = load_body(model, spec, lambda p: root / p)
+    check = sc.check
+    colliders = json.loads((root / check["colliders"]).read_text(encoding="utf-8")) if check.get("colliders") else None
+    clips = [(REST, None)] + (M.clips(root / check["clips"]) if check.get("clips") else [])
+    fabrics = check["fabrics"]
+    gd = GateData(sidecar=bytes(data), model=str(model.path), body=(body.points, body.faces, body.weights, body.complete,
+                                                                   body.rim_faces),
+                  shapes=shapes_from(colliders), fabrics=fabrics, clips=clips,
+                  looks=[str(root / p) for p in check.get("looks", [])],
+                  seats={clip: np.asarray(planes, float) for clip, planes in check.get("seats", {}).items()},
+                  stage=int(sc.build["stages"]))
+    return gd, model, body, sc
+
+
+def run(gd, model, body, sc, wanted, clip_names=None, workers=None):
+    """Every finding of the gates in `wanted` on one built sidecar, with the reports, decided by the enforcement table
+    for the sidecar's stage. clip_names limits the per-frame gates to those clips (the rest pose always runs); a name
+    that is not a clip of the outfit is refused."""
+    known = {c[0] for c in gd.clips}
+    if clip_names is not None and set(clip_names) - known:
+        raise ValueError(f"unknown clips {sorted(set(clip_names) - known)}; the outfit's clips: {sorted(known - {REST})}")
+    unknown_seats = set(gd.seats) - known
+    if unknown_seats and "G10" in wanted:
+        raise ValueError(f"seats declared for clips the outfit does not have: {sorted(unknown_seats)}")
+    findings = []
+    if "G1" in wanted:
+        findings += g1_maps(sc, gd.fabrics)
+    if {"G2", "G3", "bind"} & set(wanted):
+        findings += [f for f in g2_g3(model, sc) if f["gate"] in wanted]
+    per_frame = tuple(g for g in PER_FRAME if g in wanted)
+    if "G10" in per_frame and gd.seat_gap is None:
+        gd.seat_gap = seat_gap(body, sc, gd.fabrics)
+    if per_frame:
+        clips = []
+        for c in gd.clips:
+            if clip_names is not None and c[0] not in clip_names and c[0] != REST:
+                continue
+            frames = 1 if c[0] == REST else len(M.load(c[1]).key_times())
+            # Runs of frames, so a long clip spreads over the workers.
+            clips += [c] if c[0] == REST else [(*c, s, s + CHUNK) for s in range(0, frames, CHUNK)]
+        clips += [c for c in corrective_specs(sc, gd.clips)
+                  if clip_names is None or c[2].get("clip") in clip_names or "pose" in c[2]]
+        with ProcessPoolExecutor(max_workers=workers or min(4, os.cpu_count() or 1)) as pool:
+            parts = list(pool.map(clip_gates, [gd] * len(clips), clips, [per_frame] * len(clips)))
+        merged = merge(parts)
+        if "G10" in per_frame and ("G10", "body") not in merged:
+            merged[("G10", "body")] = dict(_record("G10", "body"), not_run="no seated clip with a declared seat was run")
+        findings += list(merged.values())
+    if "G9" in wanted:
+        findings += g9_looks(model, gd.looks)
+    findings += holes(sc, body) + bake_findings(sc) + derive_findings(sc)
+    return decide(findings, gd.stage, body.complete)

@@ -177,21 +177,58 @@ class TestHost(unittest.TestCase):
             if LIBRARY:
                 os.environ["GARMENT_HOST"] = str(LIBRARY)
             try:
-                record = o.corrective("lean", pose=key, convexes=[])
+                o.corrective("lean", pose=key, convexes=[])
+                # Declared before the last edit: the build bakes on the final state, whatever the order.
+                p.paint("r", p.f.all & ~p.pins, 0.05)
+                data = sc.read(o.write().read_bytes())
             finally:
                 if LIBRARY:
                     os.environ.pop("GARMENT_HOST") if previous is None else os.environ.__setitem__("GARMENT_HOST", previous)
+            record, = data.correctives
             self.assertTrue(record["converged"])
             self.assertIn("colliders.json", o.inputs)
-            data = sc.read(o.write().read_bytes())
             self.assertEqual(data.corrective_names, ["lean"])
+            self.assertTrue(np.all(data.piece("skirt").r[data.piece("skirt").r > 0] == np.float32(0.05)))
             delta, _ = data.piece("skirt").correctives["lean"]
             self.assertTrue(np.all(delta[data.piece("skirt").r == 0] == 0))
             self.assertGreater(float(np.abs(delta).max()), 0.01)
-            # An edit after the bake would leave the corrective describing another piece: the outfit refuses it.
-            p.paint("r", p.f.all & ~p.pins, 0.05)
-            with self.assertRaisesRegex(ValueError, "baked before a later edit"):
-                o.write()
+            from garment.cook import stale
+            self.assertEqual([s for s in stale(data, scene.root, Path(__file__)) if s.startswith("corrective")], [])
+            # A solver change makes every baked corrective stale, and stale() says so.
+            moved = sc.read(sc.write(data))
+            moved.correctives[0]["key"]["runtime_sha256"] = "0" * 64
+            self.assertIn("corrective lean: the runtime sources changed since its bake",
+                          stale(moved, scene.root, Path(__file__)))
+            # Its recorded inputs all match: a second build keeps the committed deltas and needs no host at all.
+            os.environ["GARMENT_HOST"] = str(scene.root / "no-such-host.dll")
+            try:
+                again = Outfit(None, scene.root, "model.glb", body=["skin"], fabrics={"plain": A.FABRIC},
+                               colliders="colliders.json")
+                q = A.skirt(again)
+                q.paint("r", q.f.all & ~q.pins, 0.05)
+                again.corrective("lean", pose=key, convexes=[])
+                self.assertEqual(sc.write(again.built()), sc.write(data))
+                # A changed input makes it stale: the build would bake again (here it cannot: no host).
+                q.paint("r", q.f.all & ~q.pins, 0.06)
+                with self.assertRaises((OSError, ValueError, FileNotFoundError)):
+                    again.built()
+            finally:
+                os.environ.pop("GARMENT_HOST") if previous is None else os.environ.__setitem__("GARMENT_HOST", previous)
+            # A bake that cannot converge in its passes stops the build.
+            if LIBRARY:
+                os.environ["GARMENT_HOST"] = str(LIBRARY)
+            try:
+                os.environ["GARMENT_REBAKE"] = "1"
+                once = Outfit(None, scene.root, "model.glb", body=["skin"], fabrics={"plain": A.FABRIC},
+                              colliders="colliders.json")
+                A.skirt(once)
+                once.corrective("lean", pose=key, convexes=[], max_passes=1)
+                with self.assertRaisesRegex(ValueError, "did not converge"):
+                    once.built()
+            finally:
+                os.environ.pop("GARMENT_REBAKE")
+                if LIBRARY:
+                    os.environ.pop("GARMENT_HOST") if previous is None else os.environ.__setitem__("GARMENT_HOST", previous)
         finally:
             scene.close()
 
