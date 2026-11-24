@@ -68,6 +68,12 @@ typedef struct sync_authority_body {
     bool takable;        /* light for the interaction policy: class LIGHT within light_mass_max */
     bool claim_take;     /* guest: the pending claim is a take (sync_authority_take) */
     bool take_refused;   /* guest: a take of it was refused and no move to this seat came since */
+    bool release_unheard; /* guest: released, and no newer number heard since: the host's is one on */
+    /* Host: the owner's newest state the shell took, for the end of its ownership. */
+    bool has_pose;
+    uint8_t pose_seat;
+    float pose_position[3];
+    float pose_speed;
 } sync_authority_body_t;
 
 typedef struct sync_authority_pending {
@@ -84,13 +90,21 @@ enum { SYNC_AUTHORITY_RECORD_BYTES = STUB_RECORD_BYTES_MAX, SYNC_AUTHORITY_OWED_
 /* How a guest's ownership of a body ended, for its contact claims (sync_authority_check_contact). */
 typedef enum sync_authority_end {
     SYNC_END_NONE = 0,
-    SYNC_END_VOLUNTARY, /* its own release: a flight's return at contact or rest, a let-go */
-    SYNC_END_FORCED,    /* the host's move: assign, host claim, take-back, a grant to another seat, a leave */
+    SYNC_END_VOLUNTARY,  /* its own release: a flight's return at contact or rest, a let-go */
+    /* The host settled a contest: its take-back or claim, a grant or take to another seat. The
+       guest simulates on as owner until it hears, so its claims of that time are honest. */
+    SYNC_END_ARBITRATED,
+    /* The host recalled it (an assign, to any seat; the seat left): late claims are dropped. */
+    SYNC_END_REVOKED,
 } sync_authority_end_t;
 
 typedef struct sync_authority_ended {
     uint16_t number;
-    uint8_t how; /* sync_authority_end_t */
+    uint8_t how;   /* sync_authority_end_t */
+    bool has_pose; /* the host took a state of that ownership from the seat */
+    uint32_t tick; /* the host's `now` at the end */
+    float position[3]; /* the seat's last state the host took, and its speed (m/s) */
+    float speed;
 } sync_authority_ended_t;
 
 typedef struct sync_authority {
@@ -124,12 +138,12 @@ typedef struct sync_authority {
        body to that seat, which skips a number (sync_authority_declared_number). */
     uint64_t refused[BODY_SYNC_SEATS_MAX][SYNC_AUTHORITY_OWED_WORDS];
     uint32_t now;
-    /* Host: each seat's newest ownership of each body that ended, kept until the body is bound
-       again or the seat joins again. */
+    /* Host: each seat's newest ownership of each body that ended, kept through a leave until the
+       body is bound again or the seat joins after one. */
     sync_authority_ended_t ended[BODY_SYNC_SEATS_MAX][BODY_SYNC_BODIES_MAX];
-    /* A planted defect for tests that require a check to catch it: every forced end is
-       recorded as voluntary. Never set outside tests. */
-    bool plant_forced_as_voluntary;
+    /* A planted defect for tests that require a check to catch it: a revocation is recorded as
+       an arbitrated end. Never set outside tests. */
+    bool plant_revoked_as_arbitrated;
     /* Host: the shell's measure of a take's evidence (sync_policy_grant_in_t agent_gap, *reach).
        None: every take counts as touching, for the parts tested without a world. */
     float (*take_gap)(void *context, uint8_t seat, uint32_t slot, float *reach);
@@ -141,9 +155,10 @@ typedef struct sync_authority {
 void sync_authority_init(sync_authority_t *a, uint8_t self, uint8_t seats, char *error, size_t error_size);
 bool sync_authority_is_host(const sync_authority_t *a);
 
-/* Joining forgets what the seat was owed and its claims and starts its take budget full.
-   Leaving forgets too, and on the host every body of that seat returns to the host with its
-   received hold and holder. */
+/* Joining forgets what the seat was owed and its claims and starts its take budget full; a join
+   after a leave (not a repeated one) also forgets its ended ownerships. Leaving forgets the rest
+   too, and on the host every body of that seat returns to the host with its received hold and
+   holder, an end the seat's contact claims read as revoked. */
 void sync_authority_seat_joined(sync_authority_t *a, uint8_t seat);
 void sync_authority_seat_left(sync_authority_t *a, uint8_t seat);
 
@@ -171,6 +186,9 @@ body_sync_result_t sync_authority_set_data(sync_authority_t *a, body_sync_id_t i
 /* A local body's bytes, or a copy's newest received. */
 uint32_t sync_authority_data(const sync_authority_t *a, body_sync_id_t id, void *out, uint32_t capacity);
 
+/* Host: the shell took a state of the body from its owner `seat`: the pose its ownership's end
+   keeps for that seat's contact claims. */
+void sync_authority_received_pose(sync_authority_body_t *b, uint8_t seat, const float position[3], float speed);
 /* The shell stored a newer state of the body: what a take inherits from it. */
 void sync_authority_received(sync_authority_body_t *b, uint8_t hold, body_sync_id_t holder, uint8_t flags);
 /* The newest data bytes received for a copy. */
@@ -232,7 +250,8 @@ body_sync_result_t sync_authority_take(sync_authority_t *a, body_sync_id_t id);
    for its next take as well. A state of the refused take declared at most the claimant's
    number then plus one, and the claimant's number never passes the host's, which is N when
    that later move comes: N + 2 is one no such state carries, however the number moved while
-   the refusal was on its way. */
+   the refusal was on its way. A guest that released the body and has heard no newer number
+   counts from one on, as the host's move of the release did (or a forced move before it). */
 uint16_t sync_authority_declared_number(const sync_authority_t *a, const sync_authority_body_t *b);
 /* Bodies `seat` owns by interaction now (a hold until rest); this guest's own count includes its
    takes waiting for the grant. */
@@ -244,8 +263,11 @@ void sync_authority_host_active(sync_authority_t *a, body_sync_id_t id, bool act
 body_sync_result_t sync_authority_reclaim(sync_authority_t *a, body_sync_id_t id);
 
 /* Host: whether `seat` may claim a contact of `agent` under `number` (body_sync_check_contact,
-   the ownership half): every argument untrusted, anything unknown STALE. */
-body_sync_contact_verdict_t sync_authority_check_contact(const sync_authority_t *a, uint8_t seat, body_sync_id_t agent, uint16_t number);
+   the ownership half): every argument untrusted, anything unknown STALE. A voluntary or
+   arbitrated end counts for `grace_ticks` of `now` after it. *ended names the end the verdict
+   read, NULL while the seat owns the agent or for STALE. */
+body_sync_contact_verdict_t sync_authority_check_contact(const sync_authority_t *a, uint8_t seat, body_sync_id_t agent, uint16_t number,
+                                                         uint32_t grace_ticks, const sync_authority_ended_t **ended);
 /* The number a contact claim of a local body names (body_sync_contact_number). */
 bool sync_authority_contact_number(const sync_authority_t *a, const sync_authority_body_t *b, uint16_t *number);
 

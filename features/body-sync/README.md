@@ -600,27 +600,41 @@ ignores the mode.
 - **Contact claims.** The owner of a body judges its contacts and the host
   checks the claim with `body_sync_check_contact(seat, agent, number, target)`;
   the claim names `body_sync_contact_number` (the number the body's states
-  declare, so a waiting take names its grant's; a claim that is not a take names
+  declare, so a waiting take names its grant's, a take right after a release
+  the host has not answered yet included; a claim that is not a take names
   none until it is granted, since the host takes none of its states before).
-  A seat's records arrive in order, and the contact that ends a flight (always
-  under HOST, against a heavy body under INTERACTION) sends its release first:
-  the host has the body back before it reads the claim, so a gate on "owns it
-  now" would refuse every honest one. The host instead keeps, per seat and
-  body, that seat's newest ownership that ended and how: OK while the seat owns
-  the body under the number or gave it back itself under it (a release, a
-  flight's return), whoever owns it since, since the claim describes the past
-  flight; REVOKED when the host ended it by force (an assign, its own claim or
-  take-back, a grant to another seat), as the claimant simulated on past a move
-  it could not see; STALE for anything else: an old generation, a seat not
-  joined (a seat that left, and its ownerships once it joins again), a number
-  the seat never held (another seat's, or the one a refused take's states
-  declared, which the host's next move to that seat skips), a claim older than
-  the seat's newest ended ownership, a guest calling. The host's world comes
-  with it: the gap between the agent's and the target's boxes (the agent's copy
-  or its newest state, the nearer), the take evidence's reach over a round trip,
-  a delay and a tick, and the fastest approach. The seam sets no threshold and
-  judges no effect: the game dedupes by (seat, agent, number, target), and after
-  a voluntary end the host's own simulation may meet the same target again.
+  The game sends its claim after that tick's seam records of the seat, on the
+  same ordered lane: the contact that ends a flight (always under HOST, against
+  a heavy body under INTERACTION) sends its release first, so the host has the
+  body back before it reads the claim, and a gate on "owns it now" alone would
+  refuse every honest one. The host keeps, per seat and body, that seat's newest
+  ended ownership: its number, how it ended, the host's tick then and the
+  seat's last state the host took. The verdicts:
+  - OK while the seat owns the body under the number.
+  - OK within the grace after the seat's own release (a let-go, a flight's
+    return) or the host's arbitration of a contest (its take-back or claim, a
+    grant or take to another seat), STALE after. The guest simulates on as owner
+    until it hears of the end, so its honest claims of that time land within a
+    round trip of it. The grace is the evidence's span: a round trip, a
+    playback delay and a tick, capped at `SYNC_POLICY_EVIDENCE_AGE_MAX_S` (1 s;
+    the stub: one tick). Past it, the claim would credit a landing of whoever
+    flies the body since.
+  - REVOKED for good after a recall: `body_sync_assign` to any seat (its own
+    included), the seat leaving. The recall drops the seat's late claims.
+  - STALE for anything else: an old generation, a number the seat never held
+    (another seat's, or the one a refused take's states declared, which the
+    host's next move to that seat skips), a claim older than the seat's newest
+    ended ownership, any ownership from before a seat joined again after a
+    leave, a guest calling.
+  The host's world comes with it: the gap between the agent's and the
+  target's boxes (owned now: the agent's copy or its newest state, the nearer;
+  ended: where that seat's last state put it, INFINITY without one), the take
+  evidence's reach over the same capped span, the fastest approach, and the
+  end's age. A guest that acknowledges late raises its measured round trip:
+  the cap keeps it from widening a take's or a contact's reach and the grace
+  past 1 s. The seam sets no threshold and judges no effect: the game dedupes
+  per target effect, not per claim, since after an end the host's own
+  simulation, or the next owner, may meet the same target again.
 
 `body_sync_traffic` counts the takes, refusals, take-backs and returns
 (`takes`, `take_refusals`, `reclaims`, `returns`); the stand reports them per

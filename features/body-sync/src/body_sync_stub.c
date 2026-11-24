@@ -207,24 +207,49 @@ bool body_sync_contact_number(const body_sync_t *s, body_sync_id_t id, uint16_t 
 static float length3(const float v[3]) { return sqrtf(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]); }
 
 /* The stub drives a copy to the newest pose it received within the step, so its copy trails
-   the guest by a tick only and the agent is measured where the host shows it. */
+   the guest by a tick only. The agent is measured where the host shows it and where its newest
+   state puts it, or for an ended ownership where that seat's last state the host took put it. */
 body_sync_contact_verdict_t body_sync_check_contact(const body_sync_t *s, uint8_t seat, body_sync_id_t agent, uint16_t number,
                                                     body_sync_id_t target, body_sync_contact_t *out) {
     body_sync_contact_t scratch;
     out = out ? out : &scratch;
     *out = (body_sync_contact_t){.gap = INFINITY};
-    body_sync_contact_verdict_t verdict = sync_authority_check_contact(&s->authority, seat, agent, number);
+    const sync_authority_ended_t *ended;
+    body_sync_contact_verdict_t verdict = sync_authority_check_contact(&s->authority, seat, agent, number, 1u, &ended);
     const entry_t *g = entry_const(s, agent), *t = entry_const(s, target);
     if (verdict == BODY_SYNC_CONTACT_STALE || agent == target || !g || !t || !b3Body_IsValid(g->body) || !b3Body_IsValid(t->body)) {
         return BODY_SYNC_CONTACT_STALE;
     }
+    out->ended = ended != NULL;
+    out->ended_age_ticks = ended ? s->authority.now - ended->tick : 0u;
     b3AABB a = b3Body_ComputeAABB(g->body), b = b3Body_ComputeAABB(t->body);
+    b3Vec3 at = b3Body_GetPosition(g->body);
     const float alo[3] = {a.lowerBound.x, a.lowerBound.y, a.lowerBound.z}, ahi[3] = {a.upperBound.x, a.upperBound.y, a.upperBound.z};
     const float blo[3] = {b.lowerBound.x, b.lowerBound.y, b.lowerBound.z}, bhi[3] = {b.upperBound.x, b.upperBound.y, b.upperBound.z};
     b3Vec3 va = b3Body_GetLinearVelocity(g->body), vb = b3Body_GetLinearVelocity(t->body);
     float shown = length3((const float[3]){va.x, va.y, va.z}), sent = g->has_in ? length3(g->in.velocity) : 0.0f;
     float agent_speed = sent > shown ? sent : shown, target_speed = length3((const float[3]){vb.x, vb.y, vb.z});
-    out->gap = sync_policy_box_gap(blo, bhi, alo, ahi);
+    /* Where the agent is measured: shown, and its newest state; or the ended ownership's last. */
+    float at3[3] = {at.x, at.y, at.z}, places[2][3] = {{at.x, at.y, at.z}, {at.x, at.y, at.z}};
+    int first = 0, places_n = g->has_in ? 2 : 1;
+    if (g->has_in) {
+        memcpy(places[1], g->in.position, sizeof(places[1]));
+    }
+    if (ended) {
+        agent_speed = ended->has_pose ? ended->speed : 0.0f;
+        memcpy(places[1], ended->position, sizeof(places[1]));
+        first = 1;
+        places_n = ended->has_pose ? 2 : 1;
+    }
+    for (int w = first; w < places_n; w++) {
+        float lo[3], hi[3];
+        for (int i = 0; i < 3; i++) {
+            lo[i] = alo[i] + places[w][i] - at3[i];
+            hi[i] = ahi[i] + places[w][i] - at3[i];
+        }
+        float d = sync_policy_box_gap(blo, bhi, lo, hi);
+        out->gap = d < out->gap ? d : out->gap;
+    }
     out->reach = sync_policy_take_reach(agent_speed, target_speed, s->dt);
     out->approach_max = agent_speed + target_speed;
     return verdict;
@@ -298,6 +323,9 @@ static void store_in(body_sync_t *s, uint32_t slot, uint8_t from, uint32_t tick,
     e->in_from = from;
     e->in_tick = tick;
     e->in_ordered = true;
+    if (is_host(s)) {
+        sync_authority_received_pose(auth_of(s, slot), from, b->position, length3(b->velocity));
+    }
     sync_authority_received(auth_of(s, slot), b->hold, b->holder, b->flags);
     sync_authority_received_data(auth_of(s, slot), b->data_size, b->data);
     sync_authority_received_motion(auth_of(s, slot), true, b->kinematic, b->locks);
@@ -498,7 +526,7 @@ void body_sync_collect(body_sync_t *s, uint32_t tick) {
         o->holder = a->holder;
         o->hold = a->hold;
         o->seat = a->seat;
-        o->number = a->number;
+        o->number = sync_authority_declared_number(&s->authority, a);
         e->has_out = true;
         if (a->hold == BODY_SYNC_HOLD_UNTIL_SETTLED) {
             b3BodyId ignore = b3_nullBodyId;

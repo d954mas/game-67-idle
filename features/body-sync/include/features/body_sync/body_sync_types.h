@@ -101,12 +101,13 @@ typedef struct body_sync_claim_event {
 
 /* The host's verdict on a guest's contact claim (body_sync_check_contact). */
 typedef enum body_sync_contact_verdict {
-    /* The seat simulates the agent under that number now, or gave it back itself under it. */
+    /* The seat simulates the agent under that number now, or that ownership ended by its own
+       release or the host's arbitration within the grace. */
     BODY_SYNC_CONTACT_OK = 0,
-    /* Nothing to judge: a body, generation, seat or number the host does not know for that seat. */
+    /* Nothing to judge: a body, generation, seat or number the host does not know for that seat,
+       or an end past its grace. */
     BODY_SYNC_CONTACT_STALE,
-    /* The host took that ownership away (an assign, a host claim or take-back, a grant to
-       another seat): the claimant simulated on past the host's move, which it could not see. */
+    /* The host recalled that ownership (an assign, the seat leaving): its late claims are dropped. */
     BODY_SYNC_CONTACT_REVOKED,
 } body_sync_contact_verdict_t;
 
@@ -120,6 +121,9 @@ typedef struct body_sync_contact {
     float reach;
     /* The faster of the agent's shown and sent speeds plus the target's shown speed. */
     float approach_max;
+    /* The verdict read an ownership that ended, `ended_age_ticks` of the host's ticks ago. */
+    bool ended;
+    uint32_t ended_age_ticks;
 } body_sync_contact_t;
 
 typedef enum body_sync_traffic_kind {

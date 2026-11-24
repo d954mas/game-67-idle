@@ -136,16 +136,19 @@ static float speed_of(b3BodyId body) {
     return sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
 }
 
-/* How long the host's copy of `seat`'s agents may trail that guest's contact: a round trip, a
-   playback delay and a tick (SYNC_POLICY_TAKE_SLOP_M derives it). */
-static float evidence_age(const body_sync_t *s, uint8_t seat) {
-    return (sync_sender_round_trip(&s->sender, seat) + (float)s->playback.timelines[seat].delay + 1.0f) * s->dt;
+/* Ticks the host's copy of `seat`'s agents may trail that guest's contact: a round trip, a
+   playback delay and a tick, capped (SYNC_POLICY_TAKE_SLOP_M derives it). */
+static float evidence_ticks(const body_sync_t *s, uint8_t seat) {
+    return sync_policy_evidence_ticks(sync_sender_round_trip(&s->sender, seat), (float)s->playback.timelines[seat].delay, s->config.tick_hz);
 }
 
 /* The gap from `box` to the agent in slot `k`, where the host shows it or where its newest state
-   puts it (a playback delay nearer the guest's present), whichever is nearer; *reach is what the
-   two may travel apart over `age_s`, *agent_speed the faster of the agent's shown and sent speeds. */
-static float agent_gap(const body_sync_t *s, uint32_t k, b3AABB box, float body_speed, float age_s, float *reach, float *agent_speed) {
+   puts it (a playback delay nearer the guest's present), whichever is nearer; for an ownership
+   that ended (`ended`), where that seat's last state the host took put it, as another seat may fly
+   the body since. *reach is what the two may travel apart over `age_s`, *agent_speed the faster of
+   the agent's shown and sent speeds (an ended one's: its last state's). */
+static float agent_gap(const body_sync_t *s, uint32_t k, b3AABB box, float body_speed, float age_s, const sync_authority_ended_t *ended,
+                       float *reach, float *agent_speed) {
     const entry_t *g = &s->entries[k];
     b3AABB other = b3Body_ComputeAABB(g->body);
     const sync_received_t *in = &s->receiver.bodies[k];
@@ -155,9 +158,19 @@ static float agent_gap(const body_sync_t *s, uint32_t k, b3AABB box, float body_
     float sent = in->has ? sqrtf(in->velocity[0] * in->velocity[0] + in->velocity[1] * in->velocity[1] + in->velocity[2] * in->velocity[2]) : 0.0f;
     float shown = speed_of(g->body);
     *agent_speed = sent > shown ? sent : shown;
+    int first = 0, windows = in->has ? 2 : 1;
+    if (ended) {
+        *agent_speed = ended->has_pose ? ended->speed : 0.0f;
+        const float at3[3] = {at.x, at.y, at.z};
+        for (int i = 0; i < 3; i++) {
+            shift[1][i] = ended->position[i] - at3[i];
+        }
+        first = 1;
+        windows = ended->has_pose ? 2 : 1;
+    }
     *reach = sync_policy_take_reach(*agent_speed, body_speed, age_s);
     float best = INFINITY;
-    for (int w = 0; w < (in->has ? 2 : 1); w++) {
+    for (int w = first; w < windows; w++) {
         const float olo[3] = {other.lowerBound.x + shift[w][0], other.lowerBound.y + shift[w][1], other.lowerBound.z + shift[w][2]};
         const float ohi[3] = {other.upperBound.x + shift[w][0], other.upperBound.y + shift[w][1], other.upperBound.z + shift[w][2]};
         float d = sync_policy_box_gap(lo, hi, olo, ohi);
@@ -177,7 +190,7 @@ static float take_gap(void *context, uint8_t seat, uint32_t slot, float *reach) 
         return INFINITY;
     }
     b3AABB box = b3Body_ComputeAABB(e->body);
-    float age_s = evidence_age(s, seat);
+    float age_s = evidence_ticks(s, seat) * s->dt;
     float body_speed = speed_of(e->body), best = INFINITY;
     for (uint32_t k = 0; k < BODY_SYNC_BODIES_MAX; k++) {
         const sync_authority_body_t *a = &s->authority.bodies[k];
@@ -191,7 +204,7 @@ static float take_gap(void *context, uint8_t seat, uint32_t slot, float *reach) 
             continue;
         }
         float r, speed;
-        float d = agent_gap(s, k, box, body_speed, age_s, &r, &speed);
+        float d = agent_gap(s, k, box, body_speed, age_s, NULL, &r, &speed);
         if (d - r < best - *reach) {
             best = d;
             *reach = r;
@@ -378,7 +391,9 @@ body_sync_contact_verdict_t body_sync_check_contact(const body_sync_t *s, uint8_
     body_sync_contact_t scratch;
     out = out ? out : &scratch;
     *out = (body_sync_contact_t){.gap = INFINITY};
-    body_sync_contact_verdict_t verdict = sync_authority_check_contact(&s->authority, seat, agent, number);
+    float ticks = seat < s->config.seats ? evidence_ticks(s, seat) : 0.0f;
+    const sync_authority_ended_t *ended;
+    body_sync_contact_verdict_t verdict = sync_authority_check_contact(&s->authority, seat, agent, number, (uint32_t)ceilf(ticks), &ended);
     if (verdict == BODY_SYNC_CONTACT_STALE || agent == target || !sync_authority_body_const(&s->authority, target)) {
         return BODY_SYNC_CONTACT_STALE;
     }
@@ -386,8 +401,10 @@ body_sync_contact_verdict_t body_sync_check_contact(const body_sync_t *s, uint8_
     if (!b3Body_IsValid(g->body) || !b3Body_IsValid(t->body)) {
         return BODY_SYNC_CONTACT_STALE;
     }
+    out->ended = ended != NULL;
+    out->ended_age_ticks = ended ? s->authority.now - ended->tick : 0u;
     float target_speed = speed_of(t->body), agent_speed;
-    out->gap = agent_gap(s, body_sync_id_slot(agent), b3Body_ComputeAABB(t->body), target_speed, evidence_age(s, seat), &out->reach, &agent_speed);
+    out->gap = agent_gap(s, body_sync_id_slot(agent), b3Body_ComputeAABB(t->body), target_speed, ticks * s->dt, ended, &out->reach, &agent_speed);
     out->approach_max = agent_speed + target_speed;
     return verdict;
 }
@@ -584,6 +601,11 @@ body_sync_result_t body_sync_receive_state(body_sync_t *s, uint8_t seat, uint32_
         body_sync_authority_t now;
         sync_authority_describe(&s->authority, a, &now);
         note_received(s, a, &s->receiver.bodies[r->slot], (uint8_t)now.hold, a->flags, true);
+        if (is_host(s)) {
+            const sync_received_t *in = &s->receiver.bodies[r->slot];
+            float speed = sqrtf(in->velocity[0] * in->velocity[0] + in->velocity[1] * in->velocity[1] + in->velocity[2] * in->velocity[2]);
+            sync_authority_received_pose(a, seat, in->newest.position, speed);
+        }
     }
     return BODY_SYNC_OK;
 }

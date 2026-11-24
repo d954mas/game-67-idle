@@ -126,8 +126,17 @@ bool sync_policy_grants(const sync_policy_grant_in_t *in);
 /* The reach of a take's evidence: SYNC_POLICY_TAKE_SLOP_M plus the agent's and the body's travel
    (m/s) over `age_s`, the time the host's copy of the agent trails the guest. */
 float sync_policy_take_reach(float agent_speed, float body_speed, float age_s);
+/* The longest the host's evidence may trail a guest, seconds. A guest that acknowledges late
+   raises its measured round trip, and with it a take's and a contact's reach and a contact
+   claim's grace: past this neither grows. Above the stand's slowest honest path (a 300 ms round
+   trip, the default longest delay of 15 ticks at 60 Hz and a tick: 0.57 s). */
+#define SYNC_POLICY_EVIDENCE_AGE_MAX_S 1.0f
+/* Ticks the host's copy of a guest's agent trails that guest: a round trip, a playback delay
+   and a tick, at most SYNC_POLICY_EVIDENCE_AGE_MAX_S. */
+float sync_policy_evidence_ticks(float round_trip_ticks, float delay_ticks, uint32_t tick_hz);
 /* The distance between two axis-aligned boxes given by their low and high corners, 0 where
-   they overlap: the evidence's gap. */
+   they overlap: the evidence's gap. INFINITY for a corner that is not finite, so a broken pose
+   never reads as touching. */
 float sync_policy_box_gap(const float lo[3], const float hi[3], const float other_lo[3], const float other_hi[3]);
 
 /* Host: one of its agents touches a copy a guest owns by interaction. */

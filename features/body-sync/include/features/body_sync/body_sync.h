@@ -245,19 +245,27 @@ bool body_sync_contact_number(const body_sync_t *sync, body_sync_id_t id, uint16
 /* Host only: whether `seat` may claim a contact of its body `agent` with `target` under the
    authority number `number` (body_sync_contact_number on the claimant), and the host's own
    world around it in `out`. Every argument may come from a peer's bytes: anything out of
-   range, unbound, of an old generation, a seat not joined, the host's own seat, a guest
-   calling, or `target` equal to `agent` is STALE; the call never asserts.
+   range, unbound, of an old generation, the host's own seat, a guest calling, or `target`
+   equal to `agent` is STALE; the call never asserts.
 
-   OK while the seat simulates the agent under that number, and after it gave it back itself
-   under that number (a release, a flight's return at contact or rest) until it owns the body
-   again and that ownership ends. The seat's records arrive in order, so its release lands
-   before the claim of the contact that ended the flight; the claim describes that flight, and
-   another seat owning the body since does not change it. REVOKED when the host ended that
-   ownership by force (body_sync_assign, a host claim or take-back, a grant to another seat).
-   The host keeps one ended ownership per seat and body: a claim older than the seat's newest
-   ownership of the body is STALE. A seat that left is STALE, and so is all it owned before
-   it joined again. The seam judges no effect: the game dedupes claims (seat, agent, number,
-   target) and decides from `out`. */
+   The game sends its claim after that tick's seam records of the seat, on the same ordered
+   lane: then a release (a flight's return at the contact) reaches the host before the claim of
+   the contact that caused it, and a claim made before the seat heard of a host's move reaches
+   it within a round trip of that move. The verdicts:
+   - OK while the seat simulates the agent under that number.
+   - OK within the grace after that ownership ended by the seat's own release, or by the host
+     settling a contest (its take-back or claim, a grant or take to another seat); STALE after.
+     The grace is the evidence's span: a round trip, a playback delay and a tick, capped at
+     SYNC_POLICY_EVIDENCE_AGE_MAX_S (the stub: one tick).
+   - REVOKED, for good, when the host recalled it (body_sync_assign to any seat, the seat
+     leaving): the recall drops the seat's late claims.
+   - STALE otherwise: a number the seat never held, a claim older than the seat's newest ended
+     ownership of the body (one is kept per seat and body), any ownership from before a seat
+     joined again.
+   For an ended ownership `out` measures the agent where that seat's last state the host took
+   put it (another seat may fly the body since); no such state gives gap INFINITY. The seam
+   judges no effect: the game dedupes per target effect, not per claim, since after an end the
+   host's own simulation, or the next owner, may meet the same target again. */
 body_sync_contact_verdict_t body_sync_check_contact(const body_sync_t *sync, uint8_t seat, body_sync_id_t agent, uint16_t number,
                                                     body_sync_id_t target, body_sync_contact_t *out);
 

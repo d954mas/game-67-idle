@@ -31,11 +31,12 @@ add_test(NAME test_body_sync_seam_real COMMAND test_body_sync_seam_real WORKING_
 body_sync_test(test_body_sync_codec LIBS body_sync_parts)
 body_sync_test(test_body_sync_sender LIBS body_sync_parts)
 body_sync_test(test_body_sync_authority LIBS body_sync_parts)
-# The contact gate's forced-move case must fail on a planted defect (every forced end recorded
-# as voluntary): Unity names the failing case, so the pattern pins which check caught it.
-add_test(NAME test_body_sync_authority_mf_forced_as_voluntary COMMAND test_body_sync_authority --plant-forced-as-voluntary
-    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(test_body_sync_authority_mf_forced_as_voluntary PROPERTIES PASS_REGULAR_EXPRESSION ":test_contact_forced_moves_revoke:FAIL")
+# The contact gate's revocation cases must each fail on a planted defect: a recall recorded as
+# an arbitrated end.
+add_test(NAME test_body_sync_authority_mf_revoked_as_arbitrated
+    COMMAND "${CMAKE_COMMAND}" -DEXE=$<TARGET_FILE:test_body_sync_authority> -DARGS=--plant-revoked-as-arbitrated
+            "-DCASES=test_contact_revoked_by_an_assign_to_the_host|test_contact_revoked_by_an_assign_to_another_seat|test_contact_revoked_by_an_assign_to_the_same_seat|test_contact_revoked_when_the_seat_left"
+            -P "${CMAKE_CURRENT_LIST_DIR}/expect_unity_fail.cmake")
 body_sync_test(test_body_sync_playback LIBS body_sync_parts)
 body_sync_test(test_body_sync_soft LIBS body_sync_parts)
 body_sync_test(test_body_sync_policy LIBS body_sync_parts)
@@ -64,7 +65,7 @@ set(BODY_SYNC_TWICE_SCENARIOS two_walk bounce_wall cut_short cut_long hitch_gues
 set(BODY_SYNC_IMPLS "body_sync_stand_cli|" "body_sync_stand_cli_stub|stub_")
 
 set(core_tests test_body_sync_logic test_body_sync_playback test_body_sync_soft test_body_sync_policy test_body_sync_wire test_body_sync_stub test_body_sync_seam_real test_body_sync_codec test_body_sync_sender test_body_sync_authority test_body_sync_real
-    test_body_sync_stand test_body_sync_checks test_body_sync_authority_mf_forced_as_voluntary)
+    test_body_sync_stand test_body_sync_checks test_body_sync_authority_mf_revoked_as_arbitrated)
 set(slow_tests test_body_sync_free_step)
 foreach(impl IN LISTS BODY_SYNC_IMPLS)
     string(REPLACE "|" ";" parts "${impl}")

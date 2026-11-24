@@ -72,9 +72,17 @@ float sync_policy_take_reach(float agent_speed, float body_speed, float age_s) {
     return SYNC_POLICY_TAKE_SLOP_M + (agent_speed + body_speed) * age_s;
 }
 
+float sync_policy_evidence_ticks(float round_trip_ticks, float delay_ticks, uint32_t tick_hz) {
+    float ticks = round_trip_ticks + delay_ticks + 1.0f, cap = SYNC_POLICY_EVIDENCE_AGE_MAX_S * (float)tick_hz;
+    return ticks < cap ? ticks : cap;
+}
+
 float sync_policy_box_gap(const float lo[3], const float hi[3], const float other_lo[3], const float other_hi[3]) {
     float d2 = 0.0f;
     for (int i = 0; i < 3; i++) {
+        if (!isfinite(lo[i]) || !isfinite(hi[i]) || !isfinite(other_lo[i]) || !isfinite(other_hi[i])) {
+            return INFINITY;
+        }
         float d = other_lo[i] - hi[i] > lo[i] - other_hi[i] ? other_lo[i] - hi[i] : lo[i] - other_hi[i];
         d2 += d > 0.0f ? d * d : 0.0f;
     }

@@ -100,13 +100,20 @@ static void record_body(const sync_authority_t *a, const sync_authority_body_t *
    forced move. `voluntary`: a guest that owned the body gave it up itself, so its contact
    claims of that ownership still count. */
 static void host_move_to(sync_authority_t *a, sync_authority_body_t *b, uint8_t seat, uint8_t hold, uint16_t granted, bool keep_holder,
-                         uint8_t announce, bool voluntary) {
+                         uint8_t announce, sync_authority_end_t end) {
     bool was_local = sync_authority_local(a, b);
     uint32_t slot = slot_of(a, b);
     if (b->seat != BODY_SYNC_SEAT_HOST) {
-        a->ended[b->seat][slot] = (sync_authority_ended_t){
-            .number = b->number, .how = (uint8_t)(voluntary || a->plant_forced_as_voluntary ? SYNC_END_VOLUNTARY : SYNC_END_FORCED)};
+        end = end == SYNC_END_REVOKED && a->plant_revoked_as_arbitrated ? SYNC_END_ARBITRATED : end;
+        sync_authority_ended_t *e = &a->ended[b->seat][slot];
+        *e = (sync_authority_ended_t){.number = b->number, .how = (uint8_t)end, .tick = a->now};
+        if (b->has_pose && b->pose_seat == b->seat) {
+            e->has_pose = true;
+            memcpy(e->position, b->pose_position, sizeof(e->position));
+            e->speed = b->pose_speed;
+        }
     }
+    b->has_pose = false;
     a->owned_by[b->seat] -= b->seat != BODY_SYNC_SEAT_HOST && b->hold == BODY_SYNC_HOLD_UNTIL_REST ? 1u : 0u;
     uint64_t bit = 1ull << (slot % 64);
     bool skip = seat != BODY_SYNC_SEAT_HOST && (a->refused[seat][slot / 64] & bit);
@@ -131,8 +138,8 @@ static void host_move_to(sync_authority_t *a, sync_authority_body_t *b, uint8_t 
 }
 
 static void host_move(sync_authority_t *a, sync_authority_body_t *b, uint8_t seat, uint8_t hold, uint16_t granted, bool keep_holder,
-                      bool voluntary) {
-    host_move_to(a, b, seat, hold, granted, keep_holder, 0xFFu, voluntary);
+                      sync_authority_end_t end) {
+    host_move_to(a, b, seat, hold, granted, keep_holder, 0xFFu, end);
 }
 
 /* Guest: the one place authority changes on a guest, from an announcement or a host state. A
@@ -154,6 +161,7 @@ static void guest_authority(sync_authority_t *a, sync_authority_body_t *b, const
     b->take_refused = b->take_refused || (answers_take && r->seat != me);
     if (newer16(r->number, b->number)) {
         b->number = r->number;
+        b->release_unheard = false;
         bool stale_grant = r->seat == me && !answers_mine && r->sequence != 0 && !r->forced;
         b->seat = stale_grant ? BODY_SYNC_SEAT_HOST : r->seat;
         /* Any move to this seat, stale grant or not, is the one the host skipped a number on. */
@@ -180,7 +188,6 @@ static void forget_seat(sync_authority_t *a, uint8_t seat) {
     memset(a->answer[seat], 0, sizeof(a->answer[seat]));
     memset(a->forced[seat], 0, sizeof(a->forced[seat]));
     memset(a->refused[seat], 0, sizeof(a->refused[seat]));
-    memset(a->ended[seat], 0, sizeof(a->ended[seat]));
     for (uint32_t slot = 0; slot < BODY_SYNC_BODIES_MAX; slot++) {
         if (a->pending[seat][slot].active) {
             a->pending[seat][slot].active = false;
@@ -197,6 +204,9 @@ static void forget_seat(sync_authority_t *a, uint8_t seat) {
 }
 
 void sync_authority_seat_joined(sync_authority_t *a, uint8_t seat) {
+    if (!a->joined[seat]) {
+        memset(a->ended[seat], 0, sizeof(a->ended[seat]));
+    }
     forget_seat(a, seat);
     a->joined[seat] = true;
     a->take_budget[seat] = (float)(SYNC_POLICY_TAKES_PER_TICK * SYNC_POLICY_TAKE_BURST_TICKS);
@@ -205,16 +215,13 @@ void sync_authority_seat_joined(sync_authority_t *a, uint8_t seat) {
 
 void sync_authority_seat_left(sync_authority_t *a, uint8_t seat) {
     a->joined[seat] = false;
-    forget_seat(a, seat);
-    if (!sync_authority_is_host(a)) {
-        return;
-    }
-    for (uint32_t slot = 0; slot < BODY_SYNC_BODIES_MAX; slot++) {
+    for (uint32_t slot = 0; sync_authority_is_host(a) && slot < BODY_SYNC_BODIES_MAX; slot++) {
         sync_authority_body_t *b = &a->bodies[slot];
         if (b->bound && b->seat == seat) {
-            host_move(a, b, BODY_SYNC_SEAT_HOST, b->has_in ? b->in_hold : BODY_SYNC_HOLD_UNTIL_RELEASE, 0, true, false);
+            host_move(a, b, BODY_SYNC_SEAT_HOST, b->has_in ? b->in_hold : BODY_SYNC_HOLD_UNTIL_RELEASE, 0, true, SYNC_END_REVOKED);
         }
     }
+    forget_seat(a, seat);
 }
 
 body_sync_result_t sync_authority_bind(sync_authority_t *a, body_sync_id_t id, uint8_t seat, uint16_t number) {
@@ -276,7 +283,7 @@ body_sync_result_t sync_authority_claim(sync_authority_t *a, body_sync_id_t id, 
     }
     if (sync_authority_is_host(a)) {
         if (b->seat != BODY_SYNC_SEAT_HOST) {
-            host_move(a, b, BODY_SYNC_SEAT_HOST, (uint8_t)hold, 0, false, false);
+            host_move(a, b, BODY_SYNC_SEAT_HOST, (uint8_t)hold, 0, false, SYNC_END_ARBITRATED);
         }
         b->hold = (uint8_t)hold;
         return BODY_SYNC_OK;
@@ -325,6 +332,7 @@ body_sync_result_t sync_authority_release(sync_authority_t *a, body_sync_id_t id
     }
     b->seat = BODY_SYNC_SEAT_HOST;
     b->claim_pending = false;
+    b->release_unheard = true;
     b->hold = BODY_SYNC_HOLD_UNTIL_RELEASE;
     b->holder = BODY_SYNC_ID_NONE;
     return BODY_SYNC_OK;
@@ -377,7 +385,7 @@ body_sync_result_t sync_authority_answer(sync_authority_t *a, const body_sync_cl
     a->answer[claim->seat][slot] = claim->sequence;
     if (granted) {
         /* Granting the owner's own newer claim ends nothing it did not ask for. */
-        host_move(a, b, claim->seat, p->hold, claim->sequence, false, b->seat == claim->seat);
+        host_move(a, b, claim->seat, p->hold, claim->sequence, false, b->seat == claim->seat ? SYNC_END_VOLUNTARY : SYNC_END_ARBITRATED);
         b->holder = BODY_SYNC_ID_NONE;
     } else {
         a->owed[claim->seat][slot / 64] |= 1ull << (slot % 64);
@@ -397,7 +405,7 @@ body_sync_result_t sync_authority_assign(sync_authority_t *a, body_sync_id_t id,
         return invalid(a, "assign: nobody sits there, or an unknown hold");
     }
     bool moved = seat != b->seat;
-    host_move(a, b, seat, (uint8_t)hold, 0, false, false);
+    host_move(a, b, seat, (uint8_t)hold, 0, false, SYNC_END_REVOKED);
     /* A forced move takes the body out of its carrier's hands. */
     if (moved) {
         b->holder = BODY_SYNC_ID_NONE;
@@ -477,6 +485,13 @@ void sync_authority_received_data(sync_authority_body_t *b, uint8_t size, const 
     memcpy(b->in_data, data, sizeof(b->in_data));
 }
 
+void sync_authority_received_pose(sync_authority_body_t *b, uint8_t seat, const float position[3], float speed) {
+    b->has_pose = true;
+    b->pose_seat = seat;
+    memcpy(b->pose_position, position, sizeof(b->pose_position));
+    b->pose_speed = speed;
+}
+
 void sync_authority_received(sync_authority_body_t *b, uint8_t hold, body_sync_id_t holder, uint8_t flags) {
     b->has_in = true;
     b->in_hold = hold;
@@ -527,7 +542,7 @@ static void touch_claim(sync_authority_t *a, uint8_t seat, sync_authority_body_t
         a->owed[seat][slot / 64] |= 1ull << (slot % 64);
     } else if (granted) {
         a->granted[seat]++;
-        host_move_to(a, b, seat, BODY_SYNC_HOLD_UNTIL_REST, sequence, false, (uint8_t)(1u << seat), false);
+        host_move_to(a, b, seat, BODY_SYNC_HOLD_UNTIL_REST, sequence, false, (uint8_t)(1u << seat), SYNC_END_ARBITRATED);
         b->holder = BODY_SYNC_ID_NONE;
     } else {
         a->refused_takes[seat]++;
@@ -578,7 +593,7 @@ body_sync_result_t sync_authority_receive(sync_authority_t *a, uint8_t seat, uin
         /* A release counts at the number its sender saw, or for the grant it crossed; an older
            one (the host moved the body by force since) is stale and changes nothing. */
         if (b->seat == seat && (r.number == b->number || (r.sequence != 0 && r.sequence == b->granted_seq))) {
-            host_move(a, b, BODY_SYNC_SEAT_HOST, BODY_SYNC_HOLD_UNTIL_RELEASE, 0, false, true);
+            host_move(a, b, BODY_SYNC_SEAT_HOST, BODY_SYNC_HOLD_UNTIL_RELEASE, 0, false, SYNC_END_VOLUNTARY);
             take_record(b, &r, false);
         } else if (!withdrew) {
             (*stale)++;
@@ -741,18 +756,21 @@ body_sync_result_t sync_authority_take(sync_authority_t *a, body_sync_id_t id) {
 
 uint16_t sync_authority_declared_number(const sync_authority_t *a, const sync_authority_body_t *b) {
     bool taking = !sync_authority_is_host(a) && b->claim_pending && b->hold == BODY_SYNC_HOLD_UNTIL_REST && b->seat != a->self;
-    return taking ? (uint16_t)(b->number + (b->take_refused ? 2u : 1u)) : b->number;
+    uint16_t base = (uint16_t)(b->number + (b->release_unheard ? 1u : 0u));
+    return taking ? (uint16_t)(base + (b->take_refused ? 2u : 1u)) : b->number;
 }
 
-body_sync_contact_verdict_t sync_authority_check_contact(const sync_authority_t *a, uint8_t seat, body_sync_id_t agent, uint16_t number) {
-    if (!sync_authority_is_host(a) || seat == BODY_SYNC_SEAT_HOST || seat >= a->seats || !a->joined[seat]) {
+body_sync_contact_verdict_t sync_authority_check_contact(const sync_authority_t *a, uint8_t seat, body_sync_id_t agent, uint16_t number,
+                                                         uint32_t grace_ticks, const sync_authority_ended_t **ended) {
+    *ended = NULL;
+    if (!sync_authority_is_host(a) || seat == BODY_SYNC_SEAT_HOST || seat >= a->seats) {
         return BODY_SYNC_CONTACT_STALE;
     }
     const sync_authority_body_t *b = sync_authority_body_const(a, agent);
     if (!b) {
         return BODY_SYNC_CONTACT_STALE;
     }
-    if (b->seat == seat && b->number == number) {
+    if (b->seat == seat && b->number == number && a->joined[seat]) {
         return BODY_SYNC_CONTACT_OK;
     }
     /* Seat and number both match: a number another seat held, or one a refused take's states
@@ -761,7 +779,13 @@ body_sync_contact_verdict_t sync_authority_check_contact(const sync_authority_t 
     if (e->how == SYNC_END_NONE || e->number != number) {
         return BODY_SYNC_CONTACT_STALE;
     }
-    return e->how == SYNC_END_VOLUNTARY ? BODY_SYNC_CONTACT_OK : BODY_SYNC_CONTACT_REVOKED;
+    /* A claim of an ended ownership is one the guest sent before it heard of the end: within a
+       round trip and a delay of it. Later, the window would credit a body somebody else flies. */
+    if (e->how != SYNC_END_REVOKED && a->now - e->tick > grace_ticks) {
+        return BODY_SYNC_CONTACT_STALE;
+    }
+    *ended = e;
+    return e->how == SYNC_END_REVOKED ? BODY_SYNC_CONTACT_REVOKED : BODY_SYNC_CONTACT_OK;
 }
 
 bool sync_authority_contact_number(const sync_authority_t *a, const sync_authority_body_t *b, uint16_t *number) {
@@ -792,7 +816,7 @@ body_sync_result_t sync_authority_reclaim(sync_authority_t *a, body_sync_id_t id
         return invalid(a, "reclaim: host only, of a guest's body");
     }
     a->reclaimed[b->seat]++;
-    host_move(a, b, BODY_SYNC_SEAT_HOST, BODY_SYNC_HOLD_UNTIL_REST, 0, false, false);
+    host_move(a, b, BODY_SYNC_SEAT_HOST, BODY_SYNC_HOLD_UNTIL_REST, 0, false, SYNC_END_ARBITRATED);
     return BODY_SYNC_OK;
 }
 
