@@ -152,7 +152,9 @@ static void test_each_field_is_bounded(void) {
     packet[AT_SEAT] = SEATS; /* one past the last seat */
     TEST_ASSERT_FALSE(read_one(size, out));
     valid_packet(1);
-    packet[AT_HOLD] = 2;
+    packet[AT_HOLD] = STUB_HOLD_MAX; /* a hold until rest */
+    TEST_ASSERT_TRUE(read_one(size, out));
+    packet[AT_HOLD] = STUB_HOLD_MAX + 1;
     TEST_ASSERT_FALSE(read_one(size, out));
     valid_packet(1);
     const uint8_t bad_holder[4] = {0x00, 0x04, 0x01, 0x00}; /* slot 1024 */
@@ -280,7 +282,7 @@ static void test_fuzz(void) {
         }
         if (stub_wire_read_state(packet, size, SEATS, &limits, out, MAX, &count, why, sizeof(why))) {
             for (uint32_t k = 0; k < count; k++) {
-                TEST_ASSERT_TRUE((out[k].id & 0xFFFFu) < STUB_SLOTS && (out[k].id >> 16) != 0 && out[k].seat < SEATS && out[k].hold <= 1);
+                TEST_ASSERT_TRUE((out[k].id & 0xFFFFu) < STUB_SLOTS && (out[k].id >> 16) != 0 && out[k].seat < SEATS && out[k].hold <= STUB_HOLD_MAX);
                 TEST_ASSERT_TRUE(out[k].position[0] >= limits.bounds_min[0] && out[k].position[0] <= limits.bounds_max[0]);
                 float n = out[k].rotation[0] * out[k].rotation[0] + out[k].rotation[1] * out[k].rotation[1] +
                           out[k].rotation[2] * out[k].rotation[2] + out[k].rotation[3] * out[k].rotation[3];

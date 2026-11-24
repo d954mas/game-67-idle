@@ -92,6 +92,9 @@ typedef enum stand_char_status {
     STAND_CHAR_LANDED, /* a punch reached its contact this tick; the action goes on */
 } stand_char_status_t;
 
+/* A walk to a point is done this close to it. */
+#define STAND_ARRIVE_M 0.2f
+
 typedef struct stand_character {
     bool present;
     uint8_t player;

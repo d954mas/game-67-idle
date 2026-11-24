@@ -1,0 +1,27 @@
+# A guest throws a rock at a mannequin the host walks across its line, at 200 ms. The guest sees
+# the walker a one-way trip and a playback delay late; the throw aims where its copy crosses.
+scenario throw_walker
+scene walker_lane
+guests 1
+settle 8s
+
+net g1 rtt 200ms jitter 20ms loss 2%
+
+p1 grab rock as lift
+at 3300ms p1 throw 2.5 0.9 0 speed 10 as throw
+
+expect result lift granted
+expect result throw done
+expect effect walker
+expect effects_once
+expect claims.count >= 1
+expect claim_effects.count >= 1
+expect claims_format.count <= 0
+# Derived as in layer_bounce: float noise, 1 cm.
+expect local_correction.max <= 1cm
+# Derived: the stand takes the thrown body's pose at the throw's first tick; one step at a throw's
+# speed (7 m/s and up: 12 cm) carries it past the 5 cm a move needs, and the seam never holds a
+# body its thrower simulates: 1.
+expect own_ticks.max <= 1t
+expect agree_at_rest 5cm 5deg
+expect no_stuck

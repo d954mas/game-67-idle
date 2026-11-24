@@ -75,6 +75,26 @@ typedef struct body_sync_config {
        The stub ignores them. */
     uint32_t delay_min;
     uint32_t delay_max;
+    /* The second layer, kilograms, 0..1e6 (else create refuses); 0 (the default) is off. On a
+       guest, a copy of class LIGHT and at most this mass, owned by another seat, neither held nor
+       in flight under its owner, and not kinematic there, keeps character_category's bits and,
+       while something of this side's moves at it or its owner moves, is simulated here as a
+       dynamic body pulled softly toward its owner's playback pose: it answers this endpoint's own
+       character and thrown bodies at once instead of standing until the owner's state comes.
+       Resting, it is held exactly on its owner's pose like any copy. Its owner still judges it:
+       nothing of a soft copy is sent, and nothing on the wire changes. A push by a body the seam
+       does not bind moves a copy here only: the host never learns of it, so the pull takes it
+       back once the pause chain ends. Each guest may use its
+       own knob; the host ignores it, and so does the stub. */
+    float light_mass_max;
+    /* Who owns a free body; every endpoint must use the same mode and light_mass_max (the
+       caller's handshake). INTERACTION (src/sync_policy.h, README "Authority follows
+       interaction"): a seat's character, what it carries or threw and what it owns this way take
+       the light bodies (light_mass_max, which must then be above 0) they set moving; the taker
+       simulates them and the host shows them through playback until they rest, when the seam
+       hands them back. The host grants or refuses those takes itself; its own agents come first.
+       The stub ignores it. */
+    body_sync_authority_mode_t authority;
 } body_sync_config_t;
 
 /* NULL when the config is out of range, its limits are too wide for the implementation's wire
@@ -90,8 +110,8 @@ body_sync_t *body_sync_create(const body_sync_config_t *config);
    Destroy the seam before its world. */
 void body_sync_destroy(body_sync_t *sync);
 
-/* The linked implementation and its version, for logs and metrics: "real 0.6.0" or
-   "stub 0.6.0". */
+/* The linked implementation and its version, for logs and metrics: "real 0.8.0" or
+   "stub 0.8.0". */
 const char *body_sync_implementation(void);
 
 /* Text of the last INVALID or FORMAT this seam returned, "" before any. */
@@ -125,7 +145,12 @@ typedef struct body_sync_bind {
 } body_sync_bind_t;
 
 /* Binds `id` to a body of this endpoint's world. INVALID for a slot out of range, generation
-   zero or a static body; TAKEN when the slot holds a body. */
+   zero or a static body; TAKEN when the slot holds a body. On the host TAKEN too for a generation
+   equal modulo 16 to one it unbound from that slot less than the evidence cap and the longest
+   playback delay ago (75 ticks at 60 Hz): the real seam's wire names a generation modulo 16, and
+   the old one's late packets would read as the new body's. Another generation binds at once, so
+   on TAKEN a game binds the slot's next generation (a pool with rising generations always can) or
+   takes another free slot. */
 body_sync_result_t body_sync_bind(body_sync_t *sync, body_sync_id_t id, const body_sync_bind_t *bind);
 
 /* Forgets the body; the caller destroys it afterwards. Later bytes naming this id are stale:
@@ -137,7 +162,8 @@ b3BodyId body_sync_body(const body_sync_t *sync, body_sync_id_t id);
 
 /* A local body's opaque bytes (an animation state): up to BODY_SYNC_DATA_MAX, travelling with
    its state until acknowledged, as flags do. INVALID when not local or too long. On a copy,
-   body_sync_data reads them as of the copy's playback time (the stub: as last received).
+   body_sync_data reads them as of the copy's playback time; when the played states carry none,
+   and on the stub, it reads the newest the body's owner sent, which can lead the drawn pose.
    Returns the size written to `out`, at most `capacity`; 0 when none or nothing bound. */
 body_sync_result_t body_sync_set_data(body_sync_t *sync, body_sync_id_t id, const void *data, uint32_t size);
 uint32_t body_sync_data(const body_sync_t *sync, body_sync_id_t id, void *out, uint32_t capacity);
@@ -168,7 +194,9 @@ bool body_sync_authority(const body_sync_t *sync, body_sync_id_t id, body_sync_a
 bool body_sync_is_local(const body_sync_t *sync, body_sync_id_t id);
 
 /* Optimistic take: the body becomes local here at once and a claim, with this endpoint's next
-   claim sequence (never 0, also across the wrap), goes to the host. The claimant simulates the
+   claim sequence (never 0, also across the wrap), goes to the host. A copy takes over within
+   the call (its pose, velocities and motion as body_sync_is_local says), so what the caller
+   does to the body from then on (a grab carries it to the hand) is never undone. The claimant simulates the
    body until the host answers that claim; the host ignores its poses until it is granted. An
    answer to an older claim of this endpoint (one it released since) changes nothing here. On
    the host a claim takes effect at once, reaches no queue, and is announced to every guest. A
@@ -189,18 +217,25 @@ body_sync_result_t body_sync_release(body_sync_t *sync, body_sync_id_t id);
 bool body_sync_poll_claim(body_sync_t *sync, body_sync_claim_event_t *out);
 
 /* Host only: the answer to a polled claim. Granted: the claimant simulates the body from now
-   on with the claim's hold, no holder and a new number. Refused: nothing changes and the
+   on with the claim's hold, no holder and a new number (body_sync_answer_as grants another). Refused: nothing changes and the
    claimant is told, so its optimistic copy turns back into a copy. UNKNOWN when that claim is
    no longer pending (released, claimed again, its seat left, the body unbound, or already
    answered): the caller drops the event, nothing is owed for it, and a newer claim, if any,
    comes from poll. */
 body_sync_result_t body_sync_answer(body_sync_t *sync, const body_sync_claim_event_t *claim, bool granted);
+/* Host only: grants a polled claim as body_sync_answer does, under `hold` instead of the claimed
+   one: the host reads it for the claimant until her states come (a catch puts the body in her
+   hand), while she keeps simulating under the hold she claimed. INVALID, answering nothing, for a
+   hold a claim cannot name (only until release and until settled). */
+body_sync_result_t body_sync_answer_as(body_sync_t *sync, const body_sync_claim_event_t *claim, body_sync_hold_t hold);
 
 /* Host only: a forced move that answers no claim (taking a prize back, a removal, a game
    rule). The body continues on `seat` from its newest state, velocities included, with `hold`,
    no holder and a new number; the announcement says it answers no claim, so even a seat whose
    claim of the body was answered or released meanwhile takes it. Pending claims of the body
-   stay pending. */
+   stay pending. A move to the host's own seat takes over within the call, as a claim does: what
+   the caller does to the body from then on (a recall puts it home at rest) is never undone; a body
+   granted away in the same tick, never a copy yet, goes on as the host simulates it. */
 body_sync_result_t body_sync_assign(body_sync_t *sync, body_sync_id_t id, uint8_t seat, body_sync_hold_t hold);
 
 /* The character carrying a local body; it travels with the body's state. BODY_SYNC_ID_NONE
@@ -211,6 +246,46 @@ body_sync_result_t body_sync_set_holder(body_sync_t *sync, body_sync_id_t id, bo
    meaning). On a copy they read what its owner last sent. */
 body_sync_result_t body_sync_set_flags(body_sync_t *sync, body_sync_id_t id, uint8_t flags);
 uint8_t body_sync_flags(const body_sync_t *sync, body_sync_id_t id);
+
+/* ---- contact claims ---- */
+
+/* The authority number a contact claim of a local body names: the number its states declare,
+   so a take still waiting names the number its grant will give. False when nothing is bound,
+   the body is not local, or a claim that is not a take waits for its answer: the host takes no
+   state of such a claim before its grant, and judges none of its contacts either. */
+bool body_sync_contact_number(const body_sync_t *sync, body_sync_id_t id, uint16_t *number);
+
+/* Host only: whether `seat` may claim a contact of its body `agent` with `target` under the
+   authority number `number` (body_sync_contact_number on the claimant), and the host's own
+   world around it in `out`. Every argument may come from a peer's bytes: anything out of
+   range, unbound, of an old generation, the host's own seat, a guest calling, or `target`
+   equal to `agent` is STALE; the call never asserts.
+
+   The game sends its claim after that tick's seam records of the seat, on the same ordered
+   lane: then a release (a flight's return at the contact) reaches the host before the claim of
+   the contact that caused it, and a claim made before the seat heard of a host's move reaches
+   it within a round trip of that move. The verdicts:
+   - OK while the seat simulates the agent under that number.
+   - OK within the grace after that ownership ended by the seat's own release, or by the host
+     settling a contest (its take-back or claim, a grant or take to another seat); STALE after.
+     The grace is the evidence's span: a round trip, a playback delay and a tick, capped at
+     SYNC_POLICY_EVIDENCE_AGE_MAX_S (the stub, which plays no delay: its round trip plus four
+     mean deviations of it, and a tick).
+   - REVOKED, for good, when the host recalled it (body_sync_assign to any seat, the seat
+     leaving): the recall drops the seat's late claims.
+   - STALE otherwise: a number the seat never held, a claim older than the seat's newest ended
+     ownership of the body (one is kept per seat and body), any ownership from before a seat
+     joined again.
+   `out` measures only what the host itself took of that ownership's states, never the velocity
+   they declare (README "Contact claims"), at `contact_tick`, the claimant's tick of the contact
+   (the one its states are stamped with): a contact lies at most SYNC_POLICY_CHORD_TICKS_MAX (4)
+   ticks on from a taken state, else it has no evidence and the gap is INFINITY.
+   A seat not joined gets nothing of a grace. The seam judges no effect: the game dedupes per target effect
+   across seats, not per claim key (seat, agent, number, target): after an arbitrated end both
+   seats may get OK for the same contact for up to the grace (1 s at most), and after any end the
+   host's own simulation may meet the same target again. */
+body_sync_contact_verdict_t body_sync_check_contact(const body_sync_t *sync, uint8_t seat, body_sync_id_t agent, uint16_t number,
+                                                    body_sync_id_t target, uint32_t contact_tick, body_sync_contact_t *out);
 
 /* ---- the tick ---- */
 
@@ -255,7 +330,8 @@ bool body_sync_write_state(body_sync_t *sync, uint8_t seat, uint8_t *buffer, uin
 void body_sync_state_sent(body_sync_t *sync, uint8_t seat, uint16_t number);
 
 /* Packet numbers sent to `seat` whose fate the seam still wants; the caller answers each with
-   body_sync_resolve from coop_session_packet_fate once it is final. The stub wants none. */
+   body_sync_resolve from coop_session_packet_fate once it is final. The stub wants them only for
+   the round trip its contact claims' grace is built from. */
 uint32_t body_sync_unresolved(const body_sync_t *sync, uint8_t seat, uint16_t *numbers, uint32_t max);
 void body_sync_resolve(body_sync_t *sync, uint8_t seat, uint16_t number, bool arrived);
 
@@ -275,14 +351,65 @@ void body_sync_pop_record(body_sync_t *sync, uint8_t seat);
    a new one; physics never sees it. */
 bool body_sync_render_offset(const body_sync_t *sync, body_sync_id_t id, float position[3], float rotation[4]);
 
+/* The caller teleported a local body (a recall home, a respawn) with b3Body_SetTransform: it is
+   drawn where physics has it from now on, its render offset dropped, so a take-over's smoothing
+   just before (body_sync_assign) does not draw it off the new pose. UNKNOWN for an id not bound,
+   INVALID for a copy, whose pose is its owner's. */
+body_sync_result_t body_sync_teleported(body_sync_t *sync, body_sync_id_t id);
+
 /* Measurement: the owner's tick a copy shows now, in that owner's tick count; for a local body
-   the endpoint's own last collect tick. False when unknown. The stub reports the tick of the
-   newest state received. */
+   the endpoint's own last collect tick. False when unknown, and while a copy has no state to
+   play: one turned back into a copy, until the next apply drives it and its owner's first state
+   since has come. The stub reports the tick of the newest state received, once a state received
+   since the body turned into a copy has driven it. */
 bool body_sync_playback(const body_sync_t *sync, body_sync_id_t id, double *owner_tick);
+
+/* Measurement: true for a copy this side simulates itself now and pulls toward its owner (the
+   second layer, light_mass_max), whose drawn pose is a prediction rather than its playback pose;
+   false for one held on its owner's pose. Always false for the stub and with the layer off. */
+bool body_sync_is_predicted(const body_sync_t *sync, body_sync_id_t id);
+
+/* Measurement: true for a predicted copy whose pull waited at the last apply (the layer's pause
+   after this side's touch or hit): its drawn pose is this side's own answer, which the owner
+   shows at this side's moment. Past the pause it follows its playback pose. Always false for
+   the stub and with the layer off. */
+bool body_sync_is_pull_paused(const body_sync_t *sync, body_sync_id_t id);
+
+/* Measurement: a take of this side's that lost while its claim waited turns back into a copy, its
+   drawn pose handed back to the winner's (README "Conflicts"). Sets how many this body had here
+   and the latest one's distance from the drawn pose to the winner's playback pose; true while the
+   drawn pose still glides off it (its render offset outside the layer's 1 cm dead zone). Always
+   false and 0 for the stub. */
+bool body_sync_lost_take(const body_sync_t *sync, body_sync_id_t id, uint32_t *count, float *hand_back_m);
+
+/* True for a copy the second layer holds (soft, in the rest hold or in flight): the seam keeps
+   character_category's bits on it, so a game that sets its own collision filters must not take
+   them off it as it does for other LIGHT copies. Always false for the stub and with the layer
+   off. */
+bool body_sync_is_layer_copy(const body_sync_t *sync, body_sync_id_t id);
+
+/* Measurement: the round trip to a seat in ticks, from a state packet's send to its arrival fate
+   (body_sync_resolve), smoothed; 0 before the first fate. The second layer's pause is built from
+   it, and the stub's contact claim grace. */
+float body_sync_round_trip(const body_sync_t *sync, uint8_t seat);
 
 /* ---- measurements ---- */
 
 bool body_sync_traffic(const body_sync_t *sync, uint8_t seat, body_sync_traffic_t *out);
+
+/* Measurement: what this side dropped of `seat`'s bytes naming `id` (its states and its records)
+   because they speak for an ownership this side does not hold for that seat: a number the seat
+   no longer holds (the body was recalled or moved on), a seat that never owned it, the id
+   unbound since. An old owner's late packets, told apart from the older samples and far ticks
+   every path drops (body_sync_traffic counts all of them as stale or rejected). The count stays
+   through the id's unbind and starts over when its slot is bound again; 0 for an id never bound.
+   The real seam's wire names a generation modulo 16, so a slot's bytes count for the generation
+   bound there last. */
+uint32_t body_sync_old_owner_drops(const body_sync_t *sync, body_sync_id_t id, uint8_t seat);
+/* Host: characters bound while the host already kept the older states of 16 (README "Contact
+   claims"), since its creation. Each is judged on its last 12 taken states alone, so a claim of
+   its contact the record lane resent is a missed effect. 0 on a guest. */
+uint32_t body_sync_agent_overflow(const body_sync_t *sync);
 
 #ifdef __cplusplus
 }

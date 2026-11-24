@@ -1,0 +1,27 @@
+# Authority follows interaction: the guest throws the ball into the pile and its link is cut for
+# good while the pile it owns still moves. The host takes every body back from the guest's newest
+# state and the pile rests in the host's world.
+scenario authority_leave
+scene pile60
+seed 62
+guests 1
+end 16s
+light_mass 20kg
+authority interaction
+
+net g1 rtt 100ms jitter 20ms loss 2%
+
+p1 grab ball as grab
+p1 wait 300ms
+p1 throw pile31 speed 12 as throw
+at 700ms cut g1 for 10s
+
+expect result grab granted
+expect result throw done
+expect left g1
+expect no_stuck
+# Measured 20 takes before the cut (seed 62).
+expect takes.count >= 1
+# Derived: between two take-backs a prediction's pull is paused at most (120 + 60) / 2 of any
+# 120 ticks (sync_soft.h: the chain cap 60, drained a tick per tick without a touch): 90.
+expect pause_window.max <= 90t

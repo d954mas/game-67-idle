@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "body-sync",
-  "version": "0.6.0",
+  "version": "0.9.0",
   "title": "Body sync",
   "status": "opt-in",
   "kind": "network-foundation",
@@ -13,10 +13,12 @@
   "provides": [
     "body_sync_create / bind / unbind / body / seat_joined / seat_left: the seam on one endpoint's world",
     "body_sync_claim / release / poll_claim / answer / assign / authority / is_local / set_holder / set_flags: authority with claim sequences",
+    "body_sync_check_contact / contact_number: the host's gate on a guest's contact claim, by the claimant's ownership and how it ended",
     "body_sync_receive_state / receive_record / apply / collect / write_state / state_sent / unresolved / resolve / peek_record / pop_record: the tick",
     "body_sync_render_offset / playback / traffic / implementation: what is drawn and measured",
     "body_sync_set_data / data: up to 8 opaque bytes a body, read at a copy's playback time",
-    "body_sync_scene_* and body_sync_scene_catalog: scenes as data and the 8-scene catalog",
+    "body_sync_is_predicted / is_pull_paused / is_layer_copy / round_trip and config light_mass_max: the second layer, local prediction of light copies",
+    "body_sync_scene_* and body_sync_scene_catalog: scenes as data and the 9-scene catalog",
     "body_sync_scenario_parse / load: the scenario text format",
     "body_sync_stand_create / tick / run / report / world_hash / body_count / body / write_json / save_json / main: the stand"
   ],
@@ -29,8 +31,8 @@
   "registers": {
     "cmake_targets": ["body_sync", "body_sync_stub", "body_sync_parts", "body_sync_stand_logic", "body_sync_stand", "body_sync_stand_stub", "body_sync_stand_cli", "body_sync_stand_cli_stub", "body_sync_view", "body_sync_stand_view"],
     "ctest_targets": [
-      "test_body_sync_logic", "test_body_sync_playback", "test_body_sync_wire", "test_body_sync_stub", "test_body_sync_codec", "test_body_sync_sender", "test_body_sync_authority", "test_body_sync_real", "test_body_sync_seam_real", "test_body_sync_stand", "test_body_sync_checks", "test_body_sync_two_processes", "test_body_sync_two_processes_*", "test_body_sync_mf_*", "test_body_sync_stub_two_processes", "test_body_sync_stub_two_processes_*", "test_body_sync_stub_contrast_char_push", "test_body_sync_stub_mf_*", "test_body_sync_stub_scn_*",
-      "test_body_sync_free_step", "test_body_sync_scn_*"
+      "test_body_sync_logic", "test_body_sync_playback", "test_body_sync_soft", "test_body_sync_wire", "test_body_sync_stub", "test_body_sync_codec", "test_body_sync_sender", "test_body_sync_authority", "test_body_sync_authority_mf_revoked_as_arbitrated", "test_body_sync_real", "test_body_sync_seam_real", "test_body_sync_stand", "test_body_sync_checks", "test_body_sync_claims", "test_body_sync_claims_mf_*", "test_body_sync_two_processes", "test_body_sync_two_processes_*", "test_body_sync_mf_*", "test_body_sync_stub_two_processes", "test_body_sync_stub_two_processes_*", "test_body_sync_stub_contrast_char_push", "test_body_sync_stub_mf_*", "test_body_sync_stub_scn_*",
+      "test_body_sync_free_step", "test_body_sync_scn_*", "test_body_sync_layer_scn_*", "test_body_sync_interaction_scn_*", "test_body_sync_claims_loss_sweep"
     ]
   }
 }

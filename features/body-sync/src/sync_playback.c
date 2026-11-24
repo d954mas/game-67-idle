@@ -362,13 +362,32 @@ static void evict(sync_buffered_t *b, const sync_timeline_t *t) {
     b->count--;
 }
 
+void sync_playback_end(sync_playback_t *p, uint16_t slot) {
+    if (slot >= BODY_SYNC_BODIES_MAX || !p->bodies[slot].has) {
+        return;
+    }
+    sync_buffered_t *b = &p->bodies[slot];
+    const sync_timeline_t *t = &p->timelines[b->timeline];
+    uint8_t keep = 0;
+    while (keep < b->count && (!t->started || at(t, b->snapshots[keep].tick) <= t->playback)) {
+        keep++;
+    }
+    b->count = keep < b->count ? (uint8_t)(keep + 1u) : b->count;
+    b->ended = true;
+}
+
 sync_file_t sync_playback_file(sync_playback_t *p, uint8_t timeline, uint32_t sample, const sync_record_t *r) {
     if (timeline >= BODY_SYNC_SEATS_MAX || r->slot >= BODY_SYNC_BODIES_MAX) {
         return SYNC_FILE_LATE;
     }
     sync_buffered_t *b = &p->bodies[r->slot];
+    /* A new owner: its timeline is another clock, and the groups played so far are another
+       ownership's, which the reader takes from authority until this owner's play. */
     if (b->has && b->timeline != timeline) {
-        b->count = 0; /* a new owner: its timeline is another clock */
+        b->count = 0;
+        b->known = 0;
+        memset(&b->rare, 0, sizeof(b->rare));
+        memset(b->rare_tick, 0, sizeof(b->rare_tick));
     }
     b->has = true;
     b->timeline = timeline;
@@ -401,6 +420,7 @@ sync_file_t sync_playback_file(sync_playback_t *p, uint8_t timeline, uint32_t sa
     memcpy(s->angular, r->angular, sizeof(s->angular));
     s->rare = r->rare;
     b->count++;
+    b->ended = false;
     return SYNC_FILE_TAKEN;
 }
 
@@ -455,12 +475,19 @@ void sync_playback_sample(const sync_playback_t *p, uint16_t slot, sync_play_t *
     }
     if (last + 1 >= b->count) {
         hold(s0, out);
-        out->frozen = now - at(t, s0->tick) > (double)SYNC_FREEZE_TICKS;
+        out->frozen = b->ended || now - at(t, s0->tick) > (double)SYNC_FREEZE_TICKS;
         if (!out->frozen) {
-            /* Waiting for the next snapshot the pose holds; the owner's last motion is kept for
-               a dynamic hold, which would otherwise brake every time playback catches up. */
+            /* Waiting for the next snapshot the pose holds; the owner's last motion is kept for a
+               dynamic hold, which would otherwise brake every time playback catches up. */
+            out->waiting = true;
+            out->past = now > at(t, s0->tick);
             memcpy(out->velocity, s0->velocity, sizeof(out->velocity));
             memcpy(out->angular, s0->angular, sizeof(out->angular));
+            const sync_snapshot_t *prev = last > 0 ? &b->snapshots[last - 1] : NULL;
+            int32_t back = prev ? (int32_t)(s0->tick - prev->tick) : 0;
+            for (int i = 0; !s0->sim && back > 0 && i < 3; i++) {
+                out->velocity[i] = (s0->position[i] - prev->position[i]) / ((float)back * p->dt); /* as below */
+            }
         }
         return;
     }
@@ -495,6 +522,11 @@ void sync_playback_sample(const sync_playback_t *p, uint16_t slot, sync_play_t *
     for (int i = 0; i < 3; i++) {
         out->velocity[i] = s0->velocity[i] + (s1->velocity[i] - s0->velocity[i]) * u;
         out->angular[i] = s0->angular[i] + (s1->angular[i] - s0->angular[i]) * u;
+        /* Copy records carry no velocity: the line between the two gives it, for a hold that
+           feeds its owner's motion forward. */
+        if (!s0->sim || !s1->sim) {
+            out->velocity[i] = (s1->position[i] - s0->position[i]) / ((float)span * p->dt);
+        }
     }
 }
 
@@ -505,7 +537,7 @@ const sync_rare_t *sync_playback_rare(const sync_playback_t *p, uint16_t slot, u
 }
 
 bool sync_playback_tick(const sync_playback_t *p, uint16_t slot, double *owner_tick) {
-    if (slot >= BODY_SYNC_BODIES_MAX || !p->bodies[slot].has) {
+    if (slot >= BODY_SYNC_BODIES_MAX || !p->bodies[slot].has || p->bodies[slot].count == 0) {
         return false;
     }
     const sync_timeline_t *t = &p->timelines[p->bodies[slot].timeline];
@@ -543,7 +575,7 @@ bool sync_playback_line_tick(const sync_playback_t *p, uint8_t timeline, uint32_
 }
 
 /* The rotation taking `from` to `to` on the shorter arc, as axis times angle. */
-static void turn_between(const float from[4], const float to[4], float out[3]) {
+void sync_turn_between(const float from[4], const float to[4], float out[3]) {
     /* to * conj(from) */
     float ax = -from[0], ay = -from[1], az = -from[2], aw = from[3];
     float x = to[3] * ax + to[0] * aw + to[1] * az - to[2] * ay;
@@ -570,7 +602,7 @@ bool sync_drive_reachable(const float now_position[3], const float now_rotation[
                           float max_spin) {
     float d[3] = {play->position[0] - now_position[0], play->position[1] - now_position[1], play->position[2] - now_position[2]};
     float w[3];
-    turn_between(now_rotation, play->rotation, w);
+    sync_turn_between(now_rotation, play->rotation, w);
     return length3(d) <= max_speed * dt && length3(w) <= max_spin * dt;
 }
 
@@ -585,12 +617,19 @@ static void clamp3(float v[3], float limit) {
 
 void sync_drive_dynamic(const float now_position[3], const float now_rotation[4], const sync_play_t *play, float dt, float velocity[3],
                         float angular[3]) {
-    float fix[3], turn[3];
+    float fix[3], turn[3], err[3];
     for (int i = 0; i < 3; i++) {
-        fix[i] = (play->position[i] - now_position[i]) / (SYNC_CORRECT_TICKS * dt);
+        err[i] = play->position[i] - now_position[i];
+        fix[i] = err[i] / (SYNC_CORRECT_TICKS * dt);
+    }
+    sync_turn_between(now_rotation, play->rotation, turn);
+    if (length3(play->velocity) < SYNC_CORRECT_STILL_SPEED && length3(play->angular) < SYNC_CORRECT_STILL_SPIN &&
+        length3(err) <= SYNC_CORRECT_REST_M && length3(turn) <= SYNC_CORRECT_REST_RAD) {
+        memset(velocity, 0, 3 * sizeof(float));
+        memset(angular, 0, 3 * sizeof(float));
+        return;
     }
     clamp3(fix, SYNC_CORRECT_SPEED);
-    turn_between(now_rotation, play->rotation, turn);
     for (int i = 0; i < 3; i++) {
         turn[i] /= SYNC_CORRECT_TICKS * dt;
     }
@@ -605,7 +644,7 @@ static void quat_mul(const float a[4], const float b[4], float out[4]);
 
 bool sync_drive_locked_turn(const float now[4], const float target[4], uint8_t locked_axes, float out[4]) {
     float w[3];
-    turn_between(now, target, w);
+    sync_turn_between(now, target, w);
     for (int i = 0; i < 3; i++) {
         w[i] = (locked_axes & (1u << i)) ? w[i] : 0.0f;
     }
@@ -632,8 +671,9 @@ static void quat_mul(const float a[4], const float b[4], float out[4]) {
 }
 
 void sync_offset_absorb(sync_offset_t *o, const float before_position[3], const float before_rotation[4], const float after_position[3],
-                        const float after_rotation[4]) {
+                        const float after_rotation[4], float reach) {
     /* drawn = offset + physics, drawn rotation = offset rotation * physics rotation */
+    float was = length3(o->position);
     for (int i = 0; i < 3; i++) {
         o->position[i] += before_position[i] - after_position[i];
     }
@@ -641,18 +681,24 @@ void sync_offset_absorb(sync_offset_t *o, const float before_position[3], const 
     quat_mul(o->rotation, before_rotation, drawn);
     quat_mul(drawn, inverse, o->rotation);
     normalize(o->rotation);
-    if (length3(o->position) > SYNC_OFFSET_SNAP_M) {
+    /* Only this jump clears it: a placement that leaves a lost take's wider offset no wider keeps
+       its glide. */
+    float now = length3(o->position);
+    if (!(now <= reach) && !(now <= was)) {
         sync_offset_clear(o);
     }
 }
 
 void sync_offset_decay(sync_offset_t *o) {
     float d = length3(o->position);
-    if (d > SYNC_OFFSET_SNAP_M) {
+    if (!(d <= SYNC_OFFSET_LOST_M)) {
         sync_offset_clear(o);
         return;
     }
-    float k = d <= SYNC_OFFSET_NEAR_M ? SYNC_OFFSET_SLOW
+    /* Past the snap reach (a lost take's only) it closes by the release at 1 m, 0.15 m a tick: half
+       the release at the reach, which a glide held at it would graze every tick. */
+    float k = d <= SYNC_OFFSET_NEAR_M  ? SYNC_OFFSET_SLOW
+              : d > SYNC_OFFSET_SNAP_M ? 1.0f - (1.0f - SYNC_OFFSET_FAST) * SYNC_OFFSET_FAR_M / d
               : d >= SYNC_OFFSET_FAR_M ? SYNC_OFFSET_FAST
                                        : SYNC_OFFSET_SLOW + (SYNC_OFFSET_FAST - SYNC_OFFSET_SLOW) * (d - SYNC_OFFSET_NEAR_M) / (SYNC_OFFSET_FAR_M - SYNC_OFFSET_NEAR_M);
     for (int i = 0; i < 3; i++) {

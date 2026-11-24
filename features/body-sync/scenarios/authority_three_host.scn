@@ -1,0 +1,64 @@
+# Three agents at one pile: two guests throw into it on one tick from opposite sides, and the
+# host's heroine runs straight through it during the scatter. Where the two guests' bodies meet
+# the host takes both back; the host's runner takes back what she touches.
+scenario authority_three_host
+scene pile60_four
+seed 71
+guests 2
+# A hard end well past rest, so the rest measures watch the world at rest for seconds.
+end 16s
+light_mass 20kg
+authority interaction
+
+net g1 rtt 100ms jitter 20ms loss 2%
+net g2 rtt 100ms jitter 20ms loss 2%
+
+p1 grab ball_s as a1
+p2 grab ball_n as a2
+p0 walk -1.2 0 as start
+at 1200ms p1 throw 2 0.3 -0.1 speed 8 as t1
+at 1200ms p2 throw 2 0.3 0.1 speed 8 as t2
+at 1300ms p0 walk 5.5 0 speed 4 as run
+# Derived: the run starts at 1.3 s and covers 6.7 m at 4 m/s (1.68 s); the pile's 1 m at half
+# speed adds 0.25 s, reaching speed and stopping within 0.2 m a quarter second: 3.5 s. A runner
+# the pile holds or flings is cut off here and the run fails.
+at 3500ms p0 wait 100ms as stop
+
+expect result a1 granted
+expect result a2 granted
+expect result run done
+expect agree_at_rest 1cm 2deg
+expect no_stuck
+# Once at rest after the last action, a guest's world stays at rest: 0.
+expect rest_breaks.count <= 0
+# No pass-through: a light copy a guest's own character walks into without contact is a miss.
+expect response_misses.count <= 0
+# Derived: a body a guest simulates is moved by the seam only at a take, which keeps its pose
+# (README "Authority follows interaction"): float noise, 1 cm.
+expect local_correction.max <= 1cm
+# Derived: the same correction of its turn. The stand reads an angle through acosf of a float
+# dot product, 2 sqrt(2 n 2^-24) rad for a dot n ulps off 1: 0.04 deg a ulp, 0.16 deg at 16,
+# which three float products of unit turns stay within; the least turn a placement shows is a
+# hundredth of a radian, 0.57 deg: 0.25 deg.
+expect local_turn.max <= 0.25deg
+# Derived: a render offset's release, 0.15 of at most 2 m.
+expect jump.max <= 0.3m
+# Derived for every copy, predicted or not, against its owner's drawn picture at the copy's
+# playback tick: at the apply its physics lies within 2 m of the owner's physics there (the
+# host's dynamic copy of a guest's body is placed only past the render offset's 2 m), and the
+# step moves it at most a tick of the owner's travel further (max_speed 100 m/s: 1.67 m); its
+# render offset adds at most 2 m, and the owner's picture carries its own offset of at most 2 m
+# (a placement of the owner's own, as a grab's take-over, glides there too): 7.7 m. A
+# prediction in its pause leaves the gap (prediction_gap and flight_pause_gap, reported only).
+expect aligned_gap.max <= 7.7m
+# A cap, not a derivation: the glide's reach (SYNC_OFFSET_LOST_M, 5 m), past which the offset
+# clears and the loser's picture jumps. The check is that no lost take is seen to jump; how far
+# two pictures of one contested body part is chaos no bound derives.
+expect lost_takes.max <= 5m
+# Liveness: each rule ran at all (takes, a take of another guest's body refused, a take-back).
+expect takes.count >= 1
+expect take_refusals.count >= 1
+expect reclaims.count >= 1
+# Derived: between two take-backs a prediction's pull is paused at most (120 + 60) / 2 of any
+# 120 ticks (sync_soft.h: the chain cap 60, drained a tick per tick without a touch): 90.
+expect pause_window.max <= 90t

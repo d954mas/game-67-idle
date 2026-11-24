@@ -1,0 +1,43 @@
+# Authority follows interaction, two guests at one heap: both throw into it at once. Each owns
+# what it set going first (the earliest confirmed toucher); a take of a body the other owns is
+# refused and the loser's copy is pulled to the winner's.
+scenario authority_two_guests
+scene load300
+seed 63
+guests 2
+settle 12s
+light_mass 20kg
+authority interaction
+
+net g1 rtt 100ms jitter 20ms loss 2%
+net g2 rtt 250ms jitter 30ms loss 2%
+
+p1 walk load290
+p1 grab load290 as a1
+p1 wait 300ms
+p1 throw 0 0.5 0 speed 9 as t1
+p2 walk load209
+p2 grab load209 as a2
+p2 wait 300ms
+p2 throw 0 0.5 0 speed 9 as t2
+
+expect result a1 granted
+expect result a2 granted
+# Derived: at rest each copy lies within the second layer's dead zone of its owner (1 cm, 2 degrees,
+# README "The second layer"), as in every layer scene.
+expect agree_at_rest 1cm 2deg
+expect no_stuck
+# Derived: as in authority_host_push, a take keeps the pose: 1 cm.
+expect local_correction.max <= 1cm
+# Derived: the same correction of its turn. The stand reads an angle through acosf of a float
+# dot product, 2 sqrt(2 n 2^-24) rad for a dot n ulps off 1: 0.04 deg a ulp, 0.16 deg at 16,
+# which three float products of unit turns stay within; the least turn a placement shows is a
+# hundredth of a radian, 0.57 deg: 0.25 deg.
+expect local_turn.max <= 0.25deg
+# Measured 41 and 56 takes, 6 and 33 refused (seed 63): each guest takes, and a take of what
+# the other set going first is refused.
+expect takes.count >= 10
+expect take_refusals.count >= 1
+# Derived: between two take-backs a prediction's pull is paused at most (120 + 60) / 2 of any
+# 120 ticks (sync_soft.h: the chain cap 60, drained a tick per tick without a touch): 90.
+expect pause_window.max <= 90t

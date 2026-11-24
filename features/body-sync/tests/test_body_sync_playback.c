@@ -221,6 +221,7 @@ static void test_hermite_for_sim_linear_for_copy(void) {
         file_at(1, k, &r);
         r.slot = 2;
         r.sim = false;
+        r.velocity[1] = 0.0f; /* a copy record carries none */
         file_at(2, k, &r);
     }
     set_playback(12.0);
@@ -232,6 +233,26 @@ static void test_hermite_for_sim_linear_for_copy(void) {
     float y10 = v0 * 10.0f * dt + 0.5f * g * 100.0f * dt * dt, y14 = v0 * 14.0f * dt + 0.5f * g * 196.0f * dt * dt;
     NEAR(1e-6f, 0.5f * (y10 + y14), copy.position[1]);
     TEST_ASSERT_TRUE(fabsf(copy.position[1] - arc) > 1e-4f);
+    /* Copy records carry no velocity: the line between the two gives it. */
+    NEAR(1e-3f, (y14 - y10) / (4.0f * dt), copy.velocity[1]);
+}
+
+/* A dynamic hold of a still owner leaves a hair of error alone (any velocity set wakes the
+   island around it) and corrects past it. */
+static void test_a_still_owner_is_not_corrected_for_a_hair(void) {
+    sync_play_t play;
+    memset(&play, 0, sizeof(play));
+    play.known = true;
+    play.rotation[3] = 1.0f;
+    const float q[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+    float near_p[3] = {0.5f * SYNC_CORRECT_REST_M, 0.0f, 0.0f}, far_p[3] = {5.0f * SYNC_CORRECT_REST_M, 0.0f, 0.0f}, v[3], w[3];
+    sync_drive_dynamic(near_p, q, &play, 1.0f / 60.0f, v, w);
+    TEST_ASSERT_TRUE_MESSAGE(v[0] == 0.0f && v[1] == 0.0f && v[2] == 0.0f, "a hair of error was corrected");
+    sync_drive_dynamic(far_p, q, &play, 1.0f / 60.0f, v, w);
+    TEST_ASSERT_TRUE(v[0] < 0.0f);
+    play.velocity[0] = 0.5f; /* a moving owner is always followed */
+    sync_drive_dynamic(near_p, q, &play, 1.0f / 60.0f, v, w);
+    TEST_ASSERT_TRUE(v[0] > 0.0f);
 }
 
 /* Rotation turns the shorter way, even when the owner's quaternion changed sign. */
@@ -375,7 +396,7 @@ static void test_render_offset(void) {
     sync_offset_t o;
     sync_offset_clear(&o);
     const float a[3] = {0, 0, 0}, b[3] = {1.5f, 0, 0}, q[4] = {0, 0, 0, 1};
-    sync_offset_absorb(&o, a, q, b, q);
+    sync_offset_absorb(&o, a, q, b, q, SYNC_OFFSET_SNAP_M);
     SAME(-1.5f, o.position[0]);
     sync_offset_decay(&o);
     NEAR(1e-6f, -1.5f * SYNC_OFFSET_FAST, o.position[0]);
@@ -387,8 +408,20 @@ static void test_render_offset(void) {
     TEST_ASSERT_TRUE(o.position[0] < 0.6f * SYNC_OFFSET_SLOW && o.position[0] > 0.6f * SYNC_OFFSET_FAST);
     const float far[3] = {2.5f, 0, 0};
     sync_offset_clear(&o);
-    sync_offset_absorb(&o, a, q, far, q);
+    sync_offset_absorb(&o, a, q, far, q, SYNC_OFFSET_SNAP_M);
     SAME(0.0f, o.position[0]);
+    /* A lost take keeps it, and its drawn pose never moves more than the release at the snap
+       reach in a tick, 0.15 of 2 m; past the reach it closes by 0.15 m. */
+    sync_offset_absorb(&o, a, q, far, q, SYNC_OFFSET_LOST_M);
+    SAME(-2.5f, o.position[0]);
+    sync_offset_decay(&o);
+    NEAR(1e-5f, -2.5f + (1.0f - SYNC_OFFSET_FAST) * SYNC_OFFSET_FAR_M, o.position[0]);
+    for (int k = 0; k < 120; k++) {
+        float before = o.position[0];
+        sync_offset_decay(&o);
+        TEST_ASSERT_TRUE(o.position[0] - before <= (1.0f - SYNC_OFFSET_FAST) * SYNC_OFFSET_SNAP_M + 1e-6f && o.position[0] - before >= 0.0f);
+    }
+    TEST_ASSERT_TRUE(fabsf(o.position[0]) < 0.01f);
 }
 
 /* The rate of a sender at 60 Hz heard by a 59.5 Hz endpoint, and the line a relay ages by. */
@@ -578,7 +611,8 @@ static void test_a_rebase_keeps_the_owner_tick(void) {
 }
 
 /* forget_until drops the snapshot at its tick too; a copy waiting at its newest snapshot keeps
-   that snapshot's motion for a dynamic hold. */
+   that snapshot's motion for a dynamic hold. With every snapshot dropped it plays nothing, and
+   reports no owner tick: its timeline's would name a picture it does not show. */
 static void test_forget_until_and_a_waiting_copys_motion(void) {
     sync_playback_init(&pb, 60, 0, 0);
     for (uint32_t k = 10; k <= 14; k++) {
@@ -593,6 +627,12 @@ static void test_forget_until_and_a_waiting_copys_motion(void) {
     sync_playback_sample(&pb, 3, &play);
     TEST_ASSERT_FALSE(play.frozen);
     SAME(3.0f, play.velocity[0]);
+    double tick;
+    TEST_ASSERT_TRUE(sync_playback_tick(&pb, 3, &tick));
+    sync_playback_forget_until(&pb, 3, 14);
+    sync_playback_sample(&pb, 3, &play);
+    TEST_ASSERT_FALSE(play.known);
+    TEST_ASSERT_FALSE_MESSAGE(sync_playback_tick(&pb, 3, &tick), "a body with nothing to play reported its timeline's tick");
 }
 
 /* The locked axes' part of a turn, and only that. */
@@ -619,6 +659,7 @@ int main(void) {
     RUN_TEST(test_the_clock_before_it_knows_and_after_a_rejoin);
     RUN_TEST(test_freeze_and_jump);
     RUN_TEST(test_hermite_for_sim_linear_for_copy);
+    RUN_TEST(test_a_still_owner_is_not_corrected_for_a_hair);
     RUN_TEST(test_rotation_takes_the_shorter_arc);
     RUN_TEST(test_a_rest_pose_is_exact);
     RUN_TEST(test_rare_groups_play_on_time_and_stay);

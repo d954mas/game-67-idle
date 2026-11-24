@@ -40,6 +40,10 @@ typedef struct view {
     body_sync_stand_t *stand;
     uint64_t seed;
     bool override_seed;
+    bool override_light_mass; /* --light-mass: the second layer, kilograms */
+    float light_mass;
+    bool override_authority; /* --authority host|interaction */
+    uint8_t authority;
     uint32_t endpoint;
     bool ghost;
     bool paused;
@@ -80,7 +84,7 @@ typedef struct view {
 static view_t s_view;
 
 static int usage(void) {
-    fprintf(stderr, "usage: body_sync_stand_view <scenario.scn> [--view host|g1|g2|g3] [--ghost] [--seed N] [--frames N]\n"
+    fprintf(stderr, "usage: body_sync_stand_view <scenario.scn> [--view host|g1|g2|g3] [--ghost] [--seed N] [--light-mass KG] [--authority host|interaction] [--frames N]\n"
                     "                            [--size WxH] [--camera ex,ey,ez,tx,ty,tz[,fov]] [--record file.mp4] [--shot file.png]\n"
                     "                            [--shot-tick N] [--hash-every N]\n");
     return 2;
@@ -111,7 +115,9 @@ static bool parse_u64(const char *text, uint64_t *out) {
 }
 
 static bool create_stand(view_t *v, body_sync_error_t *error) {
-    body_sync_stand_config_t config = {.scene = v->scene, .scenario = v->scenario, .override_seed = v->override_seed, .seed = v->seed};
+    body_sync_stand_config_t config = {.scene = v->scene, .scenario = v->scenario, .override_seed = v->override_seed, .seed = v->seed,
+                                       .override_light_mass = v->override_light_mass, .light_mass_max = v->light_mass,
+                                       .override_authority = v->override_authority, .authority = v->authority};
     v->stand = body_sync_stand_create(&config, error);
     v->ticks = 0;
     v->framed = false;
@@ -620,6 +626,22 @@ int body_sync_view_main(int argc, char **argv, const body_sync_scene_entry_t *ex
             }
             i++;
             v->override_seed = true;
+        } else if (strcmp(arg, "--light-mass") == 0) {
+            char *end = NULL;
+            double kg = value ? strtod(value, &end) : -1.0;
+            if (!value || !end || *end || !(kg >= 0.0 && kg <= 1000.0)) {
+                return refuse(arg, value, value ? "must be 0..1000 (kilograms)" : "needs a value");
+            }
+            i++;
+            v->light_mass = (float)kg;
+            v->override_light_mass = true;
+        } else if (strcmp(arg, "--authority") == 0) {
+            if (!value || (strcmp(value, "host") != 0 && strcmp(value, "interaction") != 0)) {
+                return refuse(arg, value, value ? "must be host or interaction" : "needs a value");
+            }
+            i++;
+            v->authority = strcmp(value, "interaction") == 0 ? BODY_SYNC_AUTHORITY_INTERACTION : BODY_SYNC_AUTHORITY_HOST;
+            v->override_authority = true;
         } else if (strcmp(arg, "--frames") == 0) {
             bad = parse_count(arg, value, &v->frames_max);
             i++;

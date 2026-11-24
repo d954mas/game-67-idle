@@ -1,0 +1,26 @@
+# A stack the layer holds at rest for 10 s: it must not jitter. Bounds, derived: no rest wake, no
+# rest jitter, agreement at 1 cm and 2 degrees.
+scenario layer_rest
+scene stack10
+seed 54
+guests 1
+end 10s
+light_mass 20kg
+
+net g1 rtt 100ms jitter 20ms loss 2%
+
+p1 walk -3 2 as away
+
+expect result away done
+expect agree_at_rest 1cm 2deg
+expect rest_wakes.count <= 0
+# Once at rest after the last action, a guest's world stays at rest: 0.
+expect rest_breaks.count <= 0
+expect rest_jitter.max <= 0m
+# Derived: a copy's visible correction in a tick (its drawn move less its owner's at the same
+# event time, or less its own step for a predicted copy) is at most a render offset's release,
+# 0.15 of at most 2 m: 0.3 m. A placement the offset does not take shows as its whole move.
+expect jump.max <= 0.3m
+# Derived: between two take-backs a prediction's pull is paused at most (120 + 60) / 2 of any
+# 120 ticks (sync_soft.h: the chain cap 60, drained a tick per tick without a touch): 90.
+expect pause_window.max <= 90t

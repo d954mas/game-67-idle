@@ -44,7 +44,7 @@ typedef struct w_rflags {
 typedef struct w_rauthority {
     uint32_t seat;
     uint32_t number;
-    bool settled;
+    uint32_t hold; /* body_sync_hold_t: 2 bits, UNTIL_REST the largest */
 } w_rauthority_t;
 
 typedef struct w_rholder {
@@ -121,7 +121,7 @@ bool sync_codec_init(sync_codec_t *c, const sync_limits_t *limits) {
     const net_bits_field_t rmotion[] = {NET_BITS_BOOL(w_rmotion_t, kinematic), NET_BITS_UINT(w_rmotion_t, locks, 6)};
     const net_bits_field_t rflags[] = {NET_BITS_UINT(w_rflags_t, flags, 4)};
     const net_bits_field_t rauthority[] = {NET_BITS_UINT(w_rauthority_t, seat, 2), NET_BITS_UINT(w_rauthority_t, number, 16),
-                                           NET_BITS_BOOL(w_rauthority_t, settled)};
+                                           NET_BITS_UINT(w_rauthority_t, hold, 2)};
     const net_bits_field_t rholder[] = {NET_BITS_BOOL(w_rholder_t, present), NET_BITS_UINT(w_rholder_t, slot, SYNC_SLOT_BITS),
                                         NET_BITS_UINT(w_rholder_t, gen, SYNC_GEN_BITS)};
     memcpy(c->head_fields, head, sizeof(head));
@@ -199,7 +199,7 @@ bool sync_codec_limit(const sync_codec_t *c, sync_record_t *r) {
     r->rare.flags &= (uint8_t)((1u << BODY_SYNC_FLAG_BITS) - 1u);
     r->rare.locks &= 0x3Fu;
     r->rare.seat &= 3u;
-    r->rare.hold = r->rare.hold ? 1u : 0u;
+    r->rare.hold = r->rare.hold > BODY_SYNC_HOLD_UNTIL_REST ? (uint8_t)BODY_SYNC_HOLD_UNTIL_RELEASE : r->rare.hold;
     r->slot &= (uint16_t)(BODY_SYNC_BODIES_MAX - 1);
     r->generation_low &= SYNC_GEN_MASK;
     return true;
@@ -254,7 +254,7 @@ static void write_body(net_bits_writer_t *wr, const sync_codec_t *c, const sync_
         net_bits_write_record(wr, &c->rare_flags, &f);
     }
     if (g & SYNC_RARE_AUTHORITY) {
-        w_rauthority_t a = {r->rare.seat, r->rare.number, r->rare.hold != 0};
+        w_rauthority_t a = {r->rare.seat, r->rare.number, r->rare.hold};
         net_bits_write_record(wr, &c->rare_authority, &a);
     }
     if (g & SYNC_RARE_HOLDER) {
@@ -411,12 +411,12 @@ bool sync_packet_read(const sync_codec_t *c, uint8_t seats, const uint8_t *data,
                 if (!net_bits_read_record(&rd, &c->rare_authority, &a)) {
                     return fail(error, error_size, "authority group cut short");
                 }
-                if (a.seat >= seats) {
-                    return fail(error, error_size, "authority names a seat out of range");
+                if (a.seat >= seats || a.hold > BODY_SYNC_HOLD_UNTIL_REST) {
+                    return fail(error, error_size, "authority names a seat or a hold out of range");
                 }
                 r->rare.seat = (uint8_t)a.seat;
                 r->rare.number = (uint16_t)a.number;
-                r->rare.hold = a.settled ? 1u : 0u;
+                r->rare.hold = (uint8_t)a.hold;
             }
             if (mask.mask & SYNC_RARE_HOLDER) {
                 w_rholder_t h;

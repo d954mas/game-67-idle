@@ -41,7 +41,12 @@ the source and version of each feature from its `feature.json` in the game's
    does not block them (the host's simulation moves it); the seam then owns
    those mask bits of a LIGHT copy's shapes and gives the masks back exactly
    when the body is local. `delay_min` and `delay_max` (ticks, 0 for 4 and 15)
-   bound the playback delay.
+   bound the playback delay. `light_mass_max` (kilograms, 0 off) turns on the second
+   layer on a guest: free LIGHT copies up to that mass keep the character bits,
+   are simulated here while something of this side's moves at them, and rest on
+   their owner's pose (README "The second layer"); draw them as any copy, leave
+   the ones `body_sync_is_predicted` names out of playback measurements, and
+   move this side's bodies after `body_sync_apply` as below.
 2. Each tick, in this order: `body_sync_set_peer_tick` for each seat (from
    `coop_session_peer_tick`), `body_sync_receive_state` and
    `body_sync_receive_record` for what the session delivered, `body_sync_apply`,

@@ -90,6 +90,8 @@ typedef struct body_sync_body_desc {
     uint8_t debris_count;
     float debris_speed; /* m/s */
     float break_speed;  /* m/s of an impact claim that breaks it */
+    /* Mannequin: m/s of an impact that knocks it down (a thrown body, not a nudge); (0, 100]. */
+    float fall_speed;
 } body_sync_body_desc_t;
 
 typedef struct body_sync_route {

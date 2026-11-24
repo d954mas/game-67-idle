@@ -52,6 +52,9 @@ body_sync_body_desc_t body_sync_body_default(body_sync_shape_t shape, const floa
     body.role = BODY_SYNC_ROLE_PROP;
     body.route = BODY_SYNC_ROUTE_NONE;
     body.debris_template = BODY_SYNC_TEMPLATE_NONE;
+    /* Past a punched item's push (4 m/s) and a run, under a throw (11.5 m/s): a nudge or a body
+       a character walks into never fells a mannequin, a throw does. */
+    body.fall_speed = 5.0f;
     return body;
 }
 
@@ -159,7 +162,7 @@ static bool body_ok(const body_sync_scene_t *scene, const body_sync_body_desc_t 
     }
     if (!finite3(b->size) || !finite3(b->position) || !isfinite(b->mass) || !isfinite(b->density) || !isfinite(b->friction) ||
         !isfinite(b->restitution) || !isfinite(b->linear_damping) || !isfinite(b->angular_damping) || !isfinite(b->debris_speed) ||
-        !isfinite(b->break_speed)) {
+        !isfinite(b->break_speed) || !isfinite(b->fall_speed)) {
         return fail_body(error, is_template, line, "a number is not finite", b);
     }
     int sized = b->shape == BODY_SYNC_SHAPE_BOX ? 3 : b->shape == BODY_SYNC_SHAPE_SPHERE ? 1 : 2;
@@ -218,6 +221,9 @@ static bool body_ok(const body_sync_scene_t *scene, const body_sync_body_desc_t 
         }
         if (b->route == BODY_SYNC_ROUTE_NONE && b->motion != BODY_SYNC_MOTION_DYNAMIC) {
             return fail_body(error, is_template, line, "a standing mannequin is dynamic", b);
+        }
+        if (!(b->fall_speed > 0.0f && b->fall_speed <= 100.0f)) {
+            return fail_body(error, is_template, line, "a mannequin's fall speed is in (0, 100] m/s", b);
         }
     } else if (b->motion == BODY_SYNC_MOTION_KINEMATIC) {
         return fail_body(error, is_template, line, "only a walking mannequin is kinematic", b);

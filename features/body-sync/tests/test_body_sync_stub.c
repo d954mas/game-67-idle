@@ -4,6 +4,7 @@
 
 #include "features/body_sync/body_sync.h"
 #include "stub_wire.h"
+#include "sync_policy.h"
 #ifdef SEAM_REAL
 #include "sync_codec.h"
 #endif
@@ -319,6 +320,34 @@ static void test_claims_answers_and_holds(void) {
 }
 
 /* A release that crosses the host's grant leaves the body with the host. */
+/* A host state that arrives in the same poll as the grant belongs to the ownership before it: once
+   the guest gives the body back, its copy plays nothing (body_sync_playback false) until a host
+   state sent after the return comes. */
+static void test_a_state_beside_the_grant_is_never_played_after_the_return(void) {
+    tick_all();
+    tick_all();
+    tick_no++;
+    step(&host);
+    state(&host, &guest); /* a host state, not yet applied */
+    grant(&guest, ID0, BODY_SYNC_HOLD_UNTIL_RELEASE);
+    step(&guest);
+    TEST_ASSERT_TRUE(body_sync_is_local(guest.sync, ID0));
+    for (int i = 0; i < 5; i++) {
+        tick_all();
+    }
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_release(guest.sync, ID0));
+    tick_no++;
+    step(&guest);
+    double played = 0.0;
+    TEST_ASSERT_FALSE(body_sync_is_local(guest.sync, ID0));
+    TEST_ASSERT_FALSE_MESSAGE(body_sync_playback(guest.sync, ID0, &played), "a copy plays a state of the ownership before the grant");
+    records(&guest, &host);
+    for (int i = 0; i < 4 && !body_sync_playback(guest.sync, ID0, &played); i++) {
+        tick_all();
+    }
+    TEST_ASSERT_TRUE_MESSAGE(body_sync_playback(guest.sync, ID0, &played), "the host's states since the return never play");
+}
+
 static void test_a_release_crossing_the_grant_stays_with_the_host(void) {
     tick_all();
     body_sync_claim(guest.sync, ID0, BODY_SYNC_HOLD_UNTIL_RELEASE);
@@ -1050,6 +1079,94 @@ static void test_a_handover_carries_flags_type_and_locks(void) {
     TEST_ASSERT_TRUE(l.angularX && l.angularZ && !l.angularY);
 }
 
+/* A grant of the host's own body to a guest carries the flags and data the host set, not those of
+   a guest that owned it before: what the host received of that guest is an older ownership's,
+   on the host itself and on the new owner, at the grant and after. */
+static void test_a_grant_of_the_hosts_body_carries_the_hosts_flags(void) {
+    tick_all();
+    grant(&guest, ID0, BODY_SYNC_HOLD_UNTIL_RELEASE);
+    tick_all();
+    const uint8_t mine = 1, hosts = 2;
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_set_flags(guest.sync, ID0, 0x05));
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_set_data(guest.sync, ID0, &mine, 1));
+    for (int i = 0; i < 6; i++) {
+        tick_all();
+    }
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(0x05, body_sync_flags(host.sync, ID0), "the guest's flags never reached the host: the case proves nothing");
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_release(guest.sync, ID0));
+    for (int i = 0; i < 6; i++) {
+        tick_all();
+    }
+    TEST_ASSERT_TRUE(body_sync_is_local(host.sync, ID0));
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_set_flags(host.sync, ID0, 0x0A));
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_set_data(host.sync, ID0, &hosts, 1));
+    tick_all();
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_claim(other.sync, ID0, BODY_SYNC_HOLD_UNTIL_RELEASE));
+    records(&other, &host);
+    body_sync_claim_event_t c;
+    while (body_sync_poll_claim(host.sync, &c)) {
+        TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_answer(host.sync, &c, true));
+    }
+    records(&host, &other);
+    for (int k = 0; k < 4; k++) {
+        uint8_t data = 0;
+        TEST_ASSERT_EQUAL_UINT8_MESSAGE(0x0A, body_sync_flags(host.sync, ID0), "the host reads an older owner's flags");
+        TEST_ASSERT_EQUAL_UINT32(1, body_sync_data(host.sync, ID0, &data, 1));
+        TEST_ASSERT_EQUAL_UINT8_MESSAGE(hosts, data, "the host reads an older owner's data");
+        TEST_ASSERT_EQUAL_UINT8_MESSAGE(0x0A, body_sync_flags(other.sync, ID0), "the new owner goes on from an older owner's flags");
+        TEST_ASSERT_EQUAL_UINT32(1, body_sync_data(other.sync, ID0, &data, 1));
+        TEST_ASSERT_EQUAL_UINT8_MESSAGE(hosts, data, "the new owner goes on from an older owner's data");
+        tick_all();
+    }
+}
+
+/* A grant may name the hold the host reads for the claimant; a hold no claim can name is refused
+   and answers nothing, so the claim stays pending. */
+static void test_a_grant_as_an_unclaimable_hold_is_refused(void) {
+    tick_all();
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_claim(guest.sync, ID0, BODY_SYNC_HOLD_UNTIL_SETTLED));
+    records(&guest, &host);
+    body_sync_claim_event_t c;
+    TEST_ASSERT_TRUE(body_sync_poll_claim(host.sync, &c));
+    TEST_ASSERT_EQUAL(BODY_SYNC_INVALID, body_sync_answer_as(host.sync, &c, BODY_SYNC_HOLD_UNTIL_REST));
+    TEST_ASSERT_EQUAL(BODY_SYNC_INVALID, body_sync_answer_as(host.sync, &c, (body_sync_hold_t)7));
+    body_sync_authority_t a;
+    TEST_ASSERT_TRUE(body_sync_authority(host.sync, ID0, &a));
+    TEST_ASSERT_EQUAL_UINT8(BODY_SYNC_SEAT_HOST, a.seat);
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_answer_as(host.sync, &c, BODY_SYNC_HOLD_UNTIL_RELEASE));
+    TEST_ASSERT_TRUE(body_sync_authority(host.sync, ID0, &a));
+    TEST_ASSERT_EQUAL_UINT8(GUEST, a.seat);
+    TEST_ASSERT_EQUAL(BODY_SYNC_HOLD_UNTIL_RELEASE, a.hold);
+}
+
+/* The host keeps older states for 16 characters; one more binds as any body and is counted, and
+   an unbind frees its place for the next. */
+static void test_characters_past_the_agent_rings_are_counted(void) {
+    b3ShapeDef shape = b3DefaultShapeDef();
+    b3BoxHull cube = b3MakeBoxHull(0.3f, 0.9f, 0.3f);
+    body_sync_id_t ids[17];
+    for (uint32_t i = 0; i < 17; i++) {
+        b3BodyDef d = b3DefaultBodyDef();
+        d.type = b3_dynamicBody;
+        d.position = (b3Vec3){(float)i * 2.0f, 0.9f, 40.0f};
+        b3BodyId body = b3CreateBody(host.world, &d);
+        b3CreateHullShape(body, &shape, &cube.base);
+        ids[i] = body_sync_id_make(BODIES + i, 1);
+        body_sync_bind_t bind = {.body = body, .body_class = BODY_SYNC_CLASS_CHARACTER, .authority = BODY_SYNC_SEAT_HOST};
+        TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_bind(host.sync, ids[i], &bind));
+        TEST_ASSERT_EQUAL_UINT32(i < 16 ? 0u : 1u, body_sync_agent_overflow(host.sync));
+    }
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_unbind(host.sync, ids[0]));
+    b3BodyDef d = b3DefaultBodyDef();
+    d.type = b3_dynamicBody;
+    b3BodyId body = b3CreateBody(host.world, &d);
+    b3CreateHullShape(body, &shape, &cube.base);
+    body_sync_bind_t bind = {.body = body, .body_class = BODY_SYNC_CLASS_CHARACTER, .authority = BODY_SYNC_SEAT_HOST};
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_bind(host.sync, body_sync_id_make(BODIES + 17, 1), &bind));
+    TEST_ASSERT_EQUAL_UINT32(1, body_sync_agent_overflow(host.sync));
+    TEST_ASSERT_EQUAL_UINT32(0, body_sync_agent_overflow(guest.sync));
+}
+
 /* A late state packet arriving after a newer one changes nothing: it neither counts as a pose
    nor moves back the authority number its sender declared. */
 static void test_a_late_packet_changes_nothing(void) {
@@ -1409,12 +1526,354 @@ static void test_destroy_gives_the_mask_bits_back(void) {
     TEST_ASSERT_TRUE_MESSAGE(after == B3_DEFAULT_MASK_BITS, "destroy kept the character bit off");
 }
 
+/* The contact gate end to end: the guest's release travels in the seam's records, its claim of
+   the contact that ended the flight after them, so the host has the body back before it judges
+   the claim, and the claim still counts. The host's world around it is measured. */
+static void test_a_contact_claim_counts_after_its_release(void) {
+    tick_all();
+    body_sync_id_t target = body_sync_id_make(1, 1);
+    grant(&guest, ID0, BODY_SYNC_HOLD_UNTIL_SETTLED);
+    tick_all(); /* the guest's first state reaches the host */
+    uint16_t n = 0;
+    TEST_ASSERT_FALSE(body_sync_contact_number(other.sync, ID0, &n) || body_sync_contact_number(guest.sync, target, &n)); /* copies */
+    TEST_ASSERT_TRUE(body_sync_contact_number(guest.sync, ID0, &n));
+    body_sync_contact_t c;
+    TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_OK, body_sync_check_contact(host.sync, GUEST, ID0, n, target, tick_no, &c));
+    /* neighbours a metre apart, 0.4 m cubes, nearly still: a finite gap under a metre */
+    TEST_ASSERT_TRUE(c.gap >= 0.0f && c.gap < 1.0f);
+    TEST_ASSERT_TRUE(c.reach >= 0.15f && isfinite(c.reach));
+    TEST_ASSERT_TRUE(c.approach_max >= 0.0f && isfinite(c.approach_max));
+    TEST_ASSERT_FALSE(c.ended);
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_release(guest.sync, ID0));
+    records(&guest, &host);
+    TEST_ASSERT_TRUE(body_sync_is_local(host.sync, ID0));
+    TEST_ASSERT_EQUAL_MESSAGE(BODY_SYNC_CONTACT_OK, body_sync_check_contact(host.sync, GUEST, ID0, n, target, tick_no, &c),
+                              "the claim of a flight its own release ended was rejected");
+    TEST_ASSERT_TRUE(c.ended && c.ended_age_ticks == 0);
+    TEST_ASSERT_TRUE(c.gap >= 0.0f && c.gap < 1.0f);
+    /* the host's recall of that flight's body, before the release arrived */
+    grant(&guest, ID0, BODY_SYNC_HOLD_UNTIL_SETTLED);
+    tick_all();
+    TEST_ASSERT_TRUE(body_sync_contact_number(guest.sync, ID0, &n));
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_assign(host.sync, ID0, BODY_SYNC_SEAT_HOST, BODY_SYNC_HOLD_UNTIL_RELEASE));
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_release(guest.sync, ID0));
+    records(&guest, &host);
+    TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_REVOKED, body_sync_check_contact(host.sync, GUEST, ID0, n, target, tick_no, &c));
+    TEST_ASSERT_TRUE(c.gap >= 0.0f && c.gap < 1.0f); /* measured all the same: the game may log it */
+}
+
+/* A seat that gave a body back is measured where it left it, not where the next owner flies it,
+   and its claim lapses after the grace: one far landing is not credited to both. */
+static void test_an_ended_flight_is_measured_where_its_seat_left_it(void) {
+    tick_all();
+    body_sync_id_t far_target = body_sync_id_make(BODIES - 1, 1);
+    grant(&guest, ID0, BODY_SYNC_HOLD_UNTIL_SETTLED);
+    tick_all();
+    uint16_t n = 0, m = 0;
+    TEST_ASSERT_TRUE(body_sync_contact_number(guest.sync, ID0, &n));
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_release(guest.sync, ID0));
+    records(&guest, &host);
+    grant(&other, ID0, BODY_SYNC_HOLD_UNTIL_SETTLED);
+    TEST_ASSERT_TRUE(body_sync_contact_number(other.sync, ID0, &m));
+    b3Vec3 t = b3Body_GetPosition(other.bodies[BODIES - 1]);
+    b3Body_SetTransform(other.bodies[0], (b3Vec3){t.x + 0.5f, t.y, t.z}, b3Quat_identity);
+    step(&other);
+    state(&other, &host);
+    body_sync_contact_t c;
+    TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_OK, body_sync_check_contact(host.sync, OTHER, ID0, m, far_target, tick_no, &c));
+    TEST_ASSERT_TRUE_MESSAGE(c.gap < 1.0f, "the owner's newest state was not measured");
+    TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_OK, body_sync_check_contact(host.sync, GUEST, ID0, n, far_target, tick_no, &c)); /* within the grace */
+    TEST_ASSERT_TRUE_MESSAGE(c.gap > 10.0f, "the past owner was measured where the next one flies it");
+    for (int i = 0; i < 70; i++) {
+        tick_all();
+    }
+    TEST_ASSERT_EQUAL_MESSAGE(BODY_SYNC_CONTACT_STALE, body_sync_check_contact(host.sync, GUEST, ID0, n, far_target, tick_no, &c),
+                              "a voluntary end counted past its grace");
+    TEST_ASSERT_TRUE(isinf(c.gap));
+}
+
+/* A guest's claim names a slot the host bound again since: the old generation and the new
+   body are both STALE, as is everything the host cannot judge, and nothing is measured. */
+static void test_a_contact_of_a_rebound_slot_is_stale(void) {
+    tick_all();
+    body_sync_id_t old = body_sync_id_make(5, 1), fresh = body_sync_id_make(5, 2), target = body_sync_id_make(6, 1);
+    grant(&guest, old, BODY_SYNC_HOLD_UNTIL_SETTLED);
+    uint16_t n = 0;
+    TEST_ASSERT_TRUE(body_sync_contact_number(guest.sync, old, &n));
+    body_sync_contact_t c;
+    TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_OK, body_sync_check_contact(host.sync, GUEST, old, n, target, tick_no, &c));
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_unbind(host.sync, old));
+    body_sync_bind_t bind = {.body = host.bodies[5], .body_class = BODY_SYNC_CLASS_LIGHT, .authority = BODY_SYNC_SEAT_HOST, .number = n};
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_bind(host.sync, fresh, &bind));
+    TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_STALE, body_sync_check_contact(host.sync, GUEST, old, n, target, tick_no, &c));
+    TEST_ASSERT_TRUE(isinf(c.gap) && c.reach == 0.0f && c.approach_max == 0.0f);
+    TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_STALE, body_sync_check_contact(host.sync, GUEST, fresh, n, target, tick_no, &c));
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_release(guest.sync, old));
+    records(&guest, &host); /* the release names the old generation: stale, ends nothing */
+    TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_STALE, body_sync_check_contact(host.sync, GUEST, old, n, target, tick_no, &c));
+    TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_STALE, body_sync_check_contact(host.sync, GUEST, fresh, n, target, tick_no, &c));
+    /* what the host cannot judge either */
+    grant(&guest, ID0, BODY_SYNC_HOLD_UNTIL_SETTLED);
+    TEST_ASSERT_TRUE(body_sync_contact_number(guest.sync, ID0, &n));
+    TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_OK, body_sync_check_contact(host.sync, GUEST, ID0, n, target, tick_no, NULL));
+    TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_STALE, body_sync_check_contact(host.sync, GUEST, ID0, n, ID0, tick_no, &c));                    /* itself */
+    TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_STALE, body_sync_check_contact(host.sync, GUEST, ID0, n, old, tick_no, &c));                    /* gone */
+    TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_STALE, body_sync_check_contact(host.sync, GUEST, ID0, n, body_sync_id_make(0xFFFF, 1), tick_no, &c));
+    TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_STALE, body_sync_check_contact(host.sync, OTHER, ID0, n, target, tick_no, &c));                 /* not its */
+    TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_STALE, body_sync_check_contact(host.sync, 200, ID0, n, target, tick_no, &c));                   /* no seat */
+    TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_STALE, body_sync_check_contact(guest.sync, GUEST, ID0, n, target, tick_no, &c));                /* host only */
+}
+
+static float apart_from(b3BodyId body, b3Vec3 q) {
+    b3Vec3 p = b3Body_GetPosition(body);
+    return sqrtf((p.x - q.x) * (p.x - q.x) + (p.y - q.y) * (p.y - q.y) + (p.z - q.z) * (p.z - q.z));
+}
+
+/* A recall mid-flight: the host takes the body back and puts it home, and that placement stays
+   on the host and reaches the guest; the take-over from the owner's newest state comes first. */
+static void test_a_recall_keeps_what_the_host_does_after_it(void) {
+    b3Vec3 home = b3Body_GetPosition(host.bodies[0]);
+    tick_all();
+    grant(&guest, ID0, BODY_SYNC_HOLD_UNTIL_SETTLED);
+    tick_all();
+    b3Body_SetLinearVelocity(guest.bodies[0], (b3Vec3){0.0f, 5.0f, -6.0f}); /* no body lies at negative z */
+    for (int i = 0; i < 8; i++) {
+        tick_all();
+    }
+    TEST_ASSERT_TRUE_MESSAGE(apart_from(host.bodies[0], home) > 0.5f, "the host never showed the flight");
+    /* Her newest states reach the host late, all at once: the copy trails them, so the take-over
+       jumps to the newest and smooths that jump into the render offset. */
+    for (int i = 0; i < 4; i++) {
+        tick_no++;
+        step(&host);
+        step(&guest);
+        step(&other);
+    }
+    state(&guest, &host);
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_assign(host.sync, ID0, BODY_SYNC_SEAT_HOST, BODY_SYNC_HOLD_UNTIL_RELEASE));
+    TEST_ASSERT_TRUE(body_sync_is_local(host.sync, ID0));
+    b3Body_SetTransform(host.bodies[0], home, b3Quat_identity);
+    b3Body_SetLinearVelocity(host.bodies[0], (b3Vec3){0.0f, 0.0f, 0.0f});
+    b3Body_SetAngularVelocity(host.bodies[0], (b3Vec3){0.0f, 0.0f, 0.0f});
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_teleported(host.sync, ID0));
+    tick_all();
+    /* Drawn home at once: the take-over's smoothing went with the teleport. */
+    float offset[3], turn[4];
+    TEST_ASSERT_TRUE(body_sync_render_offset(host.sync, ID0, offset, turn));
+    b3Vec3 p = b3Body_GetPosition(host.bodies[0]);
+    float dx = p.x + offset[0] - home.x, dy = p.y + offset[1] - home.y, dz = p.z + offset[2] - home.z;
+    TEST_ASSERT_TRUE_MESSAGE(apart_from(host.bodies[0], home) < 0.01f && sqrtf(dx * dx + dy * dy + dz * dz) < 0.01f,
+                             "the host draws the recalled body off home");
+    TEST_ASSERT_EQUAL(BODY_SYNC_UNKNOWN, body_sync_teleported(host.sync, body_sync_id_make(0, 9)));
+    for (int i = 0; i < 89; i++) {
+        tick_all();
+    }
+    TEST_ASSERT_EQUAL(BODY_SYNC_INVALID, body_sync_teleported(guest.sync, ID0)); /* a copy's pose is the host's */
+    TEST_ASSERT_TRUE_MESSAGE(apart_from(host.bodies[0], home) < 0.01f, "the next apply undid the host's placement");
+    TEST_ASSERT_TRUE_MESSAGE(apart_from(guest.bodies[0], home) < 0.02f, "the guest does not show the body home");
+    TEST_ASSERT_FALSE(body_sync_is_local(guest.sync, ID0));
+}
+
+/* The host removes a guest's body and binds a new one in its slot under the very seat and number
+   the old one had: only the generation tells the guest's late bytes apart, and they are stale. */
+static void test_a_guests_old_generation_is_stale_after_the_host_rebinds(void) {
+    body_sync_id_t old = ID0, fresh = body_sync_id_make(0, 2);
+    tick_all();
+    grant(&guest, old, BODY_SYNC_HOLD_UNTIL_RELEASE);
+    tick_all();
+    body_sync_authority_t was, now;
+    TEST_ASSERT_TRUE(body_sync_authority(host.sync, old, &was));
+    TEST_ASSERT_EQUAL_UINT8(GUEST, was.seat);
+    b3Body_SetTransform(guest.bodies[0], (b3Vec3){0.0f, 3.0f, -4.0f}, b3Quat_identity);
+    b3Body_SetLinearVelocity(guest.bodies[0], (b3Vec3){0.0f, 0.0f, -4.0f}); /* due at once on a budgeted sender too */
+    body_sync_collect(guest.sync, tick_no);
+    uint32_t old_size = 0;
+    TEST_ASSERT_TRUE(body_sync_write_state(guest.sync, BODY_SYNC_SEAT_HOST, packet, CAPACITY, &old_size));
+    uint8_t late[CAPACITY];
+    memcpy(late, packet, old_size);
+    uint32_t late_tick = ++tick_no;
+    uint32_t first = old_size;
+    while (body_sync_write_state(guest.sync, BODY_SYNC_SEAT_HOST, packet, CAPACITY, &old_size)) {
+    }
+#ifdef SEAM_REAL
+    old_size = first;
+#else
+    (void)first;
+    old_size = STUB_HEADER_BYTES + STUB_BODY_BYTES;
+#endif
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_unbind(host.sync, old));
+    body_sync_bind_t bind = {.body = host.bodies[0], .body_class = BODY_SYNC_CLASS_LIGHT, .authority = GUEST, .number = was.number};
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_bind(host.sync, fresh, &bind));
+    b3Vec3 before = b3Body_GetPosition(host.bodies[0]);
+    body_sync_traffic_t t0, t1, t2;
+    body_sync_traffic(host.sync, GUEST, &t0);
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_receive_state(host.sync, GUEST, late_tick, late, old_size));
+    body_sync_traffic(host.sync, GUEST, &t1);
+    TEST_ASSERT_TRUE_MESSAGE(t1.stale > t0.stale, "a state of the old generation was not stale");
+    TEST_ASSERT_EQUAL_UINT32(t0.rejected, t1.rejected);
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_release(guest.sync, old));
+    records(&guest, &host);
+    body_sync_traffic(host.sync, GUEST, &t2);
+    TEST_ASSERT_TRUE_MESSAGE(t2.stale > t1.stale, "a release of the old generation was not stale");
+    TEST_ASSERT_TRUE(body_sync_authority(host.sync, fresh, &now));
+    TEST_ASSERT_EQUAL_UINT8(GUEST, now.seat);
+    TEST_ASSERT_EQUAL_UINT16(was.number, now.number);
+    step(&host);
+    TEST_ASSERT_TRUE_MESSAGE(apart_from(host.bodies[0], before) < 0.01f, "the new body took the old one's state");
+}
+
+/* Only an ended ownership's bytes count as the old owner's, per id: the guest's state sent twice
+   (an older sample of her ownership) is stale and not counted; her states after a recall and after
+   a removal are, the removed id's through its unbind; another body's and another seat's stay 0. */
+static void test_old_owner_drops_count_an_ended_ownership_per_id(void) {
+    body_sync_id_t gone = body_sync_id_make(1, 1);
+    tick_all();
+    grant(&guest, ID0, BODY_SYNC_HOLD_UNTIL_RELEASE);
+    grant(&guest, gone, BODY_SYNC_HOLD_UNTIL_RELEASE);
+    tick_all();
+    uint8_t sent[CAPACITY];
+    for (int k = 0; k < 3; k++) {
+        if (k == 1) {
+            TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_assign(host.sync, ID0, BODY_SYNC_SEAT_HOST, BODY_SYNC_HOLD_UNTIL_RELEASE));
+        } else if (k == 2) {
+            TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_unbind(host.sync, gone));
+        }
+        for (int b = 0; b < 2; b++) { /* moved and moving: due at once on a budgeted sender too */
+            b3Body_SetTransform(guest.bodies[b], (b3Vec3){(float)b, 3.0f, -4.0f - (float)k}, b3Quat_identity);
+            b3Body_SetLinearVelocity(guest.bodies[b], (b3Vec3){0.0f, 0.0f, -4.0f});
+        }
+        uint32_t at = ++tick_no, size = 0, ignored = 0;
+        body_sync_collect(guest.sync, at);
+        TEST_ASSERT_TRUE(body_sync_write_state(guest.sync, BODY_SYNC_SEAT_HOST, sent, CAPACITY, &size));
+        while (body_sync_write_state(guest.sync, BODY_SYNC_SEAT_HOST, packet, CAPACITY, &ignored)) {
+        }
+        body_sync_traffic_t t0, t1;
+        TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_receive_state(host.sync, GUEST, at, sent, size));
+        if (k == 0) {
+            body_sync_traffic(host.sync, GUEST, &t0);
+            TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_receive_state(host.sync, GUEST, at, sent, size));
+            body_sync_traffic(host.sync, GUEST, &t1);
+            TEST_ASSERT_TRUE_MESSAGE(t1.stale > t0.stale, "a state sent twice was not stale");
+            TEST_ASSERT_EQUAL_UINT32_MESSAGE(0, body_sync_old_owner_drops(host.sync, ID0, GUEST), "an older sample counted as the old owner's");
+            TEST_ASSERT_EQUAL_UINT32(0, body_sync_old_owner_drops(host.sync, gone, GUEST));
+        }
+    }
+    TEST_ASSERT_EQUAL_UINT32_MESSAGE(2, body_sync_old_owner_drops(host.sync, ID0, GUEST), "her states after the recall were not the old owner's");
+    TEST_ASSERT_EQUAL_UINT32_MESSAGE(1, body_sync_old_owner_drops(host.sync, gone, GUEST), "her state of the removed id was not the old owner's");
+    TEST_ASSERT_EQUAL_UINT32(0, body_sync_old_owner_drops(host.sync, ID0, OTHER));
+    TEST_ASSERT_EQUAL_UINT32(0, body_sync_old_owner_drops(host.sync, body_sync_id_make(2, 1), GUEST));
+    TEST_ASSERT_EQUAL_UINT32(0, body_sync_old_owner_drops(host.sync, body_sync_id_make(0, 2), GUEST)); /* not this generation */
+    /* Her release under the recalled number is the old owner's record. */
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_release(guest.sync, ID0));
+    records(&guest, &host);
+    TEST_ASSERT_EQUAL_UINT32(3, body_sync_old_owner_drops(host.sync, ID0, GUEST));
+    /* The slot bound again starts over. */
+    body_sync_bind_t bind = {.body = host.bodies[1], .body_class = BODY_SYNC_CLASS_LIGHT, .authority = BODY_SYNC_SEAT_HOST};
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_bind(host.sync, body_sync_id_make(1, 2), &bind));
+    TEST_ASSERT_EQUAL_UINT32(0, body_sync_old_owner_drops(host.sync, body_sync_id_make(1, 2), GUEST));
+    TEST_ASSERT_EQUAL_UINT32(0, body_sync_old_owner_drops(host.sync, gone, GUEST));
+}
+
+/* The host refuses a generation equal modulo 16 to one it unbound from the slot, for the evidence
+   cap and the longest playback delay: on the real seam's 4-bit wire the old body's late bytes
+   would read as the new one's. Another generation binds at once, and a guest follows its host. */
+static void test_the_host_quarantines_an_aliasing_generation(void) {
+    tick_all();
+    const uint32_t quarantine = sync_policy_rebind_ticks(60);
+    body_sync_id_t old = body_sync_id_make(3, 1), alias = body_sync_id_make(3, 17), next = body_sync_id_make(3, 2);
+    body_sync_bind_t bind = {.body = host.bodies[3], .body_class = BODY_SYNC_CLASS_LIGHT, .authority = BODY_SYNC_SEAT_HOST};
+    side_t *sides[] = {&host, &guest, &other};
+    for (int k = 0; k < 3; k++) {
+        TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_unbind(sides[k]->sync, old));
+    }
+    TEST_ASSERT_EQUAL_MESSAGE(BODY_SYNC_TAKEN, body_sync_bind(host.sync, alias, &bind), "the host bound an aliasing generation at once");
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_bind(host.sync, next, &bind));
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_unbind(host.sync, next));
+    for (uint32_t i = 0; i + 1u < quarantine; i++) {
+        tick_all();
+    }
+    TEST_ASSERT_EQUAL_MESSAGE(BODY_SYNC_TAKEN, body_sync_bind(host.sync, alias, &bind), "the quarantine ended early");
+    tick_all();
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_bind(host.sync, alias, &bind));
+    bind.body = guest.bodies[3];
+    TEST_ASSERT_EQUAL_MESSAGE(BODY_SYNC_OK, body_sync_bind(guest.sync, alias, &bind), "a guest refused the host's bind");
+}
+
+/* A recall in the tick the host granted the guest's claim, before the apply that would make the
+   body a copy: it stays home and the host's, in the motion the host gave it, not in the motion and
+   velocities of the guest's states from her ownership before. */
+static void test_a_recall_in_the_tick_of_a_grant_keeps_the_hosts_body(void) {
+    b3Vec3 home = b3Body_GetPosition(host.bodies[0]);
+    tick_all();
+    grant(&guest, ID0, BODY_SYNC_HOLD_UNTIL_RELEASE);
+    tick_all();
+    b3Body_SetMotionLocks(guest.bodies[0], ANGULAR_LOCKED);
+    b3Body_SetLinearVelocity(guest.bodies[0], (b3Vec3){0.0f, 6.0f, -8.0f});
+    for (int i = 0; i < 4; i++) {
+        tick_all();
+    }
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_release(guest.sync, ID0));
+    for (int i = 0; i < 6; i++) {
+        tick_all();
+    }
+    TEST_ASSERT_TRUE(body_sync_is_local(host.sync, ID0));
+    const b3MotionLocks free_locks = {0};
+    b3Body_SetMotionLocks(host.bodies[0], free_locks);
+    b3Body_SetTransform(host.bodies[0], home, b3Quat_identity);
+    b3Body_SetLinearVelocity(host.bodies[0], (b3Vec3){0.0f, 0.0f, 0.0f});
+    for (int i = 0; i < 30; i++) {
+        tick_all();
+    }
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_claim(guest.sync, ID0, BODY_SYNC_HOLD_UNTIL_RELEASE));
+    records(&guest, &host);
+    body_sync_claim_event_t c;
+    TEST_ASSERT_TRUE(body_sync_poll_claim(host.sync, &c));
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_answer(host.sync, &c, true));
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_assign(host.sync, ID0, BODY_SYNC_SEAT_HOST, BODY_SYNC_HOLD_UNTIL_RELEASE));
+    b3Body_SetTransform(host.bodies[0], home, b3Quat_identity);
+    b3Body_SetLinearVelocity(host.bodies[0], (b3Vec3){0.0f, 0.0f, 0.0f});
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_teleported(host.sync, ID0));
+    for (int i = 0; i < 30; i++) {
+        tick_all();
+    }
+    TEST_ASSERT_TRUE_MESSAGE(body_sync_is_local(host.sync, ID0), "the recalled body is not the host's");
+    TEST_ASSERT_TRUE_MESSAGE(apart_from(host.bodies[0], home) < 0.01f, "the recalled body left home");
+    b3MotionLocks locks = b3Body_GetMotionLocks(host.bodies[0]);
+    TEST_ASSERT_FALSE_MESSAGE(locks.angularX || locks.angularY || locks.angularZ, "the recall took an older owner's locks");
+    TEST_ASSERT_EQUAL(b3_dynamicBody, b3Body_GetType(host.bodies[0]));
+    TEST_ASSERT_FALSE(body_sync_is_local(guest.sync, ID0));
+}
+
+/* A pool that recycles one slot every 10 ticks over 40 rising generations: each next generation
+   binds at once, since the one equal to it modulo 16 went 160 ticks ago, while the generation equal
+   modulo 16 to the one just unbound is refused. Only an aliasing generation waits. */
+static void test_a_fast_pool_binds_every_next_generation(void) {
+    tick_all();
+    side_t *sides[] = {&host, &guest, &other};
+    for (int k = 0; k < 3; k++) {
+        TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_unbind(sides[k]->sync, body_sync_id_make(4, 1)));
+    }
+    body_sync_bind_t bind = {.body = host.bodies[4], .body_class = BODY_SYNC_CLASS_LIGHT, .authority = BODY_SYNC_SEAT_HOST};
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_bind(host.sync, body_sync_id_make(4, 2), &bind));
+    for (uint32_t g = 2; g < 42; g++) {
+        for (int i = 0; i < 10; i++) {
+            tick_all();
+        }
+        TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_unbind(host.sync, body_sync_id_make(4, g)));
+        TEST_ASSERT_EQUAL_MESSAGE(BODY_SYNC_TAKEN, body_sync_bind(host.sync, body_sync_id_make(4, g + 16u), &bind),
+                                  "an aliasing generation bound at once");
+        TEST_ASSERT_EQUAL_MESSAGE(BODY_SYNC_OK, body_sync_bind(host.sync, body_sync_id_make(4, g + 1u), &bind),
+                                  "the pool's next generation was refused");
+    }
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_every_body_reaches_the_guest_within_the_packet_limit);
     RUN_TEST(test_copy_is_driven_over_one_step);
     RUN_TEST(test_an_older_state_is_stale);
     RUN_TEST(test_claims_answers_and_holds);
+    RUN_TEST(test_a_state_beside_the_grant_is_never_played_after_the_return);
     RUN_TEST(test_a_release_crossing_the_grant_stays_with_the_host);
     RUN_TEST(test_a_released_claim_is_withdrawn);
     RUN_TEST(test_the_owner_keeps_its_hold_through_the_grant);
@@ -1444,6 +1903,9 @@ int main(void) {
     RUN_TEST(test_locks_follow_the_last_owner_when_its_seat_leaves);
     RUN_TEST(test_locks_follow_the_last_owner_on_a_forced_move);
     RUN_TEST(test_a_handover_carries_flags_type_and_locks);
+    RUN_TEST(test_a_grant_of_the_hosts_body_carries_the_hosts_flags);
+    RUN_TEST(test_a_grant_as_an_unclaimable_hold_is_refused);
+    RUN_TEST(test_characters_past_the_agent_rings_are_counted);
     RUN_TEST(test_a_late_packet_changes_nothing);
     RUN_TEST(test_a_copy_stops_without_news_and_after_a_jump);
     RUN_TEST(test_a_settled_hold_ignores_its_last_holder);
@@ -1457,5 +1919,14 @@ int main(void) {
     RUN_TEST(test_mask_bits_are_taken_and_given_back_exactly);
     RUN_TEST(test_destroy_gives_the_mask_bits_back);
     RUN_TEST(test_bind_refuses_too_many_shapes);
+    RUN_TEST(test_a_contact_claim_counts_after_its_release);
+    RUN_TEST(test_an_ended_flight_is_measured_where_its_seat_left_it);
+    RUN_TEST(test_a_contact_of_a_rebound_slot_is_stale);
+    RUN_TEST(test_a_recall_keeps_what_the_host_does_after_it);
+    RUN_TEST(test_a_guests_old_generation_is_stale_after_the_host_rebinds);
+    RUN_TEST(test_old_owner_drops_count_an_ended_ownership_per_id);
+    RUN_TEST(test_the_host_quarantines_an_aliasing_generation);
+    RUN_TEST(test_a_fast_pool_binds_every_next_generation);
+    RUN_TEST(test_a_recall_in_the_tick_of_a_grant_keeps_the_hosts_body);
     return UNITY_END();
 }

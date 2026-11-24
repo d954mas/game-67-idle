@@ -1,0 +1,17 @@
+# throw_dummy's throw as a lob under the dummy's fall speed (5 m/s): the rock reaches the dummy and
+# nudges it, its owner claims nothing by the same rule the host applies, and the dummy stands, so
+# the check that it fell must fail.
+scenario mf_dummy_stands
+scene dummy_wall
+seed 23
+guests 1
+settle 6s
+net g1 rtt 100ms jitter 20ms loss 2%
+p1 walk rock_b
+p1 grab rock_b as lift
+p1 wait 300ms
+p1 throw dummy speed 3.5 as dummy
+expect result lift granted
+expect moved dummy >= 1cm
+expect effect dummy
+expect effects_once

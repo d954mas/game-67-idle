@@ -4,18 +4,25 @@
 #include <string.h>
 
 #include "features/body_sync/body_sync.h"
+#include "body_sync_plant.h"
 #include "sync_authority.h"
 #include "sync_codec.h"
 #include "sync_masks.h"
 #include "sync_playback.h"
+#include "sync_policy.h"
 #include "sync_receiver.h"
 #include "sync_sender.h"
+#include "sync_soft.h"
+
+#include "box3d/constants.h"
 
 /* The real seam: the Box3D shell around the parts. It reads bodies into the sender's inputs,
    decodes packets into the receiver and the playback buffer, and moves bodies as they say. Who
    gets which record, whose poses count, when a hold settles, how a copy is held, where it is
    at playback time, how fast it may be driven and what the eye sees of a jump are the parts'
    decisions; what is left here is reading and writing Box3D and the contact test. */
+
+enum { BODY_SLOTS_HASH = 4 * BODY_SYNC_BODIES_MAX };
 
 typedef struct entry {
     b3BodyId body;
@@ -32,13 +39,84 @@ typedef struct entry {
     bool took;
     bool took_pending;
     bool took_any;
+    bool lost; /* at its first apply as a copy again, a take whose claim lost while it waited */
     uint32_t took_tick;
     sync_masks_t masks;
     sync_offset_t offset;
+    /* The second layer: light enough for it (class LIGHT, mass at most light_mass_max), held
+       soft now, and what the last step did to it. */
+    bool light;
+    bool soft;
+    bool soft_hit;
+    bool soft_paused; /* its pull waited at the last apply (sync_soft_out_t.paused) */
+    bool owner_flying;
+    /* A flight's velocity as last driven less its owner's as played then: the correction it
+       carries while it coasts, which no contact of the host's and no take-back may keep. */
+    float carried_fix[3];
+    bool waited;        /* playback waited at its newest snapshot last tick... */
+    uint32_t waited_at; /* ...this one, by its tick */
+    bool owner_rests; /* its owner rests at playback time (sync_soft_owner_rests), as of the last apply */
+    sync_soft_still_t owner_still;
+    bool rest_held;       /* driven in the rest hold this tick */
+    bool pushed;          /* a body of this side's pushed it in the last step */
+    bool leaned;          /* ...or only leaned on it (a contact that acted, closing slower) */
+    float step_v[3], step_w[3]; /* its velocities as the last apply left them: the step's start */
+    bool layer;           /* a layer copy now: it keeps the character bits */
+    uint32_t marked;      /* tick + 1 a moving body of this side's last came within reach */
+    uint32_t marked_own;  /* ...and one this side simulates itself, not a copy nor the walk */
+    sync_soft_t soft_state;
+    /* Authority follows interaction: its stillness, the tick of its last agent contact, and a
+       guest's claim of it, which goes on from the pose this side shows. */
+    sync_policy_still_t still;
+    bool quiet;
+    uint32_t agent_tick;
+    uint32_t flight_ticks; /* collects in a row this side has flown it (a hold until settled) */
+    bool keep_own;
+    bool returned_at_rest; /* released at a rest pose the host acknowledged, nothing played since */
+    bool returned_pressed; /* released under this side's own press (sync_policy_take_in_t), still pressed */
+    /* A lost take's hand-back (body_sync_lost_take): how many, the latest one's drawn distance to
+       the winner's pose, and whether the drawn pose still glides off it. */
+    uint32_t lost_count;
+    float lost_hand_back;
+    bool lost_glide;
+    /* Host: it moved from one guest to another while a copy here; its new owner's first pose is a
+       placement the render offset takes up to a lost take's reach (host_handover). */
+    bool handover;
+    /* The body that last carried it, as this side knows it, and the filter that keeps a throw off
+       its thrower until it has cleared her (release_filters). */
+    body_sync_id_t carrier;
+    b3JointId release_filter;
+    uint32_t release_end;
+    float owner_speed; /* m/s, its owner's at the playback pose, as of the last apply as a copy */
+    /* Host: where its own world had it when a guest's take was judged, and the take's stamp: the
+       target a claim of that guest's contact names, before the take moved it. */
+    bool take_pose_known;
+    uint32_t take_tick;
+    float take_at[3];
+    /* A local body's pose its sleep is measured from: the last read awake, or the last move (body_rests). */
+    bool sleep_anchored;
+    float sleep_at[3], sleep_turn[4];
 } entry_t;
+
+/* The light copies one apply marks (mark_reached), and the walk through their contacts. */
+typedef struct marking {
+    struct body_sync *s;
+    uint16_t queue[BODY_SYNC_BODIES_MAX];
+    uint32_t count;
+    bool whole; /* a mover of this side's own or a copy in flight: the touched heap wakes whole */
+    bool own;   /* the mover marking now is one this side simulates (entry_t.marked_own) */
+} marking_t;
 
 struct body_sync {
     body_sync_config_t config;
+    bool plant_transform_sleep; /* body_sync_plant_transform_sleep */
+    bool plant_end_grace_zero;  /* body_sync_plant_end_grace_zero */
+    bool plant_copy_catch_up;   /* body_sync_plant_copy_catch_up */
+    bool plant_waiting_drive;   /* body_sync_plant_waiting_drive */
+    bool plant_resume_newest;   /* body_sync_plant_resume_newest */
+    bool plant_flight_catch_up; /* body_sync_plant_flight_catch_up */
+    bool plant_frozen_drive;    /* body_sync_plant_frozen_drive */
+    marking_t marking;
     float dt;
     uint32_t now; /* the last apply's or collect's tick */
     sync_codec_t codec;
@@ -53,9 +131,15 @@ struct body_sync {
     uint8_t send_to[BODY_SYNC_BODIES_MAX];
     sync_record_t scratch[BODY_SYNC_BODIES_MAX];
     char error[128];
+    /* A bound body's slot by its Box3D index, to tell a contact with a body this side simulates:
+       open addressing, BODY_SLOTS_HASH entries for at most BODY_SYNC_BODIES_MAX bodies. */
+    int32_t hash_index[BODY_SLOTS_HASH];
+    uint16_t hash_slot[BODY_SLOTS_HASH];
+    uint16_t agents[BODY_SYNC_BODIES_MAX]; /* gather_agents, once an apply */
+    uint32_t agent_count;
 };
 
-const char *body_sync_implementation(void) { return "real 0.6.0"; }
+const char *body_sync_implementation(void) { return "real 0.8.0"; }
 
 const char *body_sync_traffic_kind_name(body_sync_traffic_kind_t kind) {
     static const char *names[] = {"header", "copy", "sim", "held", "authority"};
@@ -72,9 +156,93 @@ static body_sync_result_t invalid(body_sync_t *s, const char *what) {
 static bool is_host(const body_sync_t *s) { return s->config.seat == BODY_SYNC_SEAT_HOST; }
 static bool seat_ok(const body_sync_t *s, uint8_t seat) { return seat < s->config.seats && seat != s->config.seat; }
 
+static float speed_of(b3BodyId body) {
+    b3Vec3 v = b3Body_GetLinearVelocity(body);
+    return sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
+}
+
+/* Ticks the host's copy of `seat`'s agents may trail that guest's contact: a round trip, a
+   playback delay and a tick, capped (SYNC_POLICY_TAKE_SLOP_M derives it). */
+static float evidence_ticks(const body_sync_t *s, uint8_t seat) {
+    return sync_policy_evidence_ticks(sync_sender_round_trip(&s->sender, seat), (float)s->playback.timelines[seat].delay, s->config.tick_hz);
+}
+
+/* The boxes a contact claim is measured with: the target's, and the agent's about its position. */
+static void contact_boxes(b3AABB target, b3AABB agent, b3Vec3 at, sync_contact_scene_t *scene) {
+    const float t_lo[3] = {target.lowerBound.x, target.lowerBound.y, target.lowerBound.z}, t_hi[3] = {target.upperBound.x, target.upperBound.y, target.upperBound.z};
+    const float a_lo[3] = {agent.lowerBound.x - at.x, agent.lowerBound.y - at.y, agent.lowerBound.z - at.z};
+    const float a_hi[3] = {agent.upperBound.x - at.x, agent.upperBound.y - at.y, agent.upperBound.z - at.z};
+    memcpy(scene->target_lo, t_lo, sizeof(t_lo));
+    memcpy(scene->target_hi, t_hi, sizeof(t_hi));
+    memcpy(scene->agent_lo, a_lo, sizeof(a_lo));
+    memcpy(scene->agent_hi, a_hi, sizeof(a_hi));
+}
+
+/* Host: a take's evidence (sync_policy_grants). The claimant's agents (its characters, what it
+   carries, throws or owns by interaction) on the path the host's own taken states of each show,
+   the one that comes nearest within its reach; never the velocity they declare
+   (sync_authority_contact_measure). The target travelled a round trip, a delay and a tick since
+   the touch at most. */
+static float take_gap(void *context, uint8_t seat, uint32_t slot, uint32_t tick, float *reach) {
+    body_sync_t *s = context;
+    entry_t *e = &s->entries[slot];
+    *reach = 0.0f;
+    if (!b3Body_IsValid(e->body)) {
+        return INFINITY;
+    }
+    b3Vec3 here = b3Body_GetPosition(e->body);
+    e->take_pose_known = true;
+    e->take_tick = tick;
+    e->take_at[0] = here.x;
+    e->take_at[1] = here.y;
+    e->take_at[2] = here.z;
+    b3AABB box = b3Body_ComputeAABB(e->body);
+    float ticks = evidence_ticks(s, seat), best = INFINITY;
+    sync_contact_scene_t scene = {.target_speed = speed_of(e->body), .tick_hz = s->config.tick_hz, .max_speed = s->config.max_speed,
+                                  .contact_tick = tick, .later_points = true, .window_ticks = (uint32_t)ceilf(ticks), .target_ticks = ticks,
+                                  .push_ticks = ticks};
+    for (uint32_t k = 0; k < BODY_SYNC_BODIES_MAX; k++) {
+        const sync_authority_body_t *a = &s->authority.bodies[k];
+        const entry_t *g = &s->entries[k];
+        /* The host's own hold says a take it granted at once; the owner's states say the rest
+           (what it carries, a flight that went on owned by interaction). */
+        bool held = a->holder != BODY_SYNC_ID_NONE || (a->has_in && a->in_holder != BODY_SYNC_ID_NONE);
+        bool moving = a->hold == BODY_SYNC_HOLD_UNTIL_SETTLED || a->hold == BODY_SYNC_HOLD_UNTIL_REST ||
+                      (a->has_in && (a->in_hold == BODY_SYNC_HOLD_UNTIL_SETTLED || a->in_hold == BODY_SYNC_HOLD_UNTIL_REST));
+        if (k == slot || !a->bound || a->seat != seat || !b3Body_IsValid(g->body) || !(g->body_class == BODY_SYNC_CLASS_CHARACTER || held || moving)) {
+            continue;
+        }
+        float d, r, approach;
+        contact_boxes(box, b3Body_ComputeAABB(g->body), b3Body_GetPosition(g->body), &scene);
+        if (sync_authority_path_measure(&s->authority, a, seat, NULL, &scene, &d, &r, &approach) && d - r < best - *reach) {
+            best = d;
+            *reach = r;
+        }
+    }
+    return best;
+}
+
+void body_sync_plant_take_reach_unbounded(body_sync_t *s) { s->authority.plant_take_reach_unbounded = true; }
+void body_sync_plant_evidence_grows_over_gaps(body_sync_t *s) { s->authority.plant_evidence_grows_over_gaps = true; }
+void body_sync_plant_approach_from_ring(body_sync_t *s) { s->authority.plant_approach_from_ring = true; }
+void body_sync_plant_evidence_age_unbounded(body_sync_t *s) { s->authority.plant_evidence_age_unbounded = true; }
+void body_sync_plant_transform_sleep(body_sync_t *s) { s->plant_transform_sleep = true; }
+void body_sync_plant_end_grace_zero(body_sync_t *s) { s->plant_end_grace_zero = true; }
+void body_sync_plant_copy_catch_up(body_sync_t *s) { s->plant_copy_catch_up = true; }
+void body_sync_plant_waiting_drive(body_sync_t *s) { s->plant_waiting_drive = true; }
+void body_sync_plant_resume_newest(body_sync_t *s) { s->plant_resume_newest = true; }
+void body_sync_plant_flight_catch_up(body_sync_t *s) { s->plant_flight_catch_up = true; }
+void body_sync_plant_frozen_drive(body_sync_t *s) { s->plant_frozen_drive = true; }
+void body_sync_plant_recall_keeps_number(body_sync_t *s) { s->authority.plant_recall_keeps_number = true; }
+void body_sync_plant_move_keeps_received(body_sync_t *s) { s->authority.plant_move_keeps_received = true; }
+void body_sync_plant_agent_ring_off(body_sync_t *s) { s->authority.plant_agent_ring_off = true; }
+void body_sync_plant_handover_keeps_flight(body_sync_t *s) { s->authority.plant_handover_keeps_flight = true; }
+
 body_sync_t *body_sync_create(const body_sync_config_t *config) {
     if (!config || !b3World_IsValid(config->world) || config->seats < 1 || config->seats > BODY_SYNC_SEATS_MAX ||
         config->seat >= config->seats || config->tick_hz < 1 || config->tick_hz > 1000 || config->delay_min > 60 || config->delay_max > 60 ||
+        !(config->light_mass_max >= 0.0f && config->light_mass_max <= 1e6f) || config->authority > BODY_SYNC_AUTHORITY_INTERACTION ||
+        (config->authority == BODY_SYNC_AUTHORITY_INTERACTION && !(config->light_mass_max > 0.0f)) ||
         (config->delay_min && config->delay_max && config->delay_min > config->delay_max)) {
         return NULL;
     }
@@ -94,11 +262,19 @@ body_sync_t *body_sync_create(const body_sync_config_t *config) {
     s->config = *config;
     s->dt = 1.0f / (float)config->tick_hz;
     sync_authority_init(&s->authority, config->seat, (uint8_t)config->seats, s->error, sizeof(s->error));
+    s->authority.rebind_ticks = sync_policy_rebind_ticks(config->tick_hz);
+    s->authority.agent_stride = sync_policy_agent_stride(config->tick_hz, SYNC_AUTHORITY_AGENT_POSES);
+    s->authority.take_gap = take_gap;
+    s->authority.take_context = s;
+    s->authority.mode = config->authority == BODY_SYNC_AUTHORITY_INTERACTION ? SYNC_POLICY_INTERACTION : SYNC_POLICY_HOST;
     sync_sender_init(&s->sender, &s->codec, (uint8_t)config->seats, config->state_budget);
     sync_receiver_init(&s->receiver, config->tick_hz, config->max_speed);
     sync_playback_init(&s->playback, config->tick_hz, config->delay_min, config->delay_max);
     for (uint32_t i = 0; i < BODY_SYNC_BODIES_MAX; i++) {
         sync_offset_clear(&s->entries[i].offset);
+    }
+    for (uint32_t i = 0; i < BODY_SLOTS_HASH; i++) {
+        s->hash_index[i] = -1;
     }
     return s;
 }
@@ -111,6 +287,10 @@ void body_sync_destroy(body_sync_t *sync) {
         entry_t *e = &sync->entries[slot];
         if (sync->authority.bodies[slot].bound && b3Body_IsValid(e->body)) {
             sync_masks_restore(&e->masks, e->body);
+        }
+        /* The world is the caller's and outlives the seam: its filters go with it. */
+        if (b3Joint_IsValid(e->release_filter)) {
+            b3DestroyJoint(e->release_filter, false);
         }
     }
     free(sync);
@@ -144,6 +324,34 @@ static void forget_slot(body_sync_t *s, uint32_t slot) {
     sync_playback_forget_body(&s->playback, (uint16_t)slot);
 }
 
+static uint32_t hash_of(int32_t index) { return ((uint32_t)index * 2654435761u) % BODY_SLOTS_HASH; }
+
+static void hash_put(body_sync_t *s, b3BodyId body, uint32_t slot) {
+    uint32_t h = hash_of(body.index1);
+    /* An entry whose slot no longer holds that body is free again: rebinds never fill it. */
+    for (uint32_t n = 0; n < BODY_SLOTS_HASH && s->hash_index[h] != -1 && s->hash_index[h] != body.index1; n++) {
+        uint32_t was = s->hash_slot[h];
+        if (!s->authority.bodies[was].bound || s->entries[was].body.index1 != s->hash_index[h]) {
+            break;
+        }
+        h = (h + 1u) % BODY_SLOTS_HASH;
+    }
+    s->hash_index[h] = body.index1;
+    s->hash_slot[h] = (uint16_t)slot;
+}
+
+/* The bound slot of a Box3D body, BODY_SYNC_BODIES_MAX when none. */
+static uint32_t hash_get(const body_sync_t *s, b3BodyId body) {
+    uint32_t h = hash_of(body.index1);
+    for (uint32_t n = 0; n < BODY_SLOTS_HASH && s->hash_index[h] != -1; n++, h = (h + 1u) % BODY_SLOTS_HASH) {
+        if (s->hash_index[h] == body.index1) {
+            uint32_t slot = s->hash_slot[h];
+            return s->authority.bodies[slot].bound && B3_ID_EQUALS(s->entries[slot].body, body) ? slot : BODY_SYNC_BODIES_MAX;
+        }
+    }
+    return BODY_SYNC_BODIES_MAX;
+}
+
 body_sync_result_t body_sync_bind(body_sync_t *s, body_sync_id_t id, const body_sync_bind_t *bind) {
     uint32_t slot = body_sync_id_slot(id);
     if (!bind || slot >= BODY_SYNC_BODIES_MAX || body_sync_id_generation(id) == 0 || !b3Body_IsValid(bind->body) ||
@@ -161,8 +369,14 @@ body_sync_result_t body_sync_bind(body_sync_t *s, body_sync_id_t id, const body_
     e->body_class = bind->body_class;
     e->bound_type = b3Body_GetType(bind->body);
     e->bound_locks = b3Body_GetMotionLocks(bind->body);
+    e->light = s->config.light_mass_max > 0.0f && bind->body_class == BODY_SYNC_CLASS_LIGHT && b3Body_GetMass(bind->body) <= s->config.light_mass_max;
+    s->authority.bodies[slot].takable = e->light;
+    if (is_host(s) && bind->body_class == BODY_SYNC_CLASS_CHARACTER) {
+        sync_authority_set_agent(&s->authority, id, true);
+    }
     sync_offset_clear(&e->offset);
     forget_slot(s, slot);
+    hash_put(s, bind->body, slot);
     return BODY_SYNC_OK;
 }
 
@@ -172,6 +386,9 @@ body_sync_result_t body_sync_unbind(body_sync_t *s, body_sync_id_t id) {
         entry_t *e = &s->entries[body_sync_id_slot(id)];
         if (b3Body_IsValid(e->body)) {
             sync_masks_restore(&e->masks, e->body); /* the caller gets its body back as it bound it */
+        }
+        if (b3Joint_IsValid(e->release_filter)) {
+            b3DestroyJoint(e->release_filter, false);
         }
     }
     body_sync_result_t r = sync_authority_unbind(&s->authority, id);
@@ -194,6 +411,57 @@ bool body_sync_authority(const body_sync_t *s, body_sync_id_t id, body_sync_auth
     return true;
 }
 
+bool body_sync_contact_number(const body_sync_t *s, body_sync_id_t id, uint16_t *number) {
+    const sync_authority_body_t *b = sync_authority_body_const(&s->authority, id);
+    return b && sync_authority_contact_number(&s->authority, b, number);
+}
+
+body_sync_contact_verdict_t body_sync_check_contact(const body_sync_t *s, uint8_t seat, body_sync_id_t agent, uint16_t number,
+                                                    body_sync_id_t target, uint32_t contact_tick, body_sync_contact_t *out) {
+    body_sync_contact_t scratch;
+    out = out ? out : &scratch;
+    *out = (body_sync_contact_t){.gap = INFINITY};
+    float ticks = seat < s->config.seats ? evidence_ticks(s, seat) : 0.0f;
+    const sync_authority_ended_t *ended;
+    uint32_t grace = s->plant_end_grace_zero ? 0u : (uint32_t)ceilf(ticks);
+    body_sync_contact_verdict_t verdict = sync_authority_check_contact(&s->authority, seat, agent, number, grace, &ended);
+    if (verdict == BODY_SYNC_CONTACT_STALE || agent == target || !sync_authority_body_const(&s->authority, target)) {
+        return BODY_SYNC_CONTACT_STALE;
+    }
+    const entry_t *g = &s->entries[body_sync_id_slot(agent)], *t = &s->entries[body_sync_id_slot(target)];
+    if (!b3Body_IsValid(g->body) || !b3Body_IsValid(t->body)) {
+        return BODY_SYNC_CONTACT_STALE;
+    }
+    out->ended = ended != NULL;
+    out->ended_age_ticks = ended ? s->authority.now - ended->tick : 0u;
+    sync_contact_scene_t scene = {.target_speed = speed_of(t->body), .tick_hz = s->config.tick_hz, .max_speed = s->config.max_speed,
+                                  .contact_tick = contact_tick, .window_ticks = (uint32_t)ceilf(ticks)};
+    b3AABB target_box = b3Body_ComputeAABB(t->body);
+    /* A target the claimant's seat moves itself (one it took at the contact) is judged where its
+       own taken states put it at the contact, not where it went since. */
+    const sync_authority_body_t *tb = sync_authority_body_const(&s->authority, target);
+    const sync_authority_pose_t *then = tb ? sync_authority_pose_at(&s->authority, tb, seat, contact_tick, (uint32_t)ceilf(ticks)) : NULL;
+    /* Before its first state, the claimant took it at the contact: where the host had it then. */
+    bool taken_then = !then && tb && tb->seat == seat && t->take_pose_known &&
+                      (contact_tick - t->take_tick <= SYNC_POLICY_CHORD_TICKS_MAX || t->take_tick - contact_tick <= SYNC_POLICY_CHORD_TICKS_MAX);
+    /* Otherwise it is the host's body as it is now, put back along its own velocity. */
+    b3Vec3 v = b3Body_GetLinearVelocity(t->body);
+    scene.target_velocity[0] = v.x;
+    scene.target_velocity[1] = v.y;
+    scene.target_velocity[2] = v.z;
+    scene.rewind = !then && !taken_then;
+    if (then || taken_then) {
+        const float *at = then ? then->position : t->take_at;
+        b3Vec3 now = b3Body_GetPosition(t->body), d = {at[0] - now.x, at[1] - now.y, at[2] - now.z};
+        target_box.lowerBound = b3Add(target_box.lowerBound, d);
+        target_box.upperBound = b3Add(target_box.upperBound, d);
+    }
+    contact_boxes(target_box, b3Body_ComputeAABB(g->body), b3Body_GetPosition(g->body), &scene);
+    sync_authority_contact_measure(&s->authority, agent, seat, ended, &scene, &out->gap, &out->reach, &out->approach_max);
+    out->slop = SYNC_POLICY_TAKE_SLOP_M;
+    return verdict;
+}
+
 bool body_sync_is_local(const body_sync_t *s, body_sync_id_t id) {
     const sync_authority_body_t *b = sync_authority_body_const(&s->authority, id);
     return b && sync_authority_local(&s->authority, b);
@@ -210,29 +478,123 @@ static void note_live(body_sync_t *s, body_sync_id_t id) {
     }
 }
 
-body_sync_result_t body_sync_claim(body_sync_t *s, body_sync_id_t id, body_sync_hold_t hold) { return sync_authority_claim(&s->authority, id, hold); }
+static void resume(body_sync_t *s, uint32_t slot, bool was_copy);
+
+body_sync_result_t body_sync_claim(body_sync_t *s, body_sync_id_t id, body_sync_hold_t hold) {
+    body_sync_result_t r = sync_authority_claim(&s->authority, id, hold);
+    /* The claim makes the body the caller's at once, and the caller may move it before the next
+       apply (a grab carries it to the hand): it takes over now, from the pose the claimant shows,
+       as a take does. A placement at the newest state would leave its jump in the render offset,
+       and the caller's move would carry that offset off the hand. */
+    uint32_t slot = body_sync_id_slot(id);
+    if (r == BODY_SYNC_OK && s->entries[slot].copy_mode && body_sync_is_local(s, id)) {
+        s->entries[slot].keep_own = !is_host(s); /* the host's claim is a forced move: from the owner's newest state */
+        resume(s, slot, true);
+    }
+    return r;
+}
 body_sync_result_t body_sync_release(body_sync_t *s, body_sync_id_t id) { return sync_authority_release(&s->authority, id); }
 bool body_sync_poll_claim(body_sync_t *s, body_sync_claim_event_t *out) { return sync_authority_poll(&s->authority, out); }
-body_sync_result_t body_sync_answer(body_sync_t *s, const body_sync_claim_event_t *claim, bool granted) {
-    if (claim) {
-        note_live(s, claim->id);
+
+/* Host: a copy moved from guest `from` to another guest. What the host received of it is the old
+   owner's flight past the move: a host claim before the new owner's first state goes on from the
+   copy as shown, not from that flight; the copy plays the old owner's snapshots no further than
+   now and holds still, since extrapolated they fly it on from where the new owner has it; and her
+   first pose is a placement the render offset glides, as a lost take's, since at the move the
+   host shows the flight a round trip of hers past where she took it. */
+static void host_handover(body_sync_t *s, uint32_t slot, uint8_t from) {
+    const sync_authority_body_t *a = &s->authority.bodies[slot];
+    if (!is_host(s) || from == BODY_SYNC_SEAT_HOST || a->seat == BODY_SYNC_SEAT_HOST || a->seat == from || s->authority.plant_move_keeps_received ||
+        s->authority.plant_handover_keeps_flight) {
+        return;
     }
-    return sync_authority_answer(&s->authority, claim, granted);
+    s->receiver.bodies[slot].has = false;
+    s->receiver.bodies[slot].fresh = false;
+    sync_playback_end(&s->playback, (uint16_t)slot);
+    s->entries[slot].handover = true;
 }
+
+static body_sync_result_t answer(body_sync_t *s, const body_sync_claim_event_t *claim, bool granted, uint8_t grant_as) {
+    if (!claim) {
+        return sync_authority_answer(&s->authority, claim, granted, grant_as);
+    }
+    note_live(s, claim->id);
+    const sync_authority_body_t *a = sync_authority_body_const(&s->authority, claim->id);
+    uint8_t from = a ? a->seat : BODY_SYNC_SEAT_HOST;
+    body_sync_result_t r = sync_authority_answer(&s->authority, claim, granted, grant_as);
+    if (r == BODY_SYNC_OK && a) {
+        host_handover(s, body_sync_id_slot(claim->id), from);
+    }
+    return r;
+}
+
+body_sync_result_t body_sync_answer(body_sync_t *s, const body_sync_claim_event_t *claim, bool granted) {
+    return answer(s, claim, granted, SYNC_AUTHORITY_AS_CLAIMED);
+}
+
+body_sync_result_t body_sync_answer_as(body_sync_t *s, const body_sync_claim_event_t *claim, body_sync_hold_t hold) {
+    return answer(s, claim, true, (uint8_t)hold);
+}
+
+uint32_t body_sync_agent_overflow(const body_sync_t *s) { return s ? s->authority.agents_unringed : 0u; }
 body_sync_result_t body_sync_assign(body_sync_t *s, body_sync_id_t id, uint8_t seat, body_sync_hold_t hold) {
     note_live(s, id);
-    return sync_authority_assign(&s->authority, id, seat, hold);
+    const sync_authority_body_t *was = sync_authority_body_const(&s->authority, id);
+    uint8_t from = was ? was->seat : BODY_SYNC_SEAT_HOST;
+    body_sync_result_t r = sync_authority_assign(&s->authority, id, seat, hold);
+    if (r == BODY_SYNC_OK && was) {
+        host_handover(s, body_sync_id_slot(id), from);
+    }
+    /* A move to this side takes over now, from the owner's newest state as the host's claim does,
+       so what the caller does next (a recall puts the body home) is not undone at the next apply. */
+    uint32_t slot = body_sync_id_slot(id);
+    entry_t *e = &s->entries[slot];
+    if (r != BODY_SYNC_OK || !body_sync_is_local(s, id) || !b3Body_IsValid(e->body)) {
+        return r;
+    }
+    if (e->copy_mode) {
+        e->keep_own = false;
+        resume(s, slot, true);
+    } else {
+        /* Never a copy here (a grant this tick, before the apply that would make it one): it goes
+           on as this side simulates it, not in the motion of an older owner's states. */
+        sync_authority_body_t *a = &s->authority.bodies[slot];
+        a->resume = false;
+        a->take_motion = false;
+        sync_authority_applied(a, b3Body_GetType(e->body) == b3_kinematicBody, locks_bits(b3Body_GetMotionLocks(e->body)));
+    }
+    return r;
+}
+body_sync_result_t body_sync_teleported(body_sync_t *s, body_sync_id_t id) {
+    const sync_authority_body_t *a = sync_authority_body_const(&s->authority, id);
+    if (!a) {
+        return BODY_SYNC_UNKNOWN;
+    }
+    if (!sync_authority_local(&s->authority, a)) {
+        return invalid(s, "teleported: a copy's pose is its owner's");
+    }
+    entry_t *e = &s->entries[body_sync_id_slot(id)];
+    sync_offset_clear(&e->offset);
+    e->lost_glide = false;
+    return BODY_SYNC_OK;
 }
 body_sync_result_t body_sync_set_holder(body_sync_t *s, body_sync_id_t id, body_sync_id_t holder) {
     return sync_authority_set_holder(&s->authority, id, holder);
 }
 body_sync_result_t body_sync_set_flags(body_sync_t *s, body_sync_id_t id, uint8_t flags) { return sync_authority_set_flags(&s->authority, id, flags); }
+/* A copy's rare groups as of its playback time, only while they are its owner's: groups played of
+   an earlier owner (kept since a guest owned the host's body, or the old owner's before the new
+   one's first state) are another ownership's, and authority's own values answer instead. */
+static bool played_is_owners(const body_sync_t *s, uint32_t slot, const sync_authority_body_t *a) {
+    return s->playback.bodies[slot].has && s->playback.bodies[slot].timeline == a->seat;
+}
+
 uint8_t body_sync_flags(const body_sync_t *s, body_sync_id_t id) {
     const sync_authority_body_t *a = sync_authority_body_const(&s->authority, id);
     if (a && !sync_authority_local(&s->authority, a)) {
         uint8_t known = 0;
         const sync_rare_t *rare = sync_playback_rare(&s->playback, (uint16_t)body_sync_id_slot(id), &known);
-        if (known & SYNC_RARE_FLAGS) {
+        if ((known & SYNC_RARE_FLAGS) && played_is_owners(s, body_sync_id_slot(id), a)) {
             return rare->flags; /* as of the copy's playback time */
         }
     }
@@ -248,12 +610,12 @@ uint32_t body_sync_data(const body_sync_t *s, body_sync_id_t id, void *out, uint
     if (!a || !out) {
         return 0;
     }
-    if (sync_authority_local(&s->authority, a)) {
-        return sync_authority_data(&s->authority, id, out, capacity);
-    }
     uint8_t known = 0;
     const sync_rare_t *rare = sync_playback_rare(&s->playback, (uint16_t)body_sync_id_slot(id), &known);
-    uint32_t size = (known & SYNC_RARE_DATA) ? rare->data_size : 0u; /* as of playback time */
+    if (sync_authority_local(&s->authority, a) || !(known & SYNC_RARE_DATA) || !played_is_owners(s, body_sync_id_slot(id), a)) {
+        return sync_authority_data(&s->authority, id, out, capacity);
+    }
+    uint32_t size = rare->data_size; /* as of playback time */
     size = size < capacity ? size : capacity;
     memcpy(out, rare->data, size);
     return size;
@@ -275,6 +637,21 @@ static body_sync_result_t format(body_sync_t *s, uint8_t seat, const char *what)
 static void timeline_of(const sync_record_t *r, uint8_t seat, uint32_t tick, uint8_t *timeline, uint32_t *sample) {
     *timeline = r->origin.relayed ? r->origin.seat : seat;
     *sample = r->origin.relayed ? tick - r->origin.age : tick;
+}
+
+/* The groups the receiver keeps for a body, as authority reads them; `hold` and `flags` stand in
+   for a group never received. */
+static void note_received(body_sync_t *s, sync_authority_body_t *a, const sync_received_t *in, uint8_t hold, uint8_t flags, bool motion) {
+    sync_authority_received(a, (in->known & SYNC_RARE_AUTHORITY) ? in->rare.hold : hold,
+                            (in->known & SYNC_RARE_HOLDER) ? sync_authority_holder_id(&s->authority, in->rare.holder_slot, in->rare.holder_generation_low, SYNC_GEN_BITS)
+                                                           : BODY_SYNC_ID_NONE,
+                            (in->known & SYNC_RARE_FLAGS) ? in->rare.flags : flags);
+    if (motion) {
+        sync_authority_received_motion(a, (in->known & SYNC_RARE_MOTION) != 0, in->rare.kinematic, in->rare.locks);
+    }
+    if (in->known & SYNC_RARE_DATA) {
+        sync_authority_received_data(a, in->rare.data_size, in->rare.data);
+    }
 }
 
 body_sync_result_t body_sync_receive_state(body_sync_t *s, uint8_t seat, uint32_t tick, const uint8_t *data, uint32_t size) {
@@ -302,6 +679,7 @@ body_sync_result_t body_sync_receive_state(body_sync_t *s, uint8_t seat, uint32_
         sync_authority_body_t *a = sync_authority_body(&s->authority, id);
         if (!a) {
             t->stale++;
+            sync_authority_old_owner_drop(&s->authority, seat, r->slot, r->generation_low, SYNC_GEN_BITS);
             continue;
         }
         uint8_t timeline;
@@ -318,6 +696,9 @@ body_sync_result_t body_sync_receive_state(body_sync_t *s, uint8_t seat, uint32_
             if (intake != SYNC_INTAKE_TAKE) {
                 t->stale += intake == SYNC_INTAKE_STALE ? 1u : 0u;
                 t->rejected += intake == SYNC_INTAKE_REJECTED ? 1u : 0u;
+                if (intake == SYNC_INTAKE_REJECTED) {
+                    sync_authority_old_owner_drop(&s->authority, seat, r->slot, a->generation, 16u);
+                }
                 continue;
             }
         } else {
@@ -326,9 +707,24 @@ body_sync_result_t body_sync_receive_state(body_sync_t *s, uint8_t seat, uint32_
             }
             if (sync_authority_local(&s->authority, a)) {
                 /* Not applied, yet buffered: the host's state of a body this guest still holds
-                   (its take-back is on the way) is what the copy plays once it is one again. */
+                   (its take-back is on the way) is what the copy plays once it is one again.
+                   Once its claim is granted the host sends it nothing of the body: a state still
+                   arriving is from before the grant, and played later (a rest pose at its spawn)
+                   it would pull the body back there. */
+                if (!a->claim_pending) {
+                    t->stale++;
+                    continue;
+                }
                 sync_playback_arrival(&s->playback, timeline, sample, s->now);
                 sync_playback_file(&s->playback, timeline, sample, r);
+                /* Its rare groups count as known at the host once this packet's fate comes back:
+                   a refusal then leaves a copy holding what the host holds (a hold its agents set
+                   going), not the groups from before the take. Its motion is the claimant's own
+                   until then (sync_authority_note_motion). */
+                if (sync_receiver_merge_rare(&s->receiver, seat, sample, r)) {
+                    note_received(s, a, &s->receiver.bodies[r->slot], a->has_in ? a->in_hold : (uint8_t)BODY_SYNC_HOLD_UNTIL_RELEASE,
+                                  a->has_in ? a->in_flags : a->flags, false);
+                }
                 continue;
             }
         }
@@ -339,17 +735,12 @@ body_sync_result_t body_sync_receive_state(body_sync_t *s, uint8_t seat, uint32_
         /* The clock hears only what the seam took: a record dropped above moves no timeline. */
         sync_playback_arrival(&s->playback, timeline, sample, s->now);
         sync_playback_file(&s->playback, timeline, sample, r);
-        const sync_received_t *in = &s->receiver.bodies[r->slot];
         body_sync_authority_t now;
         sync_authority_describe(&s->authority, a, &now);
-        sync_authority_received(a, (in->known & SYNC_RARE_AUTHORITY) ? in->rare.hold : (uint8_t)now.hold,
-                                (in->known & SYNC_RARE_HOLDER)
-                                    ? sync_authority_holder_id(&s->authority, in->rare.holder_slot, in->rare.holder_generation_low, SYNC_GEN_BITS)
-                                    : BODY_SYNC_ID_NONE,
-                                (in->known & SYNC_RARE_FLAGS) ? in->rare.flags : a->flags);
-        sync_authority_received_motion(a, (in->known & SYNC_RARE_MOTION) != 0, in->rare.kinematic, in->rare.locks);
-        if (in->known & SYNC_RARE_DATA) {
-            sync_authority_received_data(a, in->rare.data_size, in->rare.data);
+        note_received(s, a, &s->receiver.bodies[r->slot], (uint8_t)now.hold, a->flags, true);
+        if (is_host(s)) {
+            sync_authority_received_pose(&s->authority, a, seat, tick, s->playback.timelines[seat].delay,
+                                         s->config.max_speed / (float)s->config.tick_hz, s->receiver.bodies[r->slot].newest.position);
         }
     }
     return BODY_SYNC_OK;
@@ -384,6 +775,135 @@ static void stop(b3BodyId body) {
     b3Body_SetAngularVelocity(body, (b3Vec3){0.0f, 0.0f, 0.0f});
 }
 
+/* This side's agents for the overlap rule (lands_in_agent): the bound bodies it simulates. */
+static void gather_agents(body_sync_t *s) {
+    s->agent_count = 0;
+    if (s->config.light_mass_max <= 0.0f || is_host(s)) {
+        return;
+    }
+    for (uint32_t slot = 0; slot < BODY_SYNC_BODIES_MAX; slot++) {
+        const entry_t *e = &s->entries[slot];
+        if (s->authority.bodies[slot].bound && b3Body_IsValid(e->body) && b3Body_GetType(e->body) == b3_dynamicBody &&
+            sync_authority_local(&s->authority, &s->authority.bodies[slot])) {
+            s->agents[s->agent_count++] = (uint16_t)slot;
+        }
+    }
+}
+
+/* How deep two shapes on these transforms overlap, as Box3D's contact manifold measures it: the
+   depth its solver pushes out and contact data reports. 0 when apart; false for a pair without a
+   convex manifold (a compound, a mesh). */
+static bool overlap_depth(b3ShapeId a, b3WorldTransform ta, b3ShapeId b, b3WorldTransform tb, float *depth) {
+    b3ShapeType kind_a = b3Shape_GetType(a), kind_b = b3Shape_GetType(b);
+    int rank_a = kind_a == b3_hullShape ? 2 : kind_a == b3_capsuleShape ? 1 : kind_a == b3_sphereShape ? 0 : -1;
+    int rank_b = kind_b == b3_hullShape ? 2 : kind_b == b3_capsuleShape ? 1 : kind_b == b3_sphereShape ? 0 : -1;
+    if (rank_a < 0 || rank_b < 0) {
+        return false;
+    }
+    /* Each collider takes the higher of hull, capsule, sphere as its first shape. */
+    if (rank_a < rank_b) {
+        b3ShapeId sa = a;
+        b3WorldTransform st = ta;
+        int sr = rank_a;
+        a = b, ta = tb, rank_a = rank_b;
+        b = sa, tb = st, rank_b = sr;
+    }
+    b3LocalManifoldPoint points[B3_MAX_MANIFOLD_POINTS];
+    b3LocalManifold m = {0};
+    m.points = points;
+    b3Transform b_in_a = b3InvMulWorldTransforms(ta, tb);
+    b3SimplexCache simplex = {0};
+    b3SATCache sat = {0};
+    b3Sphere sphere_a, sphere_b;
+    b3Capsule capsule_a, capsule_b;
+    switch (rank_a * 3 + rank_b) {
+    case 0:
+        sphere_a = b3Shape_GetSphere(a), sphere_b = b3Shape_GetSphere(b);
+        b3CollideSpheres(&m, B3_MAX_MANIFOLD_POINTS, &sphere_a, &sphere_b, b_in_a);
+        break;
+    case 3:
+        capsule_a = b3Shape_GetCapsule(a), sphere_b = b3Shape_GetSphere(b);
+        b3CollideCapsuleAndSphere(&m, B3_MAX_MANIFOLD_POINTS, &capsule_a, &sphere_b, b_in_a);
+        break;
+    case 4:
+        capsule_a = b3Shape_GetCapsule(a), capsule_b = b3Shape_GetCapsule(b);
+        b3CollideCapsules(&m, B3_MAX_MANIFOLD_POINTS, &capsule_a, &capsule_b, b_in_a);
+        break;
+    case 6:
+        sphere_b = b3Shape_GetSphere(b);
+        b3CollideHullAndSphere(&m, B3_MAX_MANIFOLD_POINTS, b3Shape_GetHull(a), &sphere_b, b_in_a, &simplex);
+        break;
+    case 7:
+        capsule_b = b3Shape_GetCapsule(b);
+        b3CollideHullAndCapsule(&m, B3_MAX_MANIFOLD_POINTS, b3Shape_GetHull(a), &capsule_b, b_in_a, &simplex);
+        break;
+    default:
+        b3CollideHulls(&m, B3_MAX_MANIFOLD_POINTS, b3Shape_GetHull(a), b3Shape_GetHull(b), b_in_a, &sat);
+        break;
+    }
+    float deepest = 0.0f;
+    for (int i = 0; i < m.pointCount; i++) {
+        deepest = fmaxf(deepest, -points[i].separation);
+    }
+    *depth = deepest;
+    return true;
+}
+
+/* Whether a copy set on the pose (p, q) lies inside one of this side's agents, shape against
+   shape where the two collide, deeper than Box3D's linear slop. Two pictures of a resting
+   contact differ by the copy grid (SYNC_SOFT_HOLD_M, 3.4 mm) and by how each world settled its
+   pile: under the slop that is a resting contact, not an overlap. The depth is the manifold's,
+   not a shrunk shape's: pulling a hull's corners in by the slop moves its faces in by less (a
+   cube's by slop / sqrt(3)). A pair the manifold cannot measure counts as inside once the boxes
+   meet. */
+static bool lands_in_agent(const body_sync_t *s, b3BodyId copy, const float p[3], const float q[4]) {
+    if (s->agent_count == 0) {
+        return false;
+    }
+    b3ShapeId mine[4];
+    int own = b3Body_GetShapes(copy, mine, 4);
+    b3Vec3 at = b3Body_GetPosition(copy);
+    b3AABB box = b3Body_ComputeAABB(copy);
+    float half[3] = {0.5f * (box.upperBound.x - box.lowerBound.x), 0.5f * (box.upperBound.y - box.lowerBound.y), 0.5f * (box.upperBound.z - box.lowerBound.z)};
+    float off[3] = {0.5f * (box.upperBound.x + box.lowerBound.x) - at.x, 0.5f * (box.upperBound.y + box.lowerBound.y) - at.y, 0.5f * (box.upperBound.z + box.lowerBound.z) - at.z};
+    /* Its reach from its origin, whatever the target rotation. */
+    float reach = sqrtf(half[0] * half[0] + half[1] * half[1] + half[2] * half[2]) + sqrtf(off[0] * off[0] + off[1] * off[1] + off[2] * off[2]);
+    b3WorldTransform target = {{p[0], p[1], p[2]}, quat_of(q)};
+    for (uint32_t k = 0; k < s->agent_count; k++) {
+        b3BodyId body = s->entries[s->agents[k]].body;
+        b3AABB ab = b3Body_ComputeAABB(body);
+        const float lo[3] = {ab.lowerBound.x, ab.lowerBound.y, ab.lowerBound.z}, hi[3] = {ab.upperBound.x, ab.upperBound.y, ab.upperBound.z};
+        float d2 = 0.0f;
+        for (int i = 0; i < 3; i++) {
+            float d = p[i] < lo[i] ? lo[i] - p[i] : p[i] > hi[i] ? p[i] - hi[i] : 0.0f;
+            d2 += d * d;
+        }
+        if (d2 > reach * reach) {
+            continue;
+        }
+        b3ShapeId shapes[4];
+        if (b3Body_GetShapeCount(copy) > 4 || b3Body_GetShapeCount(body) > 4) {
+            return true;
+        }
+        int n = b3Body_GetShapes(body, shapes, 4);
+        b3WorldTransform t = b3Body_GetTransform(body);
+        for (int j = 0; j < n; j++) {
+            b3Filter f = b3Shape_GetFilter(shapes[j]);
+            for (int i = 0; i < own; i++) {
+                b3Filter g = b3Shape_GetFilter(mine[i]);
+                if (b3Shape_IsSensor(shapes[j]) || b3Shape_IsSensor(mine[i]) || (f.categoryBits & g.maskBits) == 0 || (g.categoryBits & f.maskBits) == 0) {
+                    continue;
+                }
+                float depth;
+                if (!overlap_depth(shapes[j], t, mine[i], target, &depth) || depth > B3_LINEAR_SLOP) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
 static void pose_now(b3BodyId body, float position[3], float rotation[4]) {
     b3Vec3 p = b3Body_GetPosition(body);
     b3Quat q = b3Body_GetRotation(body);
@@ -396,13 +916,56 @@ static void pose_now(b3BodyId body, float position[3], float rotation[4]) {
     rotation[3] = q.s;
 }
 
+/* The fastest the other body of a contact closed on `target` at a point that acted in the last
+   step, before the solve (sync_soft_pushed): the relative normal speed Box3D kept, less the
+   target's own part of it at the velocities the apply left it with (a soft copy falling onto a
+   still character is no push of hers). */
+static float approach_speed(const body_sync_t *s, const b3ContactData *contact, b3BodyId target) {
+    uint32_t slot = hash_get(s, target);
+    const entry_t *t = slot < BODY_SYNC_BODIES_MAX ? &s->entries[slot] : NULL;
+    bool target_b = B3_ID_EQUALS(b3Shape_GetBody(contact->shapeIdB), target);
+    float fastest = 0.0f;
+    for (int m = 0; m < contact->manifoldCount; m++) {
+        b3Vec3 n = contact->manifolds[m].normal;
+        for (int p = 0; p < contact->manifolds[m].pointCount; p++) {
+            const b3ManifoldPoint *point = &contact->manifolds[m].points[p];
+            if (point->totalNormalImpulse <= 0.0f) {
+                continue;
+            }
+            /* normalVelocity is n.(vB - vA) at the point, n from A to B. */
+            float own = 0.0f;
+            if (t) {
+                b3Vec3 r = target_b ? point->anchorB : point->anchorA;
+                float v[3] = {t->step_v[0] + t->step_w[1] * r.z - t->step_w[2] * r.y, t->step_v[1] + t->step_w[2] * r.x - t->step_w[0] * r.z,
+                              t->step_v[2] + t->step_w[0] * r.y - t->step_w[1] * r.x};
+                own = n.x * v[0] + n.y * v[1] + n.z * v[2];
+            }
+            float approach = target_b ? own - point->normalVelocity : -(point->normalVelocity + own);
+            fastest = approach > fastest ? approach : fastest;
+        }
+    }
+    return fastest;
+}
+
+/* Whether a contact pushed its bodies apart at any point in the last step. */
+static bool acted(const b3ContactData *contact) {
+    for (int m = 0; m < contact->manifoldCount; m++) {
+        for (int p = 0; p < contact->manifolds[m].pointCount; p++) {
+            if (contact->manifolds[m].points[p].totalNormalImpulse > 0.0f) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 /* Moves the physics pose and lets the render offset keep the drawn pose where it was. */
 static void place(entry_t *e, const float position[3], const float rotation[4]) {
     float p0[3], q0[4];
     pose_now(e->body, p0, q0);
     b3Body_SetTransform(e->body, (b3Vec3){position[0], position[1], position[2]}, quat_of(rotation));
     if (e->shown) {
-        sync_offset_absorb(&e->offset, p0, q0, position, rotation);
+        sync_offset_absorb(&e->offset, p0, q0, position, rotation, e->lost || e->handover ? SYNC_OFFSET_LOST_M : SYNC_OFFSET_SNAP_M);
     }
     e->placed = true;
     e->shown = true;
@@ -416,6 +979,7 @@ static void resume(body_sync_t *s, uint32_t slot, bool was_copy) {
     entry_t *e = &s->entries[slot];
     const sync_received_t *in = &s->receiver.bodies[slot];
     e->copy_mode = false;
+    e->handover = false;
     a->resume = false;
     sync_masks_restore(&e->masks, e->body);
     if (was_copy) {
@@ -423,10 +987,21 @@ static void resume(body_sync_t *s, uint32_t slot, bool was_copy) {
         e->took_pending = a->claim_pending;
         e->took_any = sync_playback_newest(&s->playback, (uint16_t)slot, &e->took_tick);
     }
+    /* Released after the newest state the host took of it, a moving body's last motion never came:
+       a flight its contact ended (the release goes out from that tick's collect, after the step)
+       has its newest state from before the contact. Still ahead of the copy, that state replays
+       the owner's flight into the contact; once the copy has played past it, it has gone on its
+       own motion and met here what it meets, and the state would fly it into that again: it goes
+       on as it moves. */
+    sync_play_t play;
+    sync_playback_sample(&s->playback, (uint16_t)slot, &play);
+    bool unheard_end = a->released && in->has && !in->newest.at_rest && (int32_t)(a->released_tick - in->tick) > 0 && play.known &&
+                       (play.past || play.frozen) && !s->plant_resume_newest;
+    a->released = false;
     if (!in->has && !was_copy && !a->take_motion) {
         return;
     }
-    bool kinematic;
+    bool kinematic, was_simulated = b3Body_GetType(e->body) == b3_dynamicBody;
     uint8_t locks;
     sync_authority_resume_motion(a, in->has && (in->known & SYNC_RARE_MOTION) != 0, in->rare.kinematic, in->rare.locks,
                                  e->bound_type == b3_kinematicBody, locks_bits(e->bound_locks), &kinematic, &locks);
@@ -435,10 +1010,157 @@ static void resume(body_sync_t *s, uint32_t slot, bool was_copy) {
     sync_authority_applied(a, kinematic, locks);
     /* A body already local keeps the velocities it simulated (a throw made since the grant);
        only a copy taking over continues from the state received. */
-    if (in->has && was_copy) {
-        place(e, in->newest.position, in->newest.rotation);
+    bool was_soft = e->soft;
+    e->soft = false;
+    /* A soft copy taken over keeps its own simulation: it is what this player saw, within the
+       dead zone or the pause of its owner. */
+    /* A take by interaction goes on from what this side shows: the newest state received may be
+       older than the copy's pose (a body this side owned and returned, whose new rest pose from
+       the host has not come yet). The host's take-back goes on from its own simulation alike. */
+    bool keep_own = e->keep_own || (was_copy && a->hold == BODY_SYNC_HOLD_UNTIL_REST);
+    e->keep_own = false;
+    /* A copy this side simulated (driven dynamic) within the dead zone of that state keeps its
+       pose, where its neighbours here let it lie: a body returned at rest, whose owner's pose sits
+       a fraction of a millimetre off them, would drop or be pushed out as it is placed, waking the
+       heap. The difference is the layer's, and nobody sees it; the velocities are the owner's. */
+    bool keep_pose = false;
+    keep_own = keep_own || (unheard_end && was_copy && was_simulated);
+    /* Taken back from its copy, a flight goes on without the correction the copy carried: that
+       is the copy catching up its owner, and the host's own simulation would carry it into what
+       the flight strikes next. What it gained since as it coasted (falling, a knock) stays. */
+    if (unheard_end && was_copy && was_simulated && !s->plant_flight_catch_up && !s->plant_copy_catch_up) {
+        b3Vec3 v = b3Body_GetLinearVelocity(e->body);
+        b3Body_SetLinearVelocity(e->body, (b3Vec3){v.x - e->carried_fix[0], v.y - e->carried_fix[1], v.z - e->carried_fix[2]});
+    }
+    memset(e->carried_fix, 0, sizeof(e->carried_fix));
+    if (in->has && was_copy && was_simulated && !keep_own) {
+        float p[3], q[4], turn[3];
+        pose_now(e->body, p, q);
+        sync_turn_between(q, in->newest.rotation, turn);
+        float dx = in->newest.position[0] - p[0], dy = in->newest.position[1] - p[1], dz = in->newest.position[2] - p[2];
+        keep_pose = sqrtf(dx * dx + dy * dy + dz * dz) <= SYNC_SOFT_DEAD_M && sqrtf(turn[0] * turn[0] + turn[1] * turn[1] + turn[2] * turn[2]) <= SYNC_SOFT_DEAD_RAD;
+    }
+    if (in->has && was_copy && !was_soft && !keep_own) {
+        if (!keep_pose) {
+            place(e, in->newest.position, in->newest.rotation);
+        }
         b3Body_SetLinearVelocity(e->body, (b3Vec3){in->velocity[0], in->velocity[1], in->velocity[2]});
         b3Body_SetAngularVelocity(e->body, (b3Vec3){in->angular[0], in->angular[1], in->angular[2]});
+    }
+}
+
+/* Whether a soft copy touches a body this side simulates (its own character, its thrown body). */
+/* Whether a body this side simulates and that moves faster than a lean touches it. */
+static bool touches_local(const body_sync_t *s, b3BodyId body) {
+    b3ContactData contacts[16];
+    int n = b3Body_GetContactData(body, contacts, 16);
+    for (int i = 0; i < n; i++) {
+        bool touching = false;
+        for (int m = 0; m < contacts[i].manifoldCount && !touching; m++) {
+            touching = contacts[i].manifolds[m].pointCount > 0;
+        }
+        if (!touching || !b3Shape_IsValid(contacts[i].shapeIdA) || !b3Shape_IsValid(contacts[i].shapeIdB)) {
+            continue;
+        }
+        b3BodyId a = b3Shape_GetBody(contacts[i].shapeIdA), b = b3Shape_GetBody(contacts[i].shapeIdB);
+        b3BodyId toucher = B3_ID_EQUALS(a, body) ? b : a;
+        uint32_t other = hash_get(s, toucher);
+        b3Vec3 v = b3Body_GetLinearVelocity(toucher);
+        /* A body of this side's that only leans on it (a character standing still) pauses nothing:
+           the pull would wait for ever. */
+        if (other < BODY_SYNC_BODIES_MAX && sync_authority_local(&s->authority, &s->authority.bodies[other]) &&
+            v.x * v.x + v.y * v.y + v.z * v.z > SYNC_SOFT_TOUCH_SPEED * SYNC_SOFT_TOUCH_SPEED) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* The second layer's pause: the host's answer to this side's touch reaches its playback one
+   round trip plus the playback delay later (2 ticks of margin for the host's step and the
+   acknowledgement's wait), bounded by the layer's floor and cap. */
+static uint16_t soft_pause(const body_sync_t *s) {
+    return sync_soft_pause(sync_sender_round_trip(&s->sender, BODY_SYNC_SEAT_HOST), s->playback.timelines[BODY_SYNC_SEAT_HOST].delay);
+}
+
+/* A soft copy this tick: the part decides (sync_soft.h), the shell performs. */
+static void drive_soft(body_sync_t *s, uint32_t slot, const float p[3], const float q[4], const sync_play_t *play) {
+    entry_t *e = &s->entries[slot];
+    sync_soft_in_t in;
+    memset(&in, 0, sizeof(in));
+    memcpy(in.position, p, sizeof(in.position));
+    memcpy(in.rotation, q, sizeof(in.rotation));
+    b3Vec3 v = b3Body_GetLinearVelocity(e->body), w = b3Body_GetAngularVelocity(e->body);
+    in.velocity[0] = v.x;
+    in.velocity[1] = v.y;
+    in.velocity[2] = v.z;
+    in.angular[0] = w.x;
+    in.angular[1] = w.y;
+    in.angular[2] = w.z;
+    in.asleep = !b3Body_IsAwake(e->body);
+    /* A push pauses the pull as a moving touch does: a slow one stops its pusher in the step. */
+    in.touches_local = e->pushed || (!in.asleep && touches_local(s, e->body));
+    in.max_speed = s->config.max_speed;
+    in.max_spin = s->config.max_spin;
+    in.pause_ticks = soft_pause(s);
+    in.owner_rests = e->owner_rests;
+    sync_soft_out_t out;
+    sync_soft_decide(&e->soft_state, &in, e->soft_hit, play, &out);
+    e->soft_hit = false;
+    e->soft_paused = out.paused;
+    switch (out.action) {
+    case SYNC_SOFT_NONE:
+        break;
+    case SYNC_SOFT_PLACE:
+        place(e, play->position, play->rotation);
+        /* fall through: the owner's velocities go with the placement */
+    case SYNC_SOFT_VELOCITY:
+        b3Body_SetLinearVelocity(e->body, (b3Vec3){out.velocity[0], out.velocity[1], out.velocity[2]});
+        b3Body_SetAngularVelocity(e->body, (b3Vec3){out.angular[0], out.angular[1], out.angular[2]});
+        break;
+    }
+}
+
+typedef struct own_near {
+    const body_sync_t *s;
+    b3BodyId self;
+    bool found;
+} own_near_t;
+
+static bool find_own(b3ShapeId shape, void *context) {
+    own_near_t *n = context;
+    b3BodyId body = b3Shape_GetBody(shape);
+    if (B3_ID_EQUALS(body, n->self) || b3Body_GetType(body) != b3_dynamicBody) {
+        return true;
+    }
+    uint32_t slot = hash_get(n->s, body);
+    n->found = slot >= BODY_SYNC_BODIES_MAX || sync_authority_local(&n->s->authority, &n->s->authority.bodies[slot]);
+    return !n->found;
+}
+
+/* Whether a dynamic body this side simulates (bound or not) lies within `reach` of the copy's
+   bounds: what its step may strike. */
+static bool meets_own_body(const body_sync_t *s, b3BodyId copy, float reach) {
+    b3AABB box = b3Body_ComputeAABB(copy);
+    box.lowerBound = (b3Vec3){box.lowerBound.x - reach, box.lowerBound.y - reach, box.lowerBound.z - reach};
+    box.upperBound = (b3Vec3){box.upperBound.x + reach, box.upperBound.y + reach, box.upperBound.z + reach};
+    own_near_t n = {.s = s, .self = copy};
+    b3World_OverlapAABB(s->config.world, box, b3DefaultQueryFilter(), find_own, &n);
+    return n.found;
+}
+
+/* Near a body this side simulates, a guest's flight driven never moves faster than its owner as
+   played, and coasting carries no correction (drive_copy): the correction only steers it onto the
+   owner's path, and speed past the owner's (playback catching up its clock, the path rejoined
+   after lost states) would strike harder than the owner did. A speed, not a direction: the copy
+   brings no more energy than the owner's body, whatever the contact's normal. Away from those
+   bodies it catches up freely. */
+static void cap_flight(const body_sync_t *s, b3BodyId copy, float owner, float v[3]) {
+    float speed = sqrtf(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+    if (speed > owner && !s->plant_flight_catch_up && !s->plant_copy_catch_up && meets_own_body(s, copy, speed * s->dt)) {
+        for (int i = 0; i < 3; i++) {
+            v[i] *= owner / speed;
+        }
     }
 }
 
@@ -447,31 +1169,144 @@ static void drive_copy(body_sync_t *s, uint32_t slot) {
     sync_authority_body_t *a = &s->authority.bodies[slot];
     entry_t *e = &s->entries[slot];
     const sync_received_t *in = &s->receiver.bodies[slot];
-    bool dynamic = sync_authority_holds_dynamic(&s->authority, a, in->has && (in->known & SYNC_RARE_MOTION) && in->rare.kinematic);
+    /* A body back from this side: what its owner sent before the take is stale once the take was
+       confirmed (entry_t.took), and is dropped before anything here reads the playback. */
+    if (!e->copy_mode && e->took && e->took_any && !e->took_pending) {
+        sync_playback_forget_until(&s->playback, (uint16_t)slot, e->took_tick);
+    }
+    sync_play_t play;
+    sync_playback_sample(&s->playback, (uint16_t)slot, &play);
+    if (s->plant_copy_catch_up && is_host(s) && play.known && in->has && a->seat != BODY_SYNC_SEAT_HOST &&
+        (a->has_in ? a->in_hold : a->hold) == BODY_SYNC_HOLD_UNTIL_SETTLED) {
+        memcpy(play.position, in->newest.position, sizeof(play.position));
+        memcpy(play.velocity, in->velocity, sizeof(play.velocity));
+    }
+    /* A body its owner moves fast is in flight there (an owner's own throw has no hold to say
+       so): it is driven along the owner's path, and soft again once it has slowed. */
+    float owner_speed = sqrtf(play.velocity[0] * play.velocity[0] + play.velocity[1] * play.velocity[1] + play.velocity[2] * play.velocity[2]);
+    e->owner_flying = play.known && (e->owner_flying ? owner_speed >= SYNC_SOFT_LAND_SPEED : owner_speed >= SYNC_SOFT_FLIGHT_SPEED);
+    e->owner_speed = play.known ? owner_speed : 0.0f;
+    bool owner_rests = sync_soft_owner_rests(&e->owner_still, &play);
+    /* A body this side returned at rest has no state of the host's yet (what was played before
+       the take is stale and dropped): the host holds the very pose it shows, so it rests there. */
+    if (play.known) {
+        e->returned_at_rest = false;
+    } else if (e->returned_at_rest) {
+        float p[3], q[4];
+        pose_now(e->body, p, q);
+        sync_soft_still_at(&e->owner_still, p, q);
+        owner_rests = true;
+    }
+    e->owner_rests = owner_rests;
+    float home_p[3], home_q[4], home_e[3], home_r[3];
+    pose_now(e->body, home_p, home_q);
+    for (int i = 0; i < 3; i++) {
+        home_e[i] = play.position[i] - home_p[i];
+    }
+    sync_turn_between(home_q, play.rotation, home_r);
+    /* A soft copy joining the rest hold inside the dead zone is set on the pose exactly, a move
+       too small for the offset to carry; one further off is placed, the offset taking it. */
+    bool home = sqrtf(home_e[0] * home_e[0] + home_e[1] * home_e[1] + home_e[2] * home_e[2]) <= SYNC_SOFT_DEAD_M &&
+                sqrtf(home_r[0] * home_r[0] + home_r[1] * home_r[1] + home_r[2] * home_r[2]) <= SYNC_SOFT_DEAD_RAD;
+    bool rest_hold = e->light && sync_soft_rest_hold(owner_rests, &e->soft_state, e->soft, e->marked == s->now + 1u);
+    /* In flight a copy stays soft while a body this side simulates presses it or is about to
+       meet it: the owner may move it that fast only because that body's copy there pushes it,
+       and placed kinematic on the owner's older path it would land inside that body and fling
+       it. Marks from copies (its own flight among them) do not count, or no flight is driven. */
+    /* Another seat's throw, held until it settles, is driven on its owner's path at any speed,
+       with the character bits: it strikes this side's characters as the flight rule says, soft
+       only near this side's agents, where a kinematic body would fling them. */
+    uint8_t hold_in = a->has_in ? a->in_hold : a->hold;
+    bool settling = hold_in == BODY_SYNC_HOLD_UNTIL_SETTLED;
+    bool flight_driven = (e->owner_flying || settling) && e->marked_own != s->now + 1u && !e->leaned;
+    /* A driven copy never goes where this side's agent is: placed or swept onto a pose inside one
+       it would fling it. It stays soft that step; the contact parts them, and it is driven again
+       once its pose is clear. */
+    bool driven = flight_driven || rest_hold;
+    bool lands = e->light && driven && play.known && lands_in_agent(s, e->body, play.position, play.rotation);
+    sync_hold_kind_t kind = sync_authority_hold_kind(&s->authority, a, in->has && (in->known & SYNC_RARE_MOTION) && in->rare.kinematic,
+                                                     e->light && (!driven || lands));
+    bool dynamic = kind != SYNC_HOLD_DRIVEN, soft = kind == SYNC_HOLD_SOFT;
+    e->rest_held = rest_hold && kind == SYNC_HOLD_DRIVEN;
+    /* A layer copy keeps the character bits, soft, in the rest hold or in flight (a throw held
+       until settled among them): this side's own character pushes it, meets it at rest or is
+       struck by it; any other driven LIGHT copy (the layer off, or held) lets the character
+       through. */
+    /* On the host a guest's body owned by interaction keeps them too: the host's character meets
+       it, and that touch is how the host's agents come first. So does a guest's throw the host
+       holds dynamic: its flight strikes the host's character as it strikes the thrower's copy. */
+    bool owned_there = is_host(s) && e->light && a->seat != BODY_SYNC_SEAT_HOST &&
+                       ((s->authority.mode == SYNC_POLICY_INTERACTION && hold_in == BODY_SYNC_HOLD_UNTIL_REST) ||
+                        (hold_in == BODY_SYNC_HOLD_UNTIL_SETTLED && kind == SYNC_HOLD_CORRECTED));
+    bool bits = soft || owned_there ||
+                (e->light && sync_authority_hold_kind(&s->authority, a, in->has && (in->known & SYNC_RARE_MOTION) && in->rare.kinematic, true) ==
+                                 SYNC_HOLD_SOFT);
+    e->layer = bits;
+    if (bits) {
+        sync_masks_restore(&e->masks, e->body);
+    } else if (e->body_class == BODY_SYNC_CLASS_LIGHT && e->copy_mode) {
+        sync_masks_clear(&e->masks, e->body, s->config.character_category);
+    }
+    /* A take that turns back into a copy while its claim still waited lost to the owner: what
+       this side simulated since is the loser's picture, and the owner's is the playback pose. It
+       is corrected at once, as a copy that strays (sync_soft_enter); a pause would let the loser's
+       picture run on a round trip more. A touch of this side's pauses it as any copy's. Its
+       placement keeps the drawn pose however far the pictures parted (SYNC_OFFSET_LOST_M). */
+    bool lost = !e->copy_mode && e->took && e->took_pending;
+    e->lost = lost;
+    if (lost) {
+        float d[3];
+        for (int i = 0; i < 3; i++) {
+            d[i] = play.known ? home_p[i] + e->offset.position[i] - play.position[i] : 0.0f;
+        }
+        e->lost_count++;
+        e->lost_hand_back = sqrtf(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+        e->lost_glide = true;
+    }
+    if (soft && (!e->soft || !e->copy_mode)) {
+        sync_soft_enter(&e->soft_state, !e->copy_mode && !lost, soft_pause(s));
+        e->soft_hit = false;
+    }
+    bool from_local = !e->copy_mode;
+    /* A driven copy's velocity is its drive's sweep to the next pose (a whole step of the copy grid
+       in one tick, in the rest hold): turned soft, it starts from its owner's motion instead. */
+    bool soft_from_driven = soft && e->copy_mode && b3Body_GetType(e->body) == b3_kinematicBody;
     if (!e->copy_mode || (b3Body_GetType(e->body) == b3_dynamicBody) != dynamic) {
         /* A copy starts with a placement at its playback pose; a body that was local has a
            drawn pose, so that placement goes to the render offset instead of jumping. */
         if (!e->copy_mode) {
             e->placed = false;
-            if (e->took && e->took_any && !e->took_pending) {
-                sync_playback_forget_until(&s->playback, (uint16_t)slot, e->took_tick);
-            }
             e->took = false;
-            if (e->body_class == BODY_SYNC_CLASS_LIGHT) {
+            if (e->body_class == BODY_SYNC_CLASS_LIGHT && !bits) {
                 sync_masks_clear(&e->masks, e->body, s->config.character_category);
             }
         }
         e->copy_mode = true;
         b3Body_SetType(e->body, dynamic ? b3_dynamicBody : b3_kinematicBody);
     }
+    if (soft_from_driven) {
+        b3Vec3 v = play.known ? (b3Vec3){play.velocity[0], play.velocity[1], play.velocity[2]} : b3Vec3_zero;
+        b3Vec3 w = play.known ? (b3Vec3){play.angular[0], play.angular[1], play.angular[2]} : b3Vec3_zero;
+        b3Body_SetLinearVelocity(e->body, v);
+        b3Body_SetAngularVelocity(e->body, w);
+    }
+    if (soft && from_local) {
+        e->placed = true; /* it goes on from its own simulation: no placement */
+    } else if (!soft && e->soft && rest_hold && home) {
+        b3Body_SetTransform(e->body, (b3Vec3){play.position[0], play.position[1], play.position[2]}, quat_of(play.rotation));
+    } else if (!soft && e->soft) {
+        /* Soft to driven is a placement, the offset taking it: a kinematic sweep from where this
+           side's prediction left it would bat the soft copies in its path at the sweep's speed. */
+        e->placed = false;
+    }
+    e->soft = soft;
+    e->soft_paused = false; /* drive_soft says otherwise */
     /* A kinematic copy turns to its owner's rotation, which a lock would stop; a dynamic one
        keeps its owner's locks as they change (a character stays upright). */
     b3MotionLocks locks = dynamic && (in->known & SYNC_RARE_MOTION) ? locks_of(in->rare.locks) : (b3MotionLocks){0};
     if (locks_bits(b3Body_GetMotionLocks(e->body)) != locks_bits(locks)) {
         b3Body_SetMotionLocks(e->body, locks);
     }
-    sync_play_t play;
-    sync_playback_sample(&s->playback, (uint16_t)slot, &play);
     if (!play.known) {
         if (b3Body_IsAwake(e->body) && !dynamic) {
             stop(e->body); /* nothing to play yet: stay put */
@@ -480,14 +1315,55 @@ static void drive_copy(body_sync_t *s, uint32_t slot) {
     }
     float p[3], q[4];
     pose_now(e->body, p, q);
+    if (soft) {
+        drive_soft(s, slot, p, q, &play);
+        return;
+    }
+    uint32_t newest = 0;
+    bool at_newest = play.waiting && sync_playback_newest(&s->playback, (uint16_t)slot, &newest);
+    bool stalled = at_newest && e->waited && e->waited_at == newest;
+    e->waited = at_newest;
+    e->waited_at = newest;
+    /* A flight is sent at the full rate, so playback with no later snapshot of it to play toward
+       for a second tick (a delay of one meets each state as it comes), past it, or frozen, means
+       its owner's next states are late or not coming (lost, a cut, the contact that ended it with
+       its release not yet here): it goes on its own motion, meeting what is in its way once, as
+       the owner's body did. Driven, the newest snapshot's velocity set again every tick would push
+       on through whatever it met, and frozen, the pull back to the pose before the contact would.
+       A slower body's states come less often, and between them it is fed forward; a handover holds
+       its copy by its own rule. */
+    if (dynamic && settling && (stalled || play.past || (play.frozen && !s->plant_frozen_drive)) && e->placed && !e->handover &&
+        !s->plant_waiting_drive) {
+        /* Coasting near a body this side simulates, it sheds the correction it carries, once:
+           what is left is its owner's motion as last played, carried on as the owner's would be. */
+        b3Vec3 now_v = b3Body_GetLinearVelocity(e->body);
+        if (!s->plant_flight_catch_up && !s->plant_copy_catch_up && meets_own_body(s, e->body, b3Length(now_v) * s->dt)) {
+            b3Body_SetLinearVelocity(e->body, (b3Vec3){now_v.x - e->carried_fix[0], now_v.y - e->carried_fix[1], now_v.z - e->carried_fix[2]});
+            memset(e->carried_fix, 0, sizeof(e->carried_fix));
+        }
+        return;
+    }
     /* A copy that would need more than the seam's speeds to reach its pose in one step is placed
        there, the render offset taking the jump; a dynamic one also when its error passes the
        offset's reach, since its correction is bounded far below max_speed. */
     float err[3] = {play.position[0] - p[0], play.position[1] - p[1], play.position[2] - p[2]};
     bool far = sqrtf(err[0] * err[0] + err[1] * err[1] + err[2] * err[2]) > SYNC_OFFSET_SNAP_M;
     bool reachable = !(dynamic && far) && sync_drive_reachable(p, q, &play, s->dt, s->config.max_speed, s->config.max_spin);
+    /* A copy in the rest hold within a step of the copy grid of its pose lies where its owner rests:
+       a body returned at rest meets the host's first state of it up to a step off, and a first
+       placement would move it by that step out of the rest it was handed back in. */
+    bool held_within_step = rest_hold && !dynamic && sqrtf(home_e[0] * home_e[0] + home_e[1] * home_e[1] + home_e[2] * home_e[2]) <= SYNC_SOFT_HOLD_M &&
+                            sqrtf(home_r[0] * home_r[0] + home_r[1] * home_r[1] + home_r[2] * home_r[2]) <= SYNC_SOFT_HOLD_RAD;
+    e->placed = e->placed || held_within_step;
+    /* The handover ends at the new owner's first pose: her snapshots replaced the old owner's. */
+    bool handed = e->handover && s->playback.bodies[slot].timeline == a->seat && !s->playback.bodies[slot].ended;
+    if (handed) {
+        e->placed = false;
+    }
     if (play.jumped || !e->placed || !reachable) {
         place(e, play.position, play.rotation);
+        e->handover = e->handover && !handed;
+        memset(e->carried_fix, 0, sizeof(e->carried_fix));
         if (dynamic) {
             b3Body_SetLinearVelocity(e->body, (b3Vec3){play.velocity[0], play.velocity[1], play.velocity[2]});
             b3Body_SetAngularVelocity(e->body, (b3Vec3){play.angular[0], play.angular[1], play.angular[2]});
@@ -497,8 +1373,21 @@ static void drive_copy(body_sync_t *s, uint32_t slot) {
         return;
     }
     if (dynamic) {
+        /* A light corrected copy whose owner rests within a step of the copy grid of where it lies here
+           stays as this world settled it: the owner's exact rest pose replacing its rounded one
+           would be a correction of millimetres at a step's speed into the bodies it lies on. */
+        if (kind == SYNC_HOLD_CORRECTED && e->light && owner_rests && sqrtf(home_e[0] * home_e[0] + home_e[1] * home_e[1] + home_e[2] * home_e[2]) <= SYNC_SOFT_HOLD_M &&
+            sqrtf(home_r[0] * home_r[0] + home_r[1] * home_r[1] + home_r[2] * home_r[2]) <= SYNC_SOFT_HOLD_RAD) {
+            return;
+        }
         float v[3], w[3];
         sync_drive_dynamic(p, q, &play, s->dt, v, w);
+        if (settling) {
+            cap_flight(s, e->body, sqrtf(play.velocity[0] * play.velocity[0] + play.velocity[1] * play.velocity[1] + play.velocity[2] * play.velocity[2]), v);
+        }
+        for (int i = 0; i < 3; i++) {
+            e->carried_fix[i] = settling ? v[i] - play.velocity[i] : 0.0f;
+        }
         b3Body_SetLinearVelocity(e->body, (b3Vec3){v[0], v[1], v[2]});
         b3Body_SetAngularVelocity(e->body, (b3Vec3){w[0], w[1], w[2]});
         /* Locked axes ignore a spin: their part of the owner's rotation is set, as the owner sets
@@ -517,7 +1406,10 @@ static void drive_copy(body_sync_t *s, uint32_t slot) {
         if (b3Body_IsAwake(e->body)) {
             stop(e->body);
         }
-    } else if (play.frozen) {
+    } else if (play.frozen || (rest_hold && sqrtf(home_e[0] * home_e[0] + home_e[1] * home_e[1] + home_e[2] * home_e[2]) <= SYNC_SOFT_HOLD_M &&
+                                sqrtf(home_r[0] * home_r[0] + home_r[1] * home_r[1] + home_r[2] * home_r[2]) <= SYNC_SOFT_HOLD_RAD)) {
+        /* A still, awake owner's pose is rounded to the copy grid and wanders by a step of it: a
+           copy in the rest hold stays where it is until the owner is a step away. */
         if (b3Body_IsAwake(e->body)) {
             stop(e->body);
         }
@@ -526,9 +1418,187 @@ static void drive_copy(body_sync_t *s, uint32_t slot) {
     }
 }
 
+static void mark(marking_t *m, b3BodyId body) {
+    uint32_t slot = hash_get(m->s, body);
+    entry_t *e = slot < BODY_SYNC_BODIES_MAX ? &m->s->entries[slot] : NULL;
+    if (e && e->light && m->own) {
+        e->marked_own = m->s->now + 1u;
+    }
+    if (e && e->light && e->marked != m->s->now + 1u) {
+        e->marked = m->s->now + 1u;
+        m->queue[m->count++] = (uint16_t)slot;
+    }
+}
+
+static bool mark_near(b3ShapeId shape, void *context) {
+    mark(context, b3Shape_GetBody(shape));
+    return true;
+}
+
+/* Whether a body of this side's moves only as a copy in the rest hold under it drags it: that copy
+   closes its owner's creep a step of the copy grid in one tick (0.2 m/s and 1.2 rad/s a step),
+   which drags what lies on it past a lean's speed, and taken for this side's motion the drag
+   would turn the held copy soft under it. A body dragged or shoved by a contact moves no faster
+   than the surface that moves it (it slips behind it), so one no faster than that copy's fastest
+   point is carried: the copy's centre speed plus its spin times its own half-diagonal, whatever
+   the size of the body it moves. This side's own motion past it still marks. A side contact is
+   counted too: a step that shoves a neighbour also spins it, and read along the normal alone
+   that shove would turn a held heap soft around a body that only leans on it. */
+static bool carried_by_hold_step(const body_sync_t *s, b3BodyId body, b3Vec3 v, b3Vec3 w, float extent) {
+    b3ContactData contacts[16];
+    int n = b3Body_GetContactData(body, contacts, 16);
+    for (int i = 0; i < n; i++) {
+        if (!b3Shape_IsValid(contacts[i].shapeIdA) || !b3Shape_IsValid(contacts[i].shapeIdB)) {
+            continue;
+        }
+        b3BodyId a = b3Shape_GetBody(contacts[i].shapeIdA), b = b3Shape_GetBody(contacts[i].shapeIdB);
+        b3BodyId under = B3_ID_EQUALS(a, body) ? b : a;
+        uint32_t slot = hash_get(s, under);
+        if (slot >= BODY_SYNC_BODIES_MAX || !s->entries[slot].rest_held || !s->entries[slot].copy_mode || b3Body_GetType(under) != b3_kinematicBody) {
+            continue;
+        }
+        b3AABB box = b3Body_ComputeAABB(under);
+        b3Vec3 half = {0.5f * (box.upperBound.x - box.lowerBound.x), 0.5f * (box.upperBound.y - box.lowerBound.y), 0.5f * (box.upperBound.z - box.lowerBound.z)};
+        float drag = b3Length(b3Body_GetLinearVelocity(under)) + b3Length(b3Body_GetAngularVelocity(under)) * sqrtf(half.x * half.x + half.y * half.y + half.z * half.z);
+        if (drag > 0.0f && b3Length(v) + b3Length(w) * extent <= drag) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* Every moving body (this side's own, soft copies set going, a copy in flight) marks the light
+   copies within reach of its next steps, and through them every light copy they touch: those
+   leave the rest hold before the contact, so a pile meets what comes at it as one simulated
+   whole, never with a kinematic neighbour as a wall. */
+static void mark_reached(body_sync_t *s) {
+    if (s->config.light_mass_max <= 0.0f || sync_authority_is_host(&s->authority)) {
+        return;
+    }
+    marking_t *m = &s->marking;
+    m->s = s;
+    m->count = 0;
+    m->whole = false;
+    m->own = false;
+    for (uint32_t slot = 0; slot < BODY_SYNC_BODIES_MAX; slot++) {
+        entry_t *e = &s->entries[slot];
+        if (!s->authority.bodies[slot].bound || !b3Body_IsValid(e->body) || !b3Body_IsAwake(e->body) || b3Body_GetType(e->body) == b3_staticBody) {
+            continue;
+        }
+        /* A soft copy marks only while something of this side's set it going (its pause): moved
+           by the pull it is the correction, and marking from it would keep a whole pile soft and
+           pulling, never resting, around a heroine who stands in it. */
+        if (e->soft && e->copy_mode && e->soft_state.pause == 0) {
+            continue;
+        }
+        /* A copy in the rest hold moves only on its owner's still or creeping pose, closing a step
+           of the copy grid in one tick (0.2 m/s): no motion of this side's, and taken for one it
+           would turn the resting heap soft around it. */
+        if (e->rest_held && e->copy_mode) {
+            continue;
+        }
+        b3Vec3 v = b3Body_GetLinearVelocity(e->body), w = b3Body_GetAngularVelocity(e->body);
+        b3AABB box = b3Body_ComputeAABB(e->body);
+        b3Vec3 half = {0.5f * (box.upperBound.x - box.lowerBound.x), 0.5f * (box.upperBound.y - box.lowerBound.y), 0.5f * (box.upperBound.z - box.lowerBound.z)};
+        float reach, extent = sqrtf(half.x * half.x + half.y * half.y + half.z * half.z);
+        if (!sync_soft_mover((const float[3]){v.x, v.y, v.z}, (const float[3]){w.x, w.y, w.z}, extent, s->dt, &reach)) {
+            continue;
+        }
+        bool own = sync_authority_local(&s->authority, &s->authority.bodies[slot]);
+        if (own && carried_by_hold_step(s, e->body, v, w, extent)) {
+            continue;
+        }
+        m->whole = m->whole || !(e->soft && e->copy_mode);
+        m->own = own;
+        box.lowerBound = (b3Vec3){box.lowerBound.x - reach, box.lowerBound.y - reach, box.lowerBound.z - reach};
+        box.upperBound = (b3Vec3){box.upperBound.x + reach, box.upperBound.y + reach, box.upperBound.z + reach};
+        b3World_OverlapAABB(s->config.world, box, b3DefaultQueryFilter(), mark_near, m);
+    }
+    m->own = false;
+    for (uint32_t k = 0; k < m->count; k++) {
+        b3ContactData contacts[16];
+        b3BodyId body = s->entries[m->queue[k]].body;
+        int n = b3Body_GetContactData(body, contacts, 16);
+        for (int i = 0; i < n; i++) {
+            if (b3Shape_IsValid(contacts[i].shapeIdA) && b3Shape_IsValid(contacts[i].shapeIdB)) {
+                mark(m, b3Shape_GetBody(contacts[i].shapeIdA));
+                mark(m, b3Shape_GetBody(contacts[i].shapeIdB));
+            }
+        }
+        /* Copies held kinematic share no contacts: their neighbours are found by touch distance,
+           so the whole resting heap turns soft at once, as the host's island wakes whole. Only a
+           walk a real mover started does so: a soft copy moves by the pull or by settling as it
+           leaves the hold, and a heap it woke whole would settle the same way again, never at
+           rest. */
+        if (m->whole && b3Body_GetType(body) == b3_kinematicBody) {
+            b3AABB box = b3Body_ComputeAABB(body);
+            box.lowerBound = (b3Vec3){box.lowerBound.x - SYNC_SOFT_TOUCH_M, box.lowerBound.y - SYNC_SOFT_TOUCH_M, box.lowerBound.z - SYNC_SOFT_TOUCH_M};
+            box.upperBound = (b3Vec3){box.upperBound.x + SYNC_SOFT_TOUCH_M, box.upperBound.y + SYNC_SOFT_TOUCH_M, box.upperBound.z + SYNC_SOFT_TOUCH_M};
+            b3World_OverlapAABB(s->config.world, box, b3DefaultQueryFilter(), mark_near, m);
+        }
+    }
+}
+
+/* A throw leaves its thrower's hand inside her reach: on another side her copy and the throw's play
+   from different states, and one would strike the other. Each side keeps a throw (released in
+   flight, SYNC_SOFT_FLIGHT_SPEED or faster) off its last carrier until it has travelled her radius
+   and its own half-diagonal, each with Box3D's speculative distance, at its release speed: at the
+   flight's 4 m/s floor about 0.61 m for a 0.3 m capsule and a 0.3 m box, 10 ticks; a drop is met
+   as any body. */
+static void release_filters(body_sync_t *s) {
+    for (uint32_t slot = 0; slot < BODY_SYNC_BODIES_MAX; slot++) {
+        const sync_authority_body_t *a = &s->authority.bodies[slot];
+        entry_t *e = &s->entries[slot];
+        if (b3Joint_IsValid(e->release_filter) && (!a->bound || s->now >= e->release_end)) {
+            b3DestroyJoint(e->release_filter, false);
+            e->release_filter = b3_nullJointId;
+        }
+        if (!a->bound || !b3Body_IsValid(e->body)) {
+            e->carrier = BODY_SYNC_ID_NONE;
+            continue;
+        }
+        bool local = sync_authority_local(&s->authority, a);
+        body_sync_id_t holder = local || !a->has_in ? a->holder : a->in_holder;
+        uint8_t hold = local || !a->has_in ? a->hold : a->in_hold;
+        if (holder != BODY_SYNC_ID_NONE) {
+            e->carrier = holder;
+            continue;
+        }
+        body_sync_id_t carrier = e->carrier;
+        if (hold == BODY_SYNC_HOLD_UNTIL_RELEASE) {
+            continue; /* let go, its throw's hold not yet heard */
+        }
+        e->carrier = BODY_SYNC_ID_NONE;
+        const sync_authority_body_t *c = sync_authority_body_const(&s->authority, carrier);
+        if (hold != BODY_SYNC_HOLD_UNTIL_SETTLED || !c || b3Joint_IsValid(e->release_filter)) {
+            continue;
+        }
+        b3BodyId her = s->entries[body_sync_id_slot(carrier)].body;
+        b3Vec3 v = b3Body_GetLinearVelocity(e->body);
+        /* A copy's own velocity is its drive's catching up; the throw's is its owner's. */
+        float speed = local ? sqrtf(v.x * v.x + v.y * v.y + v.z * v.z) : e->owner_speed;
+        if (!b3Body_IsValid(her) || !(speed >= SYNC_SOFT_FLIGHT_SPEED)) {
+            continue;
+        }
+        /* Box3D's shape bounds carry its speculative distance on every side. */
+        b3AABB hb = b3Body_ComputeAABB(her), bb = b3Body_ComputeAABB(e->body);
+        float radius = 0.5f * fmaxf(hb.upperBound.x - hb.lowerBound.x, hb.upperBound.z - hb.lowerBound.z);
+        b3Vec3 d = {bb.upperBound.x - bb.lowerBound.x, bb.upperBound.y - bb.lowerBound.y, bb.upperBound.z - bb.lowerBound.z};
+        float clear = radius + 0.5f * sqrtf(d.x * d.x + d.y * d.y + d.z * d.z);
+        b3FilterJointDef def = b3DefaultFilterJointDef();
+        def.base.bodyIdA = e->body;
+        def.base.bodyIdB = her;
+        e->release_filter = b3CreateFilterJoint(s->config.world, &def);
+        e->release_end = s->now + (uint32_t)ceilf(clear / (speed * s->dt));
+    }
+}
+
 void body_sync_apply(body_sync_t *s, uint32_t tick) {
     s->now = tick;
+    s->authority.now = tick;
     sync_playback_advance(&s->playback, tick);
+    mark_reached(s);
+    gather_agents(s);
     for (uint32_t slot = 0; slot < BODY_SYNC_BODIES_MAX; slot++) {
         sync_authority_body_t *a = &s->authority.bodies[slot];
         entry_t *e = &s->entries[slot];
@@ -536,22 +1606,65 @@ void body_sync_apply(body_sync_t *s, uint32_t tick) {
             continue;
         }
         sync_offset_decay(&e->offset);
+        /* The glide is over once what is left of the hand-back is inside the layer's dead zone. */
+        const float *o = e->offset.position;
+        if (e->lost_glide && (sync_authority_local(&s->authority, a) || sqrtf(o[0] * o[0] + o[1] * o[1] + o[2] * o[2]) < SYNC_SOFT_DEAD_M)) {
+            e->lost_glide = false;
+        }
         if (sync_authority_local(&s->authority, a)) {
             if (e->copy_mode || a->resume) {
                 resume(s, slot, e->copy_mode);
             }
             e->shown = true; /* its pose is drawn from here on */
             if (e->took && e->took_pending && !a->claim_pending) {
-                e->took_pending = false; /* the claim was granted while it simulated */
+                /* The claim was granted while it simulated: what the owner sent until now, its
+                   state before the grant, is stale from here on. */
+                e->took_pending = false;
+                e->took_any = sync_playback_newest(&s->playback, (uint16_t)slot, &e->took_tick) || e->took_any;
             }
             continue;
         }
         drive_copy(s, slot);
+        e->lost = false;
+        e->shown = true; /* drawn from its first apply on, a soft start too: later moves go to the offset */
+    }
+    release_filters(s);
+    for (uint32_t slot = 0; slot < BODY_SYNC_BODIES_MAX; slot++) {
+        entry_t *e = &s->entries[slot];
+        if (s->authority.bodies[slot].bound && b3Body_IsValid(e->body)) {
+            b3Vec3 v = b3Body_GetLinearVelocity(e->body), w = b3Body_GetAngularVelocity(e->body);
+            e->step_v[0] = v.x, e->step_v[1] = v.y, e->step_v[2] = v.z;
+            e->step_w[0] = w.x, e->step_w[1] = w.y, e->step_w[2] = w.z;
+        }
     }
 }
 
-/* A begin-touch of `body` with a body that is neither static nor `ignore`. */
-static bool touched_moving(const b3ContactEvents *events, b3BodyId body, b3BodyId ignore) {
+/* Whether this side may take `other` (sync_policy_takes without the agent): a body of its own
+   owned by interaction, or a free light body of the host's. */
+static bool takable_here(const body_sync_t *s, b3BodyId other) {
+    uint32_t slot = hash_get(s, other);
+    if (slot >= BODY_SYNC_BODIES_MAX) {
+        return false;
+    }
+    const sync_authority_body_t *a = &s->authority.bodies[slot];
+    if (!a->bound || !a->takable) {
+        return false;
+    }
+    if (sync_authority_local(&s->authority, a)) {
+        return a->hold == BODY_SYNC_HOLD_UNTIL_REST || (a->seat == BODY_SYNC_SEAT_HOST && a->holder == BODY_SYNC_ID_NONE);
+    }
+    const sync_received_t *in = &s->receiver.bodies[slot];
+    uint8_t hold = a->has_in ? a->in_hold : a->hold;
+    body_sync_id_t holder = a->has_in ? a->in_holder : a->holder;
+    bool kinematic = in->has && (in->known & SYNC_RARE_MOTION) && in->rare.kinematic;
+    return a->seat == BODY_SYNC_SEAT_HOST && hold == BODY_SYNC_HOLD_UNTIL_RELEASE && holder == BODY_SYNC_ID_NONE && !kinematic;
+}
+
+/* A begin-touch of `body` with a body that is neither static nor `ignore`; *untakable when one of
+   them is a body this side may not take. */
+static bool touched_moving(const body_sync_t *s, const b3ContactEvents *events, b3BodyId body, b3BodyId ignore, bool *untakable) {
+    bool any = false;
+    *untakable = false;
     for (int i = 0; i < events->beginCount; i++) {
         b3ShapeId a = events->beginEvents[i].shapeIdA, b = events->beginEvents[i].shapeIdB;
         if (!b3Shape_IsValid(a) || !b3Shape_IsValid(b)) {
@@ -567,10 +1680,11 @@ static bool touched_moving(const b3ContactEvents *events, b3BodyId body, b3BodyI
             continue;
         }
         if (b3Body_GetType(other) != b3_staticBody && !B3_ID_EQUALS(other, ignore)) {
-            return true;
+            any = true;
+            *untakable = *untakable || !takable_here(s, other);
         }
     }
-    return false;
+    return any;
 }
 
 static void holder_fields(sync_rare_t *rare, body_sync_id_t holder) {
@@ -584,6 +1698,32 @@ static void holder_fields(sync_rare_t *rare, body_sync_id_t holder) {
 }
 
 /* A local body as the sender wants it: full precision, every rare group's value. */
+/* Whether a local body rests at this pose. Box3D keeps a body asleep while the game moves it by
+   transform (a carried body: kinematic, set to its hold point every tick, no velocity), so its
+   sleep is rest only while the body stays within the stillness bounds of the pose it fell asleep
+   at; one moved past them is awake, or the sender would stop at its rest pose and the peers
+   would show it left behind. */
+static bool body_rests(const body_sync_t *s, entry_t *e, const float position[3], const float rotation[4]) {
+    if (b3Body_IsAwake(e->body)) {
+        memcpy(e->sleep_at, position, sizeof(e->sleep_at));
+        memcpy(e->sleep_turn, rotation, sizeof(e->sleep_turn));
+        e->sleep_anchored = true;
+        return false;
+    }
+    if (s->plant_transform_sleep) {
+        return true;
+    }
+    float dx = position[0] - e->sleep_at[0], dy = position[1] - e->sleep_at[1], dz = position[2] - e->sleep_at[2];
+    float dot = fabsf(rotation[0] * e->sleep_turn[0] + rotation[1] * e->sleep_turn[1] + rotation[2] * e->sleep_turn[2] + rotation[3] * e->sleep_turn[3]);
+    bool near = e->sleep_anchored && sqrtf(dx * dx + dy * dy + dz * dz) <= SYNC_POLICY_QUIET_M && dot >= cosf(0.5f * SYNC_POLICY_QUIET_RAD);
+    if (!near) {
+        memcpy(e->sleep_at, position, sizeof(e->sleep_at));
+        memcpy(e->sleep_turn, rotation, sizeof(e->sleep_turn));
+        e->sleep_anchored = true;
+    }
+    return near;
+}
+
 static void read_local(body_sync_t *s, uint32_t slot, sync_body_input_t *in) {
     sync_authority_body_t *a = &s->authority.bodies[slot];
     entry_t *e = &s->entries[slot];
@@ -612,8 +1752,11 @@ static void read_local(body_sync_t *s, uint32_t slot, sync_body_input_t *in) {
     holder_fields(&r->rare, a->holder);
     r->rare.data_size = a->data_size;
     memcpy(r->rare.data, a->data, sizeof(r->rare.data));
+    r->rare.number = sync_authority_declared_number(&s->authority, a);
     in->present = true;
-    in->asleep = !b3Body_IsAwake(e->body);
+    /* A quiet body owned by interaction goes out as a rest pose though awake (a pile leaning on a
+       character never sleeps): the pose the host continues from at its release. */
+    in->asleep = body_rests(s, e, r->position, r->rotation) || (!is_host(s) && a->hold == BODY_SYNC_HOLD_UNTIL_REST && e->quiet);
     in->held = a->holder != BODY_SYNC_ID_NONE;
     in->flying = a->hold == BODY_SYNC_HOLD_UNTIL_SETTLED;
     in->character = e->body_class == BODY_SYNC_CLASS_CHARACTER;
@@ -656,8 +1799,346 @@ static void read_relayed(body_sync_t *s, uint32_t slot, uint32_t tick, sync_body
     in->character = s->entries[slot].body_class == BODY_SYNC_CLASS_CHARACTER;
 }
 
+/* An agent of this side's: a body it simulates that its player's action moves (its character,
+   what it carries or threw, what it owns by interaction). */
+static bool agent(const body_sync_t *s, uint32_t slot) {
+    const sync_authority_body_t *a = &s->authority.bodies[slot];
+    if (!sync_authority_local(&s->authority, a)) {
+        return false;
+    }
+    return s->entries[slot].body_class == BODY_SYNC_CLASS_CHARACTER || a->holder != BODY_SYNC_ID_NONE || a->hold == BODY_SYNC_HOLD_UNTIL_SETTLED ||
+           a->hold == BODY_SYNC_HOLD_UNTIL_REST;
+}
+
+/* Host: a body it took back goes on from its own simulation and counts as set going now. */
+static void host_takes_back(body_sync_t *s, uint32_t slot, uint32_t tick) {
+    entry_t *e = &s->entries[slot];
+    /* The reclaim holds the body until rest on the host, so its resume goes on from the host's own
+       simulation of it (resume). */
+    if (sync_authority_reclaim(&s->authority, body_sync_id_make(slot, s->authority.bodies[slot].generation)) == BODY_SYNC_OK) {
+        e->agent_tick = tick;
+        e->still.ticks = 0;
+    }
+}
+
+/* Authority follows interaction (sync_policy.h): every agent's touching contacts, after the step.
+   A guest takes the free light copies its agents set moving; the host marks its own as set going
+   by it, and takes back a guest's body its agent touches. */
+static void interact(body_sync_t *s, uint32_t tick) {
+    if (s->authority.mode != SYNC_POLICY_INTERACTION) {
+        return;
+    }
+    bool host = is_host(s);
+    uint32_t owned = host ? 0u : sync_authority_owned(&s->authority, s->config.seat), taken = 0;
+    for (uint32_t slot = 0; slot < BODY_SYNC_BODIES_MAX; slot++) {
+        entry_t *e = &s->entries[slot];
+        if (!s->authority.bodies[slot].bound || !b3Body_IsValid(e->body) || !b3Body_IsAwake(e->body) || !agent(s, slot)) {
+            continue;
+        }
+        b3Vec3 v = b3Body_GetLinearVelocity(e->body), w = b3Body_GetAngularVelocity(e->body);
+        b3AABB box = b3Body_ComputeAABB(e->body);
+        b3Vec3 half = {0.5f * (box.upperBound.x - box.lowerBound.x), 0.5f * (box.upperBound.y - box.lowerBound.y), 0.5f * (box.upperBound.z - box.lowerBound.z)};
+        float speed = sqrtf(v.x * v.x + v.y * v.y + v.z * v.z) + sqrtf(w.x * w.x + w.y * w.y + w.z * w.z) * sqrtf(half.x * half.x + half.y * half.y + half.z * half.z);
+        /* A push from standstill counts for a character and what it carries, which the game moves
+           after the apply; between bodies in a pile it would count their weight on each other. */
+        const sync_authority_body_t *ab = &s->authority.bodies[slot];
+        bool pusher = e->body_class == BODY_SYNC_CLASS_CHARACTER || ab->holder != BODY_SYNC_ID_NONE;
+        b3ContactData contacts[32];
+        int n = b3Body_GetContactData(e->body, contacts, 32);
+        for (int i = 0; i < n; i++) {
+            if (!b3Shape_IsValid(contacts[i].shapeIdA) || !b3Shape_IsValid(contacts[i].shapeIdB)) {
+                continue;
+            }
+            uint32_t points = 0;
+            for (int m = 0; m < contacts[i].manifoldCount; m++) {
+                points += (uint32_t)contacts[i].manifolds[m].pointCount;
+            }
+            b3BodyId ba = b3Shape_GetBody(contacts[i].shapeIdA), bb = b3Shape_GetBody(contacts[i].shapeIdB);
+            uint32_t other = hash_get(s, B3_ID_EQUALS(ba, e->body) ? bb : ba);
+            if (points == 0 || other >= BODY_SYNC_BODIES_MAX || other == slot) {
+                continue;
+            }
+            sync_authority_body_t *o = &s->authority.bodies[other];
+            entry_t *oe = &s->entries[other];
+            body_sync_id_t oid = body_sync_id_make(other, o->generation);
+            bool pushed = pusher && sync_soft_pushed(approach_speed(s, &contacts[i], s->entries[other].body));
+            /* A body it owns by interaction takes only what rests at its owner: a copy its owner
+               moves was set going by someone else's action, and taking it on would hand a contested
+               heap back and forth between two guests through the host, never letting it rest. */
+            if (!host && !pusher && ab->holder == BODY_SYNC_ID_NONE && ab->hold == BODY_SYNC_HOLD_UNTIL_REST && !sync_authority_local(&s->authority, o) && !oe->owner_rests) {
+                continue;
+            }
+            bool local = sync_authority_local(&s->authority, o);
+            const sync_received_t *in = &s->receiver.bodies[other];
+            sync_policy_take_in_t t = {.mode = s->authority.mode,
+                                       .host = host,
+                                       .light = o->takable,
+                                       .local = local,
+                                       .owner_seat = o->seat,
+                                       .owner_hold = local || !o->has_in ? o->hold : o->in_hold,
+                                       .held = (local || !o->has_in ? o->holder : o->in_holder) != BODY_SYNC_ID_NONE,
+                                       .owner_kinematic = !local && in->has && (in->known & SYNC_RARE_MOTION) && in->rare.kinematic,
+                                       .agent_speed = speed,
+                                       .pushed = pushed,
+                                       .owned = owned,
+                                       .taken = taken,
+                                       .returned_pressed = oe->returned_pressed};
+            if (local && o->hold == BODY_SYNC_HOLD_UNTIL_REST && (speed > SYNC_POLICY_AGENT_SPEED || pushed)) {
+                oe->agent_tick = tick; /* still being set going: its age starts again */
+            }
+            if (host && !local) {
+                sync_policy_reclaim_in_t r = {.mode = s->authority.mode,
+                                              .priority = SYNC_POLICY_PRIORITY,
+                                              .owner_seat = o->seat,
+                                              .owner_hold = o->has_in ? o->in_hold : o->hold,
+                                              .agent_speed = speed,
+                                              .pushed = pushed};
+                if (sync_policy_host_reclaims(&r)) {
+                    host_takes_back(s, other, tick);
+                }
+            } else if (sync_policy_takes(&t)) {
+                if (host) {
+                    sync_authority_host_active(&s->authority, oid, true);
+                    oe->agent_tick = tick;
+                    oe->still.ticks = 0;
+                } else if (sync_authority_take(&s->authority, oid) == BODY_SYNC_OK) {
+                    owned++;
+                    taken++;
+                    oe->agent_tick = tick;
+                    oe->still.ticks = 0;
+                }
+            }
+        }
+    }
+}
+
+/* Host: copies of two guests' bodies owned by interaction that touch (sync_policy_host_takes_contested). */
+static void contest(body_sync_t *s, uint32_t tick) {
+    if (s->authority.mode != SYNC_POLICY_INTERACTION || !is_host(s)) {
+        return;
+    }
+    for (uint32_t slot = 0; slot < BODY_SYNC_BODIES_MAX; slot++) {
+        const sync_authority_body_t *a = &s->authority.bodies[slot];
+        entry_t *e = &s->entries[slot];
+        if (!a->bound || !b3Body_IsValid(e->body) || a->seat == BODY_SYNC_SEAT_HOST) {
+            continue;
+        }
+        b3ContactData contacts[32];
+        int n = b3Body_GetContactData(e->body, contacts, 32);
+        for (int i = 0; i < n && a->seat != BODY_SYNC_SEAT_HOST; i++) {
+            uint32_t points = 0;
+            for (int m = 0; m < contacts[i].manifoldCount; m++) {
+                points += (uint32_t)contacts[i].manifolds[m].pointCount;
+            }
+            if (!b3Shape_IsValid(contacts[i].shapeIdA) || !b3Shape_IsValid(contacts[i].shapeIdB) || points == 0) {
+                continue;
+            }
+            b3BodyId ba = b3Shape_GetBody(contacts[i].shapeIdA), bb = b3Shape_GetBody(contacts[i].shapeIdB);
+            uint32_t other = hash_get(s, B3_ID_EQUALS(ba, e->body) ? bb : ba);
+            if (other >= BODY_SYNC_BODIES_MAX || other == slot || !s->authority.bodies[other].bound) {
+                continue;
+            }
+            const sync_authority_body_t *o = &s->authority.bodies[other];
+            sync_policy_contest_in_t c = {.mode = s->authority.mode,
+                                          .seat = a->seat,
+                                          .other_seat = o->seat,
+                                          .hold = a->has_in ? a->in_hold : a->hold,
+                                          .other_hold = o->has_in ? o->in_hold : o->hold};
+            if (sync_policy_host_takes_contested(&c)) {
+                host_takes_back(s, slot, tick);
+                host_takes_back(s, other, tick);
+            }
+        }
+    }
+}
+
+/* Bodies owned by interaction that rest go back: a guest releases them once the host holds their
+   rest pose, the host ends its own hold (sync_policy_returns_at_rest). */
+/* One of this side's characters or the bodies they carry presses `body` (a contact that acted):
+   those the game moves, whose lean is the player's, not a body's weight in a heap. */
+static bool pressed_by_own_pusher(const body_sync_t *s, b3BodyId body) {
+    b3ContactData contacts[16];
+    int n = b3Body_GetContactData(body, contacts, 16);
+    for (int i = 0; i < n; i++) {
+        if (!b3Shape_IsValid(contacts[i].shapeIdA) || !b3Shape_IsValid(contacts[i].shapeIdB) || !acted(&contacts[i])) {
+            continue;
+        }
+        b3BodyId a = b3Shape_GetBody(contacts[i].shapeIdA), b = b3Shape_GetBody(contacts[i].shapeIdB);
+        uint32_t slot = hash_get(s, B3_ID_EQUALS(a, body) ? b : a);
+        if (slot >= BODY_SYNC_BODIES_MAX) {
+            continue;
+        }
+        const sync_authority_body_t *o = &s->authority.bodies[slot];
+        if (o->bound && sync_authority_local(&s->authority, o) &&
+            (s->entries[slot].body_class == BODY_SYNC_CLASS_CHARACTER || o->holder != BODY_SYNC_ID_NONE)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void rest_return(body_sync_t *s, uint32_t tick) {
+    if (s->authority.mode != SYNC_POLICY_INTERACTION) {
+        return;
+    }
+    bool host = is_host(s);
+    float farthest = 0.0f;
+    for (uint8_t seat = 1; host && seat < s->config.seats; seat++) {
+        float rtt = s->joined[seat] ? sync_sender_round_trip(&s->sender, seat) : 0.0f;
+        farthest = rtt > farthest ? rtt : farthest;
+    }
+    for (uint32_t slot = 0; slot < BODY_SYNC_BODIES_MAX; slot++) {
+        const sync_authority_body_t *a = &s->authority.bodies[slot];
+        entry_t *e = &s->entries[slot];
+        e->quiet = false;
+        if (e->returned_pressed && (!a->bound || !b3Body_IsValid(e->body) ||
+                                    (sync_authority_local(&s->authority, a) && a->hold == BODY_SYNC_HOLD_UNTIL_REST) ||
+                                    !pressed_by_own_pusher(s, e->body))) {
+            e->returned_pressed = false;
+        }
+        if (!a->bound || !b3Body_IsValid(e->body) || !sync_authority_local(&s->authority, a) || a->hold != BODY_SYNC_HOLD_UNTIL_REST) {
+            continue;
+        }
+        float p[3], q[4];
+        pose_now(e->body, p, q);
+        e->quiet = sync_policy_quiet(&e->still, p, q, !b3Body_IsAwake(e->body));
+    }
+    uint32_t released = 0;
+    for (uint32_t slot = 0; slot < BODY_SYNC_BODIES_MAX; slot++) {
+        sync_authority_body_t *a = &s->authority.bodies[slot];
+        entry_t *e = &s->entries[slot];
+        if (!a->bound || !b3Body_IsValid(e->body) || !sync_authority_local(&s->authority, a) || a->hold != BODY_SYNC_HOLD_UNTIL_REST ||
+            a->claim_pending) {
+            continue;
+        }
+        /* A body this side carries is its agent's, moved by the game: it neither rests nor ages
+           out while carried, and its age starts when the carrier lets go. */
+        if (a->holder != BODY_SYNC_ID_NONE) {
+            e->agent_tick = tick;
+            continue;
+        }
+        bool neighbours = true;
+        b3ContactData contacts[32];
+        int n = b3Body_GetContactData(e->body, contacts, 32);
+        for (int i = 0; i < n && neighbours; i++) {
+            if (!b3Shape_IsValid(contacts[i].shapeIdA) || !b3Shape_IsValid(contacts[i].shapeIdB)) {
+                continue;
+            }
+            b3BodyId ba = b3Shape_GetBody(contacts[i].shapeIdA), bb = b3Shape_GetBody(contacts[i].shapeIdB);
+            uint32_t other = hash_get(s, B3_ID_EQUALS(ba, e->body) ? bb : ba);
+            const sync_authority_body_t *o = other < BODY_SYNC_BODIES_MAX ? &s->authority.bodies[other] : NULL;
+            if (o && other != slot && o->bound && sync_authority_local(&s->authority, o) && o->hold == BODY_SYNC_HOLD_UNTIL_REST) {
+                neighbours = s->entries[other].quiet;
+            }
+        }
+        float p[3], q[4];
+        pose_now(e->body, p, q);
+        bool out = false;
+        for (int i = 0; i < 3; i++) {
+            out = out || p[i] < s->config.bounds_min[i] || p[i] > s->config.bounds_max[i];
+        }
+        sync_policy_rest_in_t r = {.host = host,
+                                   .quiet = e->quiet,
+                                   .neighbours_quiet = neighbours,
+                                   .rest_acked = !host && sync_sender_rest_acked(&s->sender, BODY_SYNC_SEAT_HOST, (uint16_t)slot),
+                                   .age = tick - e->agent_tick,
+                                   .out_of_box = out,
+                                   .released = released,
+                                   .round_trip_ticks = farthest};
+        if (!sync_policy_returns_at_rest(&r)) {
+            continue;
+        }
+        body_sync_id_t id = body_sync_id_make(slot, a->generation);
+        e->returned_pressed = pressed_by_own_pusher(s, e->body);
+        if (host) {
+            sync_authority_host_active(&s->authority, id, false);
+        } else if (sync_authority_release(&s->authority, id) == BODY_SYNC_OK) {
+            released++;
+            s->authority.returns_sent++;
+            e->returned_at_rest = r.quiet && r.rest_acked;
+        }
+    }
+}
+
+/* How a body of this side's (bound and local, or not bound at all) pressed a layer copy in the
+   step: the game moves its bodies after the apply, so a push from standstill is stopped once by
+   the rest hold and seen here, and a slow push keeps the copy soft while it lasts; a lean keeps
+   a copy in flight soft (drive_copy). */
+typedef enum pressed { PRESSED_NONE = 0, PRESSED_LEAN, PRESSED_PUSH } pressed_t;
+static pressed_t pressed_by_this_side(const body_sync_t *s, b3BodyId body) {
+    pressed_t pressed = PRESSED_NONE;
+    b3ContactData contacts[16];
+    int n = b3Body_GetContactData(body, contacts, 16);
+    for (int i = 0; i < n; i++) {
+        if (!b3Shape_IsValid(contacts[i].shapeIdA) || !b3Shape_IsValid(contacts[i].shapeIdB)) {
+            continue;
+        }
+        b3BodyId a = b3Shape_GetBody(contacts[i].shapeIdA), b = b3Shape_GetBody(contacts[i].shapeIdB);
+        b3BodyId pusher = B3_ID_EQUALS(a, body) ? b : a;
+        if (b3Body_GetType(pusher) != b3_dynamicBody) {
+            continue;
+        }
+        uint32_t slot = hash_get(s, pusher);
+        if (slot < BODY_SYNC_BODIES_MAX && !sync_authority_local(&s->authority, &s->authority.bodies[slot])) {
+            continue; /* a copy pushes nothing on its own account */
+        }
+        /* A body this side owns by interaction leans on what it lies on with its weight; only its
+           motion pushes, as only its motion takes (interact). */
+        if (slot < BODY_SYNC_BODIES_MAX && s->entries[slot].body_class != BODY_SYNC_CLASS_CHARACTER &&
+            s->authority.bodies[slot].holder == BODY_SYNC_ID_NONE && s->authority.bodies[slot].hold == BODY_SYNC_HOLD_UNTIL_REST) {
+            if (speed_of(pusher) > SYNC_SOFT_TOUCH_SPEED) {
+                return PRESSED_PUSH;
+            }
+            continue;
+        }
+        if (sync_soft_pushed(approach_speed(s, &contacts[i], body))) {
+            return PRESSED_PUSH;
+        }
+        if (acted(&contacts[i])) {
+            pressed = PRESSED_LEAN;
+        }
+    }
+    return pressed;
+}
+
+/* A push reaches through a pile: every layer copy touching a pushed one, and on through them, is
+   pressed too. Pulled back toward its owner's older pose it would be pushed into the body that
+   presses and placed there again and again; pressed, its pull waits (sync_soft_decide). */
+static void press_through(body_sync_t *s, uint32_t tick) {
+    if (s->config.light_mass_max <= 0.0f || sync_authority_is_host(&s->authority)) {
+        return;
+    }
+    marking_t *m = &s->marking;
+    m->count = 0;
+    for (uint32_t slot = 0; slot < BODY_SYNC_BODIES_MAX; slot++) {
+        if (s->authority.bodies[slot].bound && s->entries[slot].pushed) {
+            m->queue[m->count++] = (uint16_t)slot;
+        }
+    }
+    for (uint32_t k = 0; k < m->count; k++) {
+        b3ContactData contacts[16];
+        int n = b3Body_GetContactData(s->entries[m->queue[k]].body, contacts, 16);
+        for (int i = 0; i < n; i++) {
+            if (!b3Shape_IsValid(contacts[i].shapeIdA) || !b3Shape_IsValid(contacts[i].shapeIdB)) {
+                continue;
+            }
+            for (int side = 0; side < 2; side++) {
+                uint32_t other = hash_get(s, b3Shape_GetBody(side ? contacts[i].shapeIdB : contacts[i].shapeIdA));
+                entry_t *o = other < BODY_SYNC_BODIES_MAX ? &s->entries[other] : NULL;
+                if (o && o->copy_mode && o->layer && (o->soft || o->rest_held) && !o->pushed) {
+                    o->pushed = true;
+                    o->marked = tick + 2u;
+                    m->queue[m->count++] = (uint16_t)other;
+                }
+            }
+        }
+    }
+}
+
 void body_sync_collect(body_sync_t *s, uint32_t tick) {
     s->now = tick;
+    s->authority.now = tick;
+    rest_return(s, tick);
     b3ContactEvents events = b3World_GetContactEvents(s->config.world);
     for (uint32_t slot = 0; slot < BODY_SYNC_BODIES_MAX; slot++) {
         sync_authority_body_t *a = &s->authority.bodies[slot];
@@ -668,11 +2149,30 @@ void body_sync_collect(body_sync_t *s, uint32_t tick) {
         if (!a->bound || !b3Body_IsValid(e->body)) {
             continue;
         }
-        if (sync_authority_local(&s->authority, a) && a->hold == BODY_SYNC_HOLD_UNTIL_SETTLED) {
+        bool flying = sync_authority_local(&s->authority, a) && a->hold == BODY_SYNC_HOLD_UNTIL_SETTLED;
+        e->flight_ticks = flying ? e->flight_ticks + 1u : 0u;
+        if (flying) {
             const sync_authority_body_t *h = sync_authority_body_const(&s->authority, a->last_holder);
             b3BodyId ignore = h ? s->entries[body_sync_id_slot(a->last_holder)].body : b3_nullBodyId;
-            sync_authority_settle(&s->authority, body_sync_id_make(slot, a->generation), !b3Body_IsAwake(e->body),
-                                  touched_moving(&events, e->body, ignore));
+            bool untakable;
+            bool touched = touched_moving(s, &events, e->body, ignore, &untakable);
+            sync_authority_settle(&s->authority, body_sync_id_make(slot, a->generation), !b3Body_IsAwake(e->body), touched, untakable,
+                                  e->flight_ticks);
+            if (a->hold == BODY_SYNC_HOLD_UNTIL_REST) {
+                e->agent_tick = tick;
+            }
+        }
+        pressed_t pressed = (e->rest_held || e->soft) && e->copy_mode ? pressed_by_this_side(s, e->body) : PRESSED_NONE;
+        e->pushed = pressed == PRESSED_PUSH;
+        e->leaned = pressed != PRESSED_NONE;
+        if (e->pushed) {
+            e->marked = tick + 2u; /* soft for the next apply, and kept soft while the push lasts */
+        }
+        if (e->soft && e->copy_mode && b3Body_IsAwake(e->body)) {
+            b3Vec3 v = b3Body_GetLinearVelocity(e->body), w = b3Body_GetAngularVelocity(e->body), g = b3World_GetGravity(s->config.world);
+            float k = b3Body_GetGravityScale(e->body) * s->dt;
+            const float vv[3] = {v.x, v.y, v.z}, ww[3] = {w.x, w.y, w.z}, gg[3] = {g.x * k, g.y * k, g.z * k};
+            e->soft_hit = sync_soft_hit(&e->soft_state, vv, ww, gg);
         }
         bool mine = sync_authority_local(&s->authority, a);
         bool have = s->receiver.bodies[slot].has;
@@ -683,6 +2183,11 @@ void body_sync_collect(body_sync_t *s, uint32_t tick) {
         }
         s->send_to[slot] = in->present ? sync_authority_route(&s->authority, slot, have) : 0u;
     }
+    /* After the reads: a body taken now goes out from the next tick, once its resume has set it
+       dynamic, never with the kinematic type its rest hold gave it here. */
+    interact(s, tick);
+    contest(s, tick);
+    press_through(s, tick);
     sync_sender_tick(&s->sender, tick, s->inputs, s->send_to);
 }
 
@@ -746,7 +2251,44 @@ bool body_sync_playback(const body_sync_t *s, body_sync_id_t id, double *owner_t
         *owner_tick = (double)s->now;
         return true;
     }
+    /* A body that turned into a copy at a collect is drawn where this side simulated it until the
+       next apply drives it, which also drops what its owner sent before a take: no playback yet. */
+    if (!s->entries[body_sync_id_slot(id)].copy_mode) {
+        return false;
+    }
     return sync_playback_tick(&s->playback, (uint16_t)body_sync_id_slot(id), owner_tick);
+}
+
+bool body_sync_is_predicted(const body_sync_t *s, body_sync_id_t id) {
+    const sync_authority_body_t *a = sync_authority_body_const(&s->authority, id);
+    return a && !sync_authority_local(&s->authority, a) && s->entries[body_sync_id_slot(id)].soft;
+}
+
+bool body_sync_is_pull_paused(const body_sync_t *s, body_sync_id_t id) {
+    return body_sync_is_predicted(s, id) && s->entries[body_sync_id_slot(id)].soft_paused;
+}
+
+bool body_sync_lost_take(const body_sync_t *s, body_sync_id_t id, uint32_t *count, float *hand_back_m) {
+    if (!sync_authority_body_const(&s->authority, id)) {
+        *count = 0;
+        *hand_back_m = 0.0f;
+        return false;
+    }
+    const entry_t *e = &s->entries[body_sync_id_slot(id)];
+    *count = e->lost_count;
+    *hand_back_m = e->lost_hand_back;
+    return e->lost_glide;
+}
+
+float body_sync_round_trip(const body_sync_t *s, uint8_t seat) { return sync_sender_round_trip(&s->sender, seat); }
+
+bool body_sync_is_layer_copy(const body_sync_t *s, body_sync_id_t id) {
+    const sync_authority_body_t *a = sync_authority_body_const(&s->authority, id);
+    return a && !sync_authority_local(&s->authority, a) && s->entries[body_sync_id_slot(id)].copy_mode && s->entries[body_sync_id_slot(id)].layer;
+}
+
+uint32_t body_sync_old_owner_drops(const body_sync_t *s, body_sync_id_t id, uint8_t seat) {
+    return s ? sync_authority_old_owner_drops(&s->authority, id, seat) : 0u;
 }
 
 bool body_sync_traffic(const body_sync_t *s, uint8_t seat, body_sync_traffic_t *out) {
@@ -760,5 +2302,14 @@ bool body_sync_traffic(const body_sync_t *s, uint8_t seat, body_sync_traffic_t *
     }
     out->deferred = st->deferred;
     out->stale_max_ticks = st->stale_max_ticks;
+    const sync_authority_t *a = &s->authority;
+    if (sync_authority_is_host(a)) {
+        out->takes = a->granted[seat];
+        out->take_refusals = a->refused_takes[seat];
+        out->reclaims = a->reclaimed[seat];
+    } else if (seat == BODY_SYNC_SEAT_HOST) {
+        out->takes = a->takes_sent;
+        out->returns = a->returns_sent;
+    }
     return true;
 }

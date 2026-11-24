@@ -1,0 +1,38 @@
+# Two guests grab one guest's throw in flight at once. The first claim the host takes is a catch;
+# the second finds the box already in a guest's hold and is refused, since only a flight is caught:
+# no ping-pong. Every endpoint shows the box in the winner's hand, and the loser's copy goes to it.
+scenario catch_race
+scene four_chars_item
+seed 41
+guests 3
+settle 6s
+
+net g1 rtt 100ms jitter 10ms loss 1%
+net g2 rtt 100ms jitter 10ms loss 1%
+net g3 rtt 120ms jitter 10ms loss 1%
+
+p1 grab box as lift
+p1 wait 300ms
+p1 throw 4 0.2 0 speed 9 as throw
+p2 walk box speed 1 on throw as reach2
+p2 grab box as c2
+p2 wait 1500ms
+p2 drop as put2
+p3 walk box speed 1 on throw as reach3
+p3 grab box as c3
+p3 wait 1500ms
+p3 drop as put3
+
+expect result lift granted
+expect result throw done
+expect one_of granted c2 c3
+expect one_of refused c2 c3
+# No endpoint but the loser's own shows the box in her hand: the host never moved it to her.
+expect held box p2 p3
+expect agree_at_rest 5cm
+expect no_stuck
+expect late_drops.count >= 1
+expect late_drops.count <= 30
+expect local_correction.max <= 1cm
+expect takes.count <= 0
+expect reclaims.count <= 0

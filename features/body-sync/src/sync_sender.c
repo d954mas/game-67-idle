@@ -151,8 +151,14 @@ void sync_sender_tick(sync_sender_t *s, uint32_t tick, const sync_body_input_t *
             /* A body that needed nothing starts its age when it wants a packet again. */
             bool was_idle = b->asleep && b->rest_acked && !pending_groups(b);
             sync_rare_t now = in->state.rare;
+            /* The host takes a guest's state only under the ownership it holds for her, so a group
+               acknowledged under another may never have been read there: a claim's states before
+               its grant name the old number, a take's the grant's number but the host's seat. A new
+               number or seat sends every group again; a hold change alone (a throw) keeps the
+               ownership the host read the other groups under. */
+            bool renumbered = b->groups_known && (b->last_value.number != now.number || b->last_value.seat != now.seat);
             for (int g = 0; g < SYNC_RARE_GROUPS; g++) {
-                if (!b->groups_known || !same_value(&b->last_value, &now, (uint8_t)(1u << g))) {
+                if (!b->groups_known || renumbered || !same_value(&b->last_value, &now, (uint8_t)(1u << g))) {
                     b->version[g]++;
                 }
             }
@@ -301,6 +307,8 @@ void sync_sender_sent(sync_sender_t *s, uint8_t seat, uint16_t number) {
     s->sent_next[seat] = (s->sent_next[seat] + 1u) % SYNC_SENT_WINDOW;
 }
 
+float sync_sender_round_trip(const sync_sender_t *s, uint8_t seat) { return seat < s->seats ? s->round_trip[seat] : 0.0f; }
+
 uint32_t sync_sender_unresolved(const sync_sender_t *s, uint8_t seat, uint16_t *numbers, uint32_t max) {
     if (seat >= s->seats) {
         return 0;
@@ -328,6 +336,9 @@ void sync_sender_resolve(sync_sender_t *s, uint8_t seat, uint16_t number, bool a
         if (!arrived) {
             return;
         }
+        float sample = (float)(int32_t)(s->tick - p->tick);
+        float *rtt = &s->round_trip[seat];
+        *rtt = *rtt <= 0.0f ? sample : *rtt + (sample - *rtt) / 8.0f; /* TCP's smoothing */
         for (uint32_t k = 0; k < p->count; k++) {
             const sync_sent_record_t *e = &p->records[k];
             sync_seat_body_t *b = &s->bodies[seat][e->slot];
@@ -344,4 +355,12 @@ void sync_sender_resolve(sync_sender_t *s, uint8_t seat, uint16_t number, bool a
         }
         return;
     }
+}
+
+bool sync_sender_rest_acked(const sync_sender_t *s, uint8_t seat, uint16_t slot) {
+    if (seat >= BODY_SYNC_SEATS_MAX || slot >= BODY_SYNC_BODIES_MAX) {
+        return false;
+    }
+    const sync_seat_body_t *b = &s->bodies[seat][slot];
+    return b->eligible && b->asleep && b->rest_acked && !pending_groups(b);
 }

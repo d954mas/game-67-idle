@@ -384,6 +384,48 @@ static void test_a_rare_change_is_sent_until_its_own_version_arrives(void) {
     TEST_ASSERT_TRUE(count == 1 && (decoded[0].rare.groups & SYNC_RARE_FLAGS) && decoded[0].rare.flags == 10);
 }
 
+/* Every rare group goes out again when the authority a record names moves to another seat or
+   number: a take's states declare the grant's number while it waits, and the host refused them
+   then (the body was still its own), so the grant changes only the seat. A hold of its own (a
+   throw) keeps the ownership: only its group goes out. */
+static void test_a_new_owner_sends_every_group_again(void) {
+    start(0, 1200, 0.0f, 9, 0);
+    body(7, 1.0f, 0.0f, false);
+    input[7].state.rare.seat = BODY_SYNC_SEAT_HOST;
+    input[7].state.rare.number = 4;
+    input[7].state.rare.flags = 3;
+    for (uint32_t t = 0; t < 20; t++) {
+        step();
+    }
+    const sync_seat_body_t *b = &sender.bodies[GUEST][7];
+    for (int g = 0; g < SYNC_RARE_GROUPS; g++) {
+        TEST_ASSERT_EQUAL_UINT16_MESSAGE(b->version[g], b->acked_version[g], "the groups never settled: the case proves nothing");
+    }
+    uint16_t before[SYNC_RARE_GROUPS];
+    for (int g = 0; g < SYNC_RARE_GROUPS; g++) {
+        before[g] = b->version[g];
+    }
+    input[7].state.rare.seat = GUEST; /* the take granted: the number it declared, its own seat */
+    tick_now++;
+    sync_sender_tick(&sender, tick_now, input, send_to);
+    for (int g = 0; g < SYNC_RARE_GROUPS; g++) {
+        TEST_ASSERT_TRUE_MESSAGE(b->version[g] != before[g], "a seat change left a group acknowledged under the old owner");
+    }
+    for (uint32_t t = 0; t < 20; t++) {
+        step();
+    }
+    for (int g = 0; g < SYNC_RARE_GROUPS; g++) {
+        before[g] = b->version[g];
+    }
+    input[7].state.rare.hold = BODY_SYNC_HOLD_UNTIL_SETTLED;
+    tick_now++;
+    sync_sender_tick(&sender, tick_now, input, send_to);
+    for (int g = 0; g < SYNC_RARE_GROUPS; g++) {
+        bool authority = (1u << g) == SYNC_RARE_AUTHORITY;
+        TEST_ASSERT_TRUE_MESSAGE(authority ? b->version[g] != before[g] : b->version[g] == before[g], "a hold change resent another group");
+    }
+}
+
 /* A lost packet acknowledges no rest pose: the rest goes out again. */
 static void test_a_lost_packet_acknowledges_no_rest_pose(void) {
     start(0, 1200, 0.0f, 6, 0);
@@ -668,6 +710,7 @@ int main(void) {
     RUN_TEST(test_the_packet_number_wraps);
     RUN_TEST(test_an_unsent_packet_acknowledges_nothing);
     RUN_TEST(test_a_rare_change_is_sent_until_its_own_version_arrives);
+    RUN_TEST(test_a_new_owner_sends_every_group_again);
     RUN_TEST(test_a_lost_packet_acknowledges_no_rest_pose);
     RUN_TEST(test_a_rest_on_the_acknowledged_pose_is_not_resent);
     RUN_TEST(test_the_receiver_keeps_the_newest_and_estimates_speed);

@@ -7,6 +7,7 @@
 #include "stub_wire.h"
 #include "sync_authority.h"
 #include "sync_masks.h"
+#include "sync_policy.h"
 
 /* The naive seam: every bound body's raw pose, velocities and motion type to every seat, every
    tick, in as many packets as it takes; copies are kinematic bodies driven to the newest pose.
@@ -19,6 +20,15 @@ _Static_assert(BODY_SYNC_TRAFFIC_COUNT == 5, "body_sync_metrics.h repeats the se
 
 /* A copy farther than this from its new pose jumps there instead of being driven at speed. */
 #define SNAP_DISTANCE 2.0f
+/* State packets per seat whose fate the stub waits for: past a second of them at 60 Hz the
+   oldest is forgotten, as one never answered. */
+enum { SENT_WINDOW = 64 };
+
+typedef struct sent_packet {
+    bool used;
+    uint16_t number;
+    uint32_t tick;
+} sent_packet_t;
 
 typedef struct entry {
     b3BodyId body;
@@ -34,6 +44,13 @@ typedef struct entry {
     uint8_t in_from;
     uint32_t in_tick;
     bool in_ordered; /* in_tick orders that sender's next states: one session of the seat */
+    /* Host: the state received is an old owner's, from before the body moved to another guest: a
+       take-over goes on from the copy as shown, not from that owner's motion. */
+    bool in_old;
+    /* A state received since the body last turned into a copy has driven it: until then the copy
+       plays nothing, and the newest state is an older ownership's (body_sync_playback). */
+    bool in_played;
+    uint32_t flight_ticks; /* collects in a row this side has flown it (a hold until settled) */
     stub_body_state_t in;
     sync_masks_t masks;
 } entry_t;
@@ -49,11 +66,16 @@ struct body_sync {
     uint32_t cursor[BODY_SYNC_SEATS_MAX];
     bool writing[BODY_SYNC_SEATS_MAX];
     body_sync_traffic_t traffic[BODY_SYNC_SEATS_MAX];
+    /* The round trip to each seat, ticks from a state packet's send to its arrival fate, and its
+       mean deviation, smoothed as TCP does; 0 unknown. The claim gate's grace is built from them. */
+    sent_packet_t sent[BODY_SYNC_SEATS_MAX][SENT_WINDOW];
+    uint32_t sent_next[BODY_SYNC_SEATS_MAX];
+    float round_trip[BODY_SYNC_SEATS_MAX], round_trip_dev[BODY_SYNC_SEATS_MAX];
     stub_body_state_t scratch[BODY_SYNC_BODIES_MAX];
     char error[128];
 };
 
-const char *body_sync_implementation(void) { return "stub 0.6.0"; }
+const char *body_sync_implementation(void) { return "stub 0.8.0"; }
 
 const char *body_sync_traffic_kind_name(body_sync_traffic_kind_t kind) {
     static const char *names[] = {"header", "copy", "sim", "held", "authority"};
@@ -105,6 +127,8 @@ body_sync_t *body_sync_create(const body_sync_config_t *config) {
     s->limits.max_spin = config->max_spin;
     s->dt = 1.0f / (float)config->tick_hz;
     sync_authority_init(&s->authority, config->seat, (uint8_t)config->seats, s->error, sizeof(s->error));
+    s->authority.rebind_ticks = sync_policy_rebind_ticks(config->tick_hz);
+    s->authority.agent_stride = sync_policy_agent_stride(config->tick_hz, SYNC_AUTHORITY_AGENT_POSES);
     return s;
 }
 
@@ -122,6 +146,13 @@ void body_sync_destroy(body_sync_t *sync) {
 }
 
 static bool seat_ok(const body_sync_t *s, uint8_t seat) { return seat < s->config.seats && seat != s->config.seat; }
+
+/* A new session of the seat numbers its packets afresh, over a path of its own. */
+static void forget_round_trip(body_sync_t *s, uint8_t seat) {
+    memset(s->sent[seat], 0, sizeof(s->sent[seat]));
+    s->sent_next[seat] = 0;
+    s->round_trip[seat] = s->round_trip_dev[seat] = 0.0f;
+}
 
 /* The tick order holds within one session of a seat: a join forgets what the seat sent before,
    a leave keeps it (the host continues those bodies from it) without its order. */
@@ -142,6 +173,7 @@ void body_sync_seat_joined(body_sync_t *s, uint8_t seat) {
     }
     s->writing[seat] = false;
     forget_states(s, seat, false);
+    forget_round_trip(s, seat);
     sync_authority_seat_joined(&s->authority, seat);
     s->joined[seat] = true;
 }
@@ -153,6 +185,7 @@ void body_sync_seat_left(body_sync_t *s, uint8_t seat) {
     s->joined[seat] = false;
     s->writing[seat] = false;
     forget_states(s, seat, true);
+    forget_round_trip(s, seat);
     sync_authority_seat_left(&s->authority, seat);
 }
 
@@ -173,6 +206,9 @@ body_sync_result_t body_sync_bind(body_sync_t *s, body_sync_id_t id, const body_
     e->body_class = bind->body_class;
     e->bound_type = b3Body_GetType(bind->body);
     e->bound_locks = b3Body_GetMotionLocks(bind->body);
+    if (is_host(s) && bind->body_class == BODY_SYNC_CLASS_CHARACTER) {
+        sync_authority_set_agent(&s->authority, id, true);
+    }
     return BODY_SYNC_OK;
 }
 
@@ -198,6 +234,56 @@ bool body_sync_authority(const body_sync_t *s, body_sync_id_t id, body_sync_auth
     return true;
 }
 
+bool body_sync_contact_number(const body_sync_t *s, body_sync_id_t id, uint16_t *number) {
+    const sync_authority_body_t *b = sync_authority_body_const(&s->authority, id);
+    return b && sync_authority_contact_number(&s->authority, b, number);
+}
+
+static float length3(const float v[3]) { return sqrtf(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]); }
+
+/* The claim's grace, ticks: the real seam's (sync_policy_evidence_ticks) with no playback delay,
+   since a copy here shows the newest pose at once. A state and the claim behind it cross on
+   packets of their own, each late by the path's jitter, and a lost one is resent: four mean
+   deviations of the round trip cover what the jitter spreads, as TCP's retransmit timer does. */
+static uint32_t claim_grace(const body_sync_t *s, uint8_t seat) {
+    float rtt = seat < s->config.seats ? s->round_trip[seat] + 4.0f * s->round_trip_dev[seat] : 0.0f;
+    return (uint32_t)ceilf(sync_policy_evidence_ticks(rtt, 0.0f, s->config.tick_hz));
+}
+
+/* The agent is measured where the host's last taken state of that ownership put it
+   (body_sync_real.c says why not its declared velocity). */
+body_sync_contact_verdict_t body_sync_check_contact(const body_sync_t *s, uint8_t seat, body_sync_id_t agent, uint16_t number,
+                                                    body_sync_id_t target, uint32_t contact_tick, body_sync_contact_t *out) {
+    body_sync_contact_t scratch;
+    out = out ? out : &scratch;
+    *out = (body_sync_contact_t){.gap = INFINITY};
+    const sync_authority_ended_t *ended;
+    uint32_t grace = claim_grace(s, seat);
+    body_sync_contact_verdict_t verdict = sync_authority_check_contact(&s->authority, seat, agent, number, grace, &ended);
+    const entry_t *g = entry_const(s, agent), *t = entry_const(s, target);
+    if (verdict == BODY_SYNC_CONTACT_STALE || agent == target || !g || !t || !b3Body_IsValid(g->body) || !b3Body_IsValid(t->body)) {
+        return BODY_SYNC_CONTACT_STALE;
+    }
+    out->ended = ended != NULL;
+    out->ended_age_ticks = ended ? s->authority.now - ended->tick : 0u;
+    b3Vec3 vb = b3Body_GetLinearVelocity(t->body), at = b3Body_GetPosition(g->body);
+    b3AABB box = b3Body_ComputeAABB(g->body), tb = b3Body_ComputeAABB(t->body);
+    sync_contact_scene_t scene = {.target_lo = {tb.lowerBound.x, tb.lowerBound.y, tb.lowerBound.z},
+                                  .target_hi = {tb.upperBound.x, tb.upperBound.y, tb.upperBound.z},
+                                  .agent_lo = {box.lowerBound.x - at.x, box.lowerBound.y - at.y, box.lowerBound.z - at.z},
+                                  .agent_hi = {box.upperBound.x - at.x, box.upperBound.y - at.y, box.upperBound.z - at.z},
+                                  .target_speed = length3((const float[3]){vb.x, vb.y, vb.z}),
+                                  .target_velocity = {vb.x, vb.y, vb.z},
+                                  .rewind = true,
+                                  .tick_hz = s->config.tick_hz,
+                                  .max_speed = s->limits.max_speed,
+                                  .contact_tick = contact_tick,
+                                  .window_ticks = grace > 2u ? grace : 2u}; /* at least the tick a state crosses in and the one the claim is judged in */
+    sync_authority_contact_measure(&s->authority, agent, seat, ended, &scene, &out->gap, &out->reach, &out->approach_max);
+    out->slop = SYNC_POLICY_TAKE_SLOP_M;
+    return verdict;
+}
+
 bool body_sync_is_local(const body_sync_t *s, body_sync_id_t id) {
     const sync_authority_body_t *b = sync_authority_body_const(&s->authority, id);
     return b && sync_authority_local(&s->authority, b);
@@ -217,15 +303,73 @@ static void note_live(body_sync_t *s, body_sync_id_t id) {
     }
 }
 
-body_sync_result_t body_sync_answer(body_sync_t *s, const body_sync_claim_event_t *claim, bool granted) {
-    if (claim) {
-        note_live(s, claim->id);
+/* Host: a copy moved from guest `from` to another guest: what it received is the old owner's. */
+static void host_handover(body_sync_t *s, uint32_t slot, uint8_t from) {
+    const sync_authority_body_t *a = auth_of(s, slot);
+    if (is_host(s) && from != BODY_SYNC_SEAT_HOST && a->seat != BODY_SYNC_SEAT_HOST && a->seat != from) {
+        s->entries[slot].in_old = true;
     }
-    return sync_authority_answer(&s->authority, claim, granted);
 }
+
+static body_sync_result_t answer(body_sync_t *s, const body_sync_claim_event_t *claim, bool granted, uint8_t grant_as) {
+    if (!claim) {
+        return sync_authority_answer(&s->authority, claim, granted, grant_as);
+    }
+    note_live(s, claim->id);
+    const sync_authority_body_t *a = sync_authority_body_const(&s->authority, claim->id);
+    uint8_t from = a ? a->seat : BODY_SYNC_SEAT_HOST;
+    body_sync_result_t r = sync_authority_answer(&s->authority, claim, granted, grant_as);
+    if (r == BODY_SYNC_OK && a) {
+        host_handover(s, body_sync_id_slot(claim->id), from);
+    }
+    return r;
+}
+
+body_sync_result_t body_sync_answer(body_sync_t *s, const body_sync_claim_event_t *claim, bool granted) {
+    return answer(s, claim, granted, SYNC_AUTHORITY_AS_CLAIMED);
+}
+
+body_sync_result_t body_sync_answer_as(body_sync_t *s, const body_sync_claim_event_t *claim, body_sync_hold_t hold) {
+    return answer(s, claim, true, (uint8_t)hold);
+}
+
+uint32_t body_sync_agent_overflow(const body_sync_t *s) { return s ? s->authority.agents_unringed : 0u; }
+static void take_over(body_sync_t *s, uint32_t slot);
 body_sync_result_t body_sync_assign(body_sync_t *s, body_sync_id_t id, uint8_t seat, body_sync_hold_t hold) {
     note_live(s, id);
-    return sync_authority_assign(&s->authority, id, seat, hold);
+    const sync_authority_body_t *was = sync_authority_body_const(&s->authority, id);
+    uint8_t from = was ? was->seat : BODY_SYNC_SEAT_HOST;
+    body_sync_result_t r = sync_authority_assign(&s->authority, id, seat, hold);
+    if (r == BODY_SYNC_OK && was) {
+        host_handover(s, body_sync_id_slot(id), from);
+    }
+    /* A move to this side takes over now, so what the caller does next (a recall puts the body
+       home) is not undone by the next apply's take-over. */
+    uint32_t slot = body_sync_id_slot(id);
+    entry_t *e = &s->entries[slot];
+    if (r != BODY_SYNC_OK || !body_sync_is_local(s, id) || !b3Body_IsValid(e->body)) {
+        return r;
+    }
+    if (e->copy_mode) {
+        take_over(s, slot);
+    } else {
+        /* Never a copy here (a grant this tick, before the apply that would make it one): it goes
+           on as this side simulates it, not in the motion and velocities of an older owner's
+           states. */
+        sync_authority_body_t *a = auth_of(s, slot);
+        a->resume = false;
+        a->take_motion = false;
+        sync_authority_applied(a, b3Body_GetType(e->body) == b3_kinematicBody, locks_bits(b3Body_GetMotionLocks(e->body)));
+    }
+    return r;
+}
+body_sync_result_t body_sync_teleported(body_sync_t *s, body_sync_id_t id) {
+    const sync_authority_body_t *a = sync_authority_body_const(&s->authority, id);
+    if (!a) {
+        return BODY_SYNC_UNKNOWN;
+    }
+    /* No render offset here: a teleport is drawn where physics has it already. */
+    return sync_authority_local(&s->authority, a) ? BODY_SYNC_OK : invalid(s, "teleported: a copy's pose is its owner's");
 }
 body_sync_result_t body_sync_set_holder(body_sync_t *s, body_sync_id_t id, body_sync_id_t holder) {
     return sync_authority_set_holder(&s->authority, id, holder);
@@ -262,10 +406,14 @@ static void store_in(body_sync_t *s, uint32_t slot, uint8_t from, uint32_t tick,
     }
     e->in = *b;
     e->has_in = true;
+    e->in_old = false;
     e->in_fresh = true;
     e->in_from = from;
     e->in_tick = tick;
     e->in_ordered = true;
+    if (is_host(s)) {
+        sync_authority_received_pose(&s->authority, auth_of(s, slot), from, tick, 1u, s->limits.max_speed / (float)s->config.tick_hz, b->position);
+    }
     sync_authority_received(auth_of(s, slot), b->hold, b->holder, b->flags);
     sync_authority_received_data(auth_of(s, slot), b->data_size, b->data);
     sync_authority_received_motion(auth_of(s, slot), true, b->kinematic, b->locks);
@@ -291,11 +439,13 @@ body_sync_result_t body_sync_receive_state(body_sync_t *s, uint8_t seat, uint32_
         sync_authority_body_t *a = sync_authority_body(&s->authority, b->id);
         if (!a) {
             t->stale++;
+            sync_authority_old_owner_drop(&s->authority, seat, body_sync_id_slot(b->id), body_sync_id_generation(b->id), 16u);
             continue;
         }
         if (is_host(s)) {
             if (a->seat != seat || b->number != a->number) {
                 t->rejected++;
+                sync_authority_old_owner_drop(&s->authority, seat, body_sync_id_slot(b->id), a->generation, 16u);
                 continue;
             }
         } else {
@@ -333,8 +483,43 @@ static b3MotionLocks locks_of(uint8_t bits) {
                            .angularX = (bits & 8u) != 0, .angularY = (bits & 16u) != 0, .angularZ = (bits & 32u) != 0};
 }
 
+/* A body that became local continues from the newest state received: its motion, masks and
+   velocities. One released after that state goes on as its copy here moves: a flight its contact
+   ended, whose newest state is from before the contact, would fly on into what it struck. The
+   real seam's rule without its clause "once the copy has played past that state": a stub copy
+   is driven to its newest state as it comes, so it has met what that state met. */
+static void take_over(body_sync_t *s, uint32_t slot) {
+    sync_authority_body_t *a = auth_of(s, slot);
+    entry_t *e = &s->entries[slot];
+    bool was_copy = e->copy_mode;
+    e->copy_mode = false;
+    a->resume = false;
+    bool has_in = e->has_in && !e->in_old;
+    e->in_old = false;
+    /* What came before the take-over is the old ownership's: a copy this body turns back into
+       plays none of it. */
+    e->in_fresh = false;
+    bool unheard_end = a->released && has_in && !e->in.asleep && (int32_t)(a->released_tick - e->in_tick) > 0;
+    a->released = false;
+    if (has_in || was_copy || a->take_motion) {
+        bool kinematic;
+        uint8_t locks;
+        sync_authority_resume_motion(a, has_in, e->in.kinematic, e->in.locks, e->bound_type == b3_kinematicBody, locks_bits(e->bound_locks),
+                                     &kinematic, &locks);
+        b3Body_SetType(e->body, kinematic ? b3_kinematicBody : b3_dynamicBody);
+        b3Body_SetMotionLocks(e->body, locks_of(locks));
+        sync_authority_applied(a, kinematic, locks);
+    }
+    sync_masks_restore(&e->masks, e->body);
+    if (has_in && !unheard_end) {
+        b3Body_SetLinearVelocity(e->body, (b3Vec3){e->in.velocity[0], e->in.velocity[1], e->in.velocity[2]});
+        b3Body_SetAngularVelocity(e->body, (b3Vec3){e->in.angular[0], e->in.angular[1], e->in.angular[2]});
+    }
+}
+
 void body_sync_apply(body_sync_t *s, uint32_t tick) {
     s->now = tick;
+    s->authority.now = tick;
     for (uint32_t slot = 0; slot < BODY_SYNC_BODIES_MAX; slot++) {
         sync_authority_body_t *a = auth_of(s, slot);
         entry_t *e = &s->entries[slot];
@@ -343,29 +528,15 @@ void body_sync_apply(body_sync_t *s, uint32_t tick) {
         }
         if (sync_authority_local(&s->authority, a)) {
             if (e->copy_mode || a->resume) {
-                bool was_copy = e->copy_mode;
-                e->copy_mode = false;
-                a->resume = false;
-                if (e->has_in || was_copy || a->take_motion) {
-                    bool kinematic;
-                    uint8_t locks;
-                    sync_authority_resume_motion(a, e->has_in, e->in.kinematic, e->in.locks, e->bound_type == b3_kinematicBody,
-                                                 locks_bits(e->bound_locks), &kinematic, &locks);
-                    b3Body_SetType(e->body, kinematic ? b3_kinematicBody : b3_dynamicBody);
-                    b3Body_SetMotionLocks(e->body, locks_of(locks));
-                    sync_authority_applied(a, kinematic, locks);
-                }
-                sync_masks_restore(&e->masks, e->body);
-                if (e->has_in) {
-                    b3Body_SetLinearVelocity(e->body, (b3Vec3){e->in.velocity[0], e->in.velocity[1], e->in.velocity[2]});
-                    b3Body_SetAngularVelocity(e->body, (b3Vec3){e->in.angular[0], e->in.angular[1], e->in.angular[2]});
-                }
+                take_over(s, slot);
             }
             continue;
         }
         if (!e->copy_mode) {
             e->copy_mode = true;
             e->placed = false;
+            e->in_played = false;
+            e->flight_ticks = 0;
             b3Body_SetType(e->body, b3_kinematicBody);
             /* A lock would drop the angular velocity that turns a copy to its owner's rotation
                (a character's facing); the owner's locks travel in its state instead. */
@@ -376,6 +547,7 @@ void body_sync_apply(body_sync_t *s, uint32_t tick) {
         }
         if (e->has_in && e->in_fresh) {
             e->in_fresh = false;
+            e->in_played = true;
             const stub_body_state_t *in = &e->in;
             b3Vec3 target = {in->position[0], in->position[1], in->position[2]};
             b3Vec3 now = b3Body_GetPosition(e->body);
@@ -428,6 +600,7 @@ static bool touched_moving(const b3ContactEvents *events, b3BodyId body, b3BodyI
 
 void body_sync_collect(body_sync_t *s, uint32_t tick) {
     s->now = tick;
+    s->authority.now = tick;
     b3ContactEvents events = b3World_GetContactEvents(s->config.world);
     for (uint32_t slot = 0; slot < BODY_SYNC_BODIES_MAX; slot++) {
         sync_authority_body_t *a = auth_of(s, slot);
@@ -464,15 +637,20 @@ void body_sync_collect(body_sync_t *s, uint32_t tick) {
         o->holder = a->holder;
         o->hold = a->hold;
         o->seat = a->seat;
-        o->number = a->number;
+        o->number = sync_authority_declared_number(&s->authority, a);
         e->has_out = true;
+        e->flight_ticks = a->hold == BODY_SYNC_HOLD_UNTIL_SETTLED ? e->flight_ticks + 1u : 0u;
         if (a->hold == BODY_SYNC_HOLD_UNTIL_SETTLED) {
             b3BodyId ignore = b3_nullBodyId;
             const entry_t *h = entry_const(s, a->last_holder);
             if (h) {
                 ignore = h->body;
             }
-            if (o->asleep || touched_moving(&events, e->body, ignore)) {
+            /* The stub takes nothing by interaction: the host policy's rule, every touch untakable. */
+            bool touched = touched_moving(&events, e->body, ignore);
+            sync_policy_flight_in_t in = {.mode = SYNC_POLICY_HOST, .asleep = o->asleep, .touched_body = touched, .touched_untakable = touched,
+                                          .age = e->flight_ticks};
+            if (sync_policy_flight(&in) == SYNC_FLIGHT_RETURNS) {
                 uint8_t hold = sync_authority_settled(&s->authority, o->id);
                 if (is_host(s)) {
                     o->hold = hold;
@@ -554,25 +732,42 @@ bool body_sync_write_state(body_sync_t *s, uint8_t seat, uint8_t *buffer, uint32
 }
 
 void body_sync_state_sent(body_sync_t *s, uint8_t seat, uint16_t number) {
-    (void)number;
     if (seat < s->config.seats) {
         s->traffic[seat].packets_sent++;
+        s->sent[seat][s->sent_next[seat]] = (sent_packet_t){.used = true, .number = number, .tick = s->now};
+        s->sent_next[seat] = (s->sent_next[seat] + 1u) % SENT_WINDOW;
     }
 }
 
 uint32_t body_sync_unresolved(const body_sync_t *s, uint8_t seat, uint16_t *numbers, uint32_t max) {
-    (void)s;
-    (void)seat;
-    (void)numbers;
-    (void)max;
-    return 0;
+    uint32_t n = 0;
+    for (uint32_t i = 0; seat < s->config.seats && numbers && i < SENT_WINDOW && n < max; i++) {
+        if (s->sent[seat][i].used) {
+            numbers[n++] = s->sent[seat][i].number;
+        }
+    }
+    return n;
 }
 
 void body_sync_resolve(body_sync_t *s, uint8_t seat, uint16_t number, bool arrived) {
-    (void)s;
-    (void)seat;
-    (void)number;
-    (void)arrived;
+    for (uint32_t i = 0; seat < s->config.seats && i < SENT_WINDOW; i++) {
+        sent_packet_t *p = &s->sent[seat][i];
+        if (!p->used || p->number != number) {
+            continue;
+        }
+        p->used = false;
+        if (arrived) {
+            float sample = (float)(int32_t)(s->now - p->tick), *rtt = &s->round_trip[seat], *dev = &s->round_trip_dev[seat];
+            if (*rtt <= 0.0f) {
+                *rtt = sample;
+                *dev = sample / 2.0f;
+            } else {
+                *dev += (fabsf(sample - *rtt) - *dev) / 4.0f;
+                *rtt += (sample - *rtt) / 8.0f;
+            }
+        }
+        return;
+    }
 }
 
 bool body_sync_peek_record(const body_sync_t *s, uint8_t seat, uint8_t *buffer, uint32_t capacity, uint32_t *size) {
@@ -603,11 +798,39 @@ bool body_sync_playback(const body_sync_t *s, body_sync_id_t id, double *owner_t
         *owner_tick = (double)s->now;
         return true;
     }
-    if (!e->has_in) {
+    if (!e->has_in || !e->in_played) {
         return false;
     }
     *owner_tick = (double)e->in_tick;
     return true;
+}
+
+bool body_sync_is_predicted(const body_sync_t *s, body_sync_id_t id) {
+    (void)s;
+    (void)id;
+    return false;
+}
+
+bool body_sync_is_pull_paused(const body_sync_t *s, body_sync_id_t id) {
+    (void)s;
+    (void)id;
+    return false;
+}
+
+bool body_sync_lost_take(const body_sync_t *s, body_sync_id_t id, uint32_t *count, float *hand_back_m) {
+    (void)s;
+    (void)id;
+    *count = 0;
+    *hand_back_m = 0.0f;
+    return false;
+}
+
+float body_sync_round_trip(const body_sync_t *s, uint8_t seat) { return seat < s->config.seats ? s->round_trip[seat] : 0.0f; }
+
+bool body_sync_is_layer_copy(const body_sync_t *s, body_sync_id_t id) {
+    (void)s;
+    (void)id;
+    return false;
 }
 
 bool body_sync_render_offset(const body_sync_t *s, body_sync_id_t id, float position[3], float rotation[4]) {
@@ -618,6 +841,10 @@ bool body_sync_render_offset(const body_sync_t *s, body_sync_id_t id, float posi
     rotation[0] = rotation[1] = rotation[2] = 0.0f;
     rotation[3] = 1.0f;
     return true;
+}
+
+uint32_t body_sync_old_owner_drops(const body_sync_t *s, body_sync_id_t id, uint8_t seat) {
+    return s ? sync_authority_old_owner_drops(&s->authority, id, seat) : 0u;
 }
 
 bool body_sync_traffic(const body_sync_t *s, uint8_t seat, body_sync_traffic_t *out) {

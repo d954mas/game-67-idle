@@ -1,0 +1,15 @@
+# recall_flight's late claim of the glass: it reaches the host (line 13 passes) and the gate refuses
+# it as revoked, so a check that no claim was refused must fail.
+scenario mf_recall_claim
+scene glass_door
+seed 3
+guests 1
+settle 6s
+net g1 rtt 100ms jitter 20ms loss 2% reorder 10% reorder_delay 40ms
+p1 grab rock_a as lift
+at 1s p1 throw glass speed 7 as throw
+p0 recall rock_a on p1 rock_a contact glass +2t as recall
+expect result recall done
+expect claims.count >= 1
+expect moved glass <= 1cm
+expect claims_rejected.count <= 0

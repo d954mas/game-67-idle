@@ -1,0 +1,55 @@
+# The second layer's push from standstill: the guest walks slowly up to the pile of 60 light
+# boxes and stops against it, waits while the pile rests in the hold, then pushes on slower than
+# a walk. A copy in the rest hold is a wall for one step at most: the push must move the pile.
+scenario layer_nudge
+scene pile60
+seed 53
+guests 1
+# A hard end well past rest, so the rest measures watch the world at rest for seconds.
+end 20s
+light_mass 20kg
+
+net g1 rtt 100ms jitter 20ms loss 2%
+
+p1 walk 0.5 0 as near
+p1 walk 1.2 0 speed 0.5 as reach
+p1 wait 1500ms
+p1 walk 2.4 0 speed 0.4 as push
+
+expect result push done
+# Derived: the copy answers in its own step (0), or one later when the hit lands at the step's
+# end (1), plus one step when it rested in the hold and the body met it from standstill (a wall
+# for one step: README "The second layer"): 2.
+expect response_ticks.max <= 2t
+expect agree_at_rest 1cm 2deg
+expect no_stuck
+expect rest_wakes.count <= 0
+# Once at rest after the last action, a guest's world stays at rest: 0.
+expect rest_breaks.count <= 0
+expect response_misses.count <= 0
+# Derived: a copy moves on while its owner rests for at most the longest pause (60 ticks, a hit
+# among soft copies), then the owner's stillness (15), the playback delay (at most 15) and the
+# one-way delay (8 at 250 ms, one more a tick per extra ~33 ms); in the rest hold it stops at
+# once. 60 + 15 + 15 + 8 = 98.
+expect rest_lag_ticks.max <= 98t
+# Derived: per episode of this side's contact a copy may take one snap (past 1 m), one stalled
+# pull (30 ticks unpressed) and one rest-hold entry off the dead zone: 3. Episodes here: 3
+# (the approach, the stop against it, the push). 3 x 3 = 9.
+expect soft_places.max <= 9
+expect rest_jitter.max <= 0m
+# Derived: a copy's visible correction in a tick (its drawn move less its owner's at the same
+# event time, or less its own step for a predicted copy) is at most a render offset's release,
+# 0.15 of at most 2 m: 0.3 m. A placement the offset does not take shows as its whole move.
+expect jump.max <= 0.3m
+# Derived: a body this guest simulates is moved by the seam only when it becomes local, and the
+# render offset takes that move under either policy (a take by interaction keeps its pose): float
+# noise, 1 cm.
+expect local_correction.max <= 1cm
+# Derived: the same correction of its turn. The stand reads an angle through acosf of a float
+# dot product, 2 sqrt(2 n 2^-24) rad for a dot n ulps off 1: 0.04 deg a ulp, 0.16 deg at 16,
+# which three float products of unit turns stay within; the least turn a placement shows is a
+# hundredth of a radian, 0.57 deg: 0.25 deg.
+expect local_turn.max <= 0.25deg
+# Derived: between two take-backs a prediction's pull is paused at most (120 + 60) / 2 of any
+# 120 ticks (sync_soft.h: the chain cap 60, drained a tick per tick without a touch): 90.
+expect pause_window.max <= 90t

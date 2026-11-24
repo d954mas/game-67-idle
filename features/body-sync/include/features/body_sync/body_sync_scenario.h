@@ -6,6 +6,7 @@
 #include <stdint.h>
 
 #include "features/body_sync/body_sync_scene.h"
+#include "features/body_sync/body_sync_types.h"
 #include "features/net_link/net_link_sim.h"
 
 #ifdef __cplusplus
@@ -29,6 +30,10 @@ extern "C" {
                                 player idle, every cut, stall and deaf over) the run may wait
                                 for every endpoint's world to come to rest before it ends
      end <time>                 a hard end instead; the run stops there, rest or not
+     light_mass <x>kg           the second layer on every seam, light bodies up to x kg
+                                (0.1..1000); off without it
+     authority <host|interaction>  who owns free bodies on every seam (body_sync_config_t
+                                authority), host by default; interaction needs light_mass
      rate <host|gN> <x>hz       that endpoint steps x times a second of virtual time, 20..240
                                 (59.5hz); its seam keeps BODY_SYNC_TICK_HZ; once per endpoint
 
@@ -48,8 +53,23 @@ extern "C" {
                                   missed otherwise; on a guest a hit is a claim the host may
                                   reject
      wait <time>                  stand still
+     recall <body> [to <x> <y> <z>]  p0 only, the host's rule: body_sync_assign of the body to the
+                                  host whoever owns it (a carrier lets go, a flight stops), then
+                                  it is put at rest at the point, or at its spawn pose; done at
+                                  once, failed when the body is gone
+     remove <body>                p0 only: the host unbinds and destroys the body whoever owns
+                                  it, and tells every guest; done at once, failed when gone
    An action with `at` starts at that time and cuts off what the player was doing; one without
-   it starts when the player's previous action in the file ends, at 0 for the first. A schedule
+   it starts when the player's previous action in the file ends, at 0 for the first. An action
+   may instead start on an event, `<player> <verb> <args> on <event> [+<time>] [as <label>]`,
+   that long after it (0 without), cutting off what runs as a timed one does; the word `on`
+   ends the arguments:
+     on <pN> <agent> contact <body>  the first tick pN's own world records a hit between the
+                                  scene body `agent`, while pN simulates it, and the body (pN's
+                                  thrown rock meeting glass); her character is never the agent
+     on <label>                   the tick the earlier action with that label starts
+   Its event can fire until the run ends; one that never fired leaves the action pending. An
+   action after it with neither waits for it to end. A schedule
    that cannot fit in 600 s (a timed start plus the waits after it, a condition's end) is
    refused, not cut.
 
@@ -75,10 +95,31 @@ extern "C" {
                                                 which a guest that left fails otherwise
      expect result <label> <result>             done granted refused hit missed rejected failed
      expect one_of <result> <label> <label> ... exactly one of 2..4 distinct labels ends so
-     expect moved <body> <=|>= <length>         the scene body's travel on the host from the
+     expect moved <body> <=|>= <length> [layer <length>]
+                                                the scene body's travel on the host from the
                                                 first tick to the last
-     expect <metric> <= <value>                 metric names of body_sync_metrics.h, the
-                                                worst guest counts
+     expect moved <body> <=|>= solo <length> [interaction <length>]
+                                                that travel against the same body's in a solo
+                                                run (`pace`'s reference with everyone on time):
+                                                at most the solo's plus the margin, or at
+                                                least the solo's less it; `interaction` the
+                                                margin under that authority mode
+     expect effect <body>                      an effect (a knockdown, a break) took the scene
+                                                body on the host, and every guest that stayed
+                                                shows it once: knocked down, or gone
+     expect held <body> <player> ...            at one tick every endpoint shows the scene body
+                                                in the same named player's hand, and no endpoint
+                                                but her own shows it in another named one's
+     expect pace <label>                        a walk to a point keeps up with the same walk in
+                                                a reference run of the scenario on one world,
+                                                every player local, no network (README
+                                                "Scenario format" derives its margin)
+     expect <metric> <=|>= <value> [stub <value>]
+                                                metric names of body_sync_metrics.h, the
+                                                worst guest counts; `stub` bounds the stub,
+                                                which has no render offset to blend a handover:
+                                                jump.max, snap.count, step.count and
+                                                offset_step.count only
    With `guests 0` the checks that compare a guest (agree_at_rest, left, and every metric but
    host_ticks.max and echo_ticks.max) are refused.
 
@@ -112,6 +153,8 @@ typedef enum body_sync_verb {
     BODY_SYNC_VERB_DROP,
     BODY_SYNC_VERB_PUNCH,
     BODY_SYNC_VERB_WAIT,
+    BODY_SYNC_VERB_RECALL,
+    BODY_SYNC_VERB_REMOVE,
 } body_sync_verb_t;
 
 typedef enum body_sync_outcome {
@@ -126,6 +169,12 @@ typedef enum body_sync_outcome {
 } body_sync_outcome_t;
 /* The scenario word: "done", "granted", ...; "pending" for PENDING. */
 const char *body_sync_outcome_name(body_sync_outcome_t outcome);
+
+typedef enum body_sync_trigger {
+    BODY_SYNC_TRIGGER_NONE,
+    BODY_SYNC_TRIGGER_CONTACT, /* on <pN> <agent> contact <body> */
+    BODY_SYNC_TRIGGER_ACTION,  /* on <label> */
+} body_sync_trigger_t;
 
 typedef struct body_sync_target {
     bool is_body;
@@ -144,6 +193,15 @@ typedef struct body_sync_action {
     body_sync_target_t target;
     float speed;        /* m/s; zero takes the tuning's */
     uint32_t wait_ticks; /* WAIT */
+    bool has_home;       /* RECALL `to`: where the host puts the body, else its spawn pose */
+    float home[3];
+    /* `on`: the action starts trigger_ticks after an event instead of at a time */
+    body_sync_trigger_t trigger;
+    uint8_t trigger_player;                 /* CONTACT: whose own world sees it */
+    char trigger_agent[BODY_SYNC_NAME_MAX]; /* CONTACT: the body pN simulates that makes it */
+    char trigger_body[BODY_SYNC_NAME_MAX];  /* CONTACT: the body touched */
+    uint32_t trigger_action;               /* ACTION: the earlier action, by index */
+    uint32_t trigger_ticks;
 } body_sync_action_t;
 
 typedef enum body_sync_net_kind {
@@ -186,6 +244,9 @@ typedef enum body_sync_expect_kind {
     BODY_SYNC_EXPECT_METRIC_AT_MOST,
     BODY_SYNC_EXPECT_LEFT,
     BODY_SYNC_EXPECT_MOVED, /* a body's travel on the host from the first tick to the last */
+    BODY_SYNC_EXPECT_PACE,  /* a walk's progress against the same walk in a local reference run */
+    BODY_SYNC_EXPECT_EFFECT, /* a scene body an effect took, shown on every endpoint */
+    BODY_SYNC_EXPECT_HELD,   /* a scene body every endpoint showed in one of the named players' hands at once */
 } body_sync_expect_kind_t;
 
 typedef struct body_sync_expect {
@@ -199,8 +260,13 @@ typedef struct body_sync_expect {
     char labels[BODY_SYNC_EXPECT_LABELS_MAX][BODY_SYNC_LABEL_MAX];
     char metric[BODY_SYNC_METRIC_NAME_MAX]; /* METRIC_AT_MOST */
     double limit; /* METRIC_AT_MOST, in the metric's unit: m, deg, ticks or bytes/s; MOVED in m */
-    char body[BODY_SYNC_NAME_MAX]; /* MOVED: the scene body */
+    double layer_limit; /* MOVED: the bound while the second layer is on; negative: `limit` */
+    double stub_limit;  /* METRIC_AT_MOST: the bound on the stub implementation; negative: `limit` */
+    char body[BODY_SYNC_NAME_MAX]; /* MOVED, EFFECT, HELD: the scene body */
     bool at_least;                 /* MOVED: >= rather than <= */
+    bool solo;                     /* MOVED: against the solo run's travel, `limit` the margin */
+    double interaction_limit;      /* MOVED solo: the margin under authority INTERACTION; negative: `limit` */
+    uint8_t players;               /* HELD: a bit per player whose hand passes */
 } body_sync_expect_t;
 
 typedef struct body_sync_scenario {
@@ -212,6 +278,11 @@ typedef struct body_sync_scenario {
     /* Steps per second of virtual time each endpoint runs, in millihertz; 0 is BODY_SYNC_TICK_HZ.
        Its seam keeps tick_hz: the case of a fixed-step game that cannot keep up, or runs ahead. */
     uint32_t rate_mhz[1 + BODY_SYNC_GUESTS_MAX];
+    /* The second layer's light_mass_max for every seam, kilograms; 0 off. */
+    float light_mass_max;
+    /* body_sync_authority_mode_t for every seam; `authority_set` once the word was read. */
+    uint8_t authority;
+    bool authority_set;
     bool has_end;
     uint32_t end_tick;
     uint32_t action_count;

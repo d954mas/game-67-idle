@@ -263,6 +263,45 @@ static bool speed_tail(parser_t *p, const line_words_t *w, uint32_t at, uint32_t
     return true;
 }
 
+/* `on <pN> <agent> contact <body> [+<time>]` or `on <label> [+<time>]`, words at..end after the
+   `on`. The agent is named: a player owns several bodies (her character, one in hand, one in
+   flight), and only the named one's contact is the scenario's event. */
+static bool trigger(parser_t *p, const line_words_t *w, uint32_t at, uint32_t end, body_sync_action_t *a) {
+    const body_sync_scenario_t *s = p->out;
+    if (end > at && w->word[end - 1][0] == '+') {
+        if (!time_word(p, w->word[end - 1] + 1, &a->trigger_ticks)) {
+            return false;
+        }
+        end--;
+    }
+    uint8_t player;
+    if (end - at == 4 && player_word(w->word[at], &player) && strcmp(w->word[at + 2], "contact") == 0) {
+        body_sync_target_t agent, touched;
+        if (!body_word(p, w->word[at + 1], &agent) || !body_word(p, w->word[at + 3], &touched)) {
+            return false;
+        }
+        a->trigger = BODY_SYNC_TRIGGER_CONTACT;
+        a->trigger_player = player;
+        copy_text(a->trigger_agent, sizeof(a->trigger_agent), agent.body);
+        copy_text(a->trigger_body, sizeof(a->trigger_body), touched.body);
+        return true;
+    }
+    if (end - at == 1 && !player_word(w->word[at], &player)) {
+        if (!name_word(w->word[at], BODY_SYNC_LABEL_MAX - 1)) {
+            return refuse(p, "'%s' is not a label ([a-z0-9_], at most 15)", w->word[at]);
+        }
+        for (uint32_t i = 0; i < s->action_count; i++) {
+            if (strcmp(s->actions[i].label, w->word[at]) == 0) {
+                a->trigger = BODY_SYNC_TRIGGER_ACTION;
+                a->trigger_action = i;
+                return true;
+            }
+        }
+        return refuse(p, "no earlier action is labelled '%s'", w->word[at]);
+    }
+    return refuse(p, "on takes '<player> <agent> contact <body> [+<time>]' or '<label> [+<time>]'%s", "");
+}
+
 static bool action(parser_t *p, const line_words_t *w, uint32_t first, bool timed, uint32_t tick) {
     body_sync_scenario_t *s = p->out;
     if (s->action_count >= BODY_SYNC_SCENARIO_ACTIONS_MAX) {
@@ -286,6 +325,18 @@ static bool action(parser_t *p, const line_words_t *w, uint32_t first, bool time
         }
         copy_text(a.label, sizeof(a.label), w->word[end - 1]);
         end -= 2;
+    }
+    for (uint32_t i = first + 2; i < end; i++) {
+        if (strcmp(w->word[i], "on") == 0) {
+            if (timed) {
+                return refuse(p, "an action starts at a time or on an event, not both%s", "");
+            }
+            if (!trigger(p, w, i + 1, end, &a)) {
+                return false;
+            }
+            end = i;
+            break;
+        }
     }
     if (first + 1 >= end) {
         return refuse(p, "a player needs a verb%s", "");
@@ -370,6 +421,33 @@ static bool action(parser_t *p, const line_words_t *w, uint32_t first, bool time
         }
         if (!time_word(p, w->word[arg], &a.wait_ticks)) {
             return false;
+        }
+    } else if (strcmp(verb, "recall") == 0 || strcmp(verb, "remove") == 0) {
+        bool recall = strcmp(verb, "recall") == 0;
+        a.verb = recall ? BODY_SYNC_VERB_RECALL : BODY_SYNC_VERB_REMOVE;
+        a.has_target = true;
+        if (a.player != BODY_SYNC_ENDPOINT_HOST) {
+            return refuse(p, "%s is the host's rule: only p0 may %s", verb, verb);
+        }
+        if (arg >= end) {
+            return refuse(p, "%s needs a body", verb);
+        }
+        if (!body_word(p, w->word[arg], &a.target)) {
+            return false;
+        }
+        arg += 1;
+        if (recall && arg < end) {
+            if (end - arg != 4 || strcmp(w->word[arg], "to") != 0) {
+                return refuse(p, "recall takes a body and at most 'to <x> <y> <z>', not '%s'", w->word[arg]);
+            }
+            for (int i = 0; i < 3; i++) {
+                if (!position_word(p, w->word[arg + 1u + (uint32_t)i], &a.home[i])) {
+                    return false;
+                }
+            }
+            a.has_home = true;
+        } else if (arg != end) {
+            return refuse(p, "remove takes exactly one body, not '%s'", w->word[arg]);
         }
     } else {
         return refuse(p, "unknown verb '%s'", verb);
@@ -508,6 +586,42 @@ static bool timed_condition(parser_t *p, const line_words_t *w, uint32_t first, 
     return add_net(p, &e);
 }
 
+static bool metric_limit(parser_t *p, stand_metric_unit_t unit, const char *value, double *out) {
+    float f;
+    uint32_t ticks;
+    double v;
+    const char *suffix;
+    switch (unit) {
+    case STAND_UNIT_LENGTH:
+        if (!length_word(p, value, &f)) {
+            return false;
+        }
+        *out = (double)f;
+        return true;
+    case STAND_UNIT_ANGLE:
+        if (!angle_word(p, value, &f)) {
+            return false;
+        }
+        *out = (double)f;
+        return true;
+    case STAND_UNIT_TICKS:
+        if (!quantity(value, &v, &suffix) || strcmp(suffix, "t") != 0 || !time_word(p, value, &ticks)) {
+            return refuse(p, "'%s' needs ticks, as 6t", value);
+        }
+        *out = (double)ticks;
+        return true;
+    case STAND_UNIT_RATE:
+        return rate_word(p, value, out);
+    case STAND_UNIT_COUNT:
+        if (!bare_number(value, &v) || v < 0.0 || v != floor(v) || v > 1.0e9) {
+            return refuse(p, "'%s' needs a whole count", value);
+        }
+        *out = v;
+        return true;
+    }
+    return refuse(p, "'%s' has no unit", value);
+}
+
 static bool expect(parser_t *p, const line_words_t *w) {
     body_sync_scenario_t *s = p->out;
     if (s->expect_count >= BODY_SYNC_SCENARIO_EXPECTS_MAX) {
@@ -536,16 +650,40 @@ static bool expect(parser_t *p, const line_words_t *w) {
         }
     } else if (strcmp(what, "moved") == 0) {
         e.kind = BODY_SYNC_EXPECT_MOVED;
-        if (w->count != 5 || !name_word(w->word[2], BODY_SYNC_NAME_MAX - 1) || (strcmp(w->word[3], "<=") != 0 && strcmp(w->word[3], ">=") != 0)) {
-            return refuse(p, "moved reads: expect moved <body> <=|>= <length>%s", "");
+        e.solo = (w->count == 6 || (w->count == 8 && strcmp(w->word[6], "interaction") == 0)) && strcmp(w->word[4], "solo") == 0;
+        if ((w->count != 5 && !e.solo && (w->count != 7 || strcmp(w->word[5], "layer") != 0)) || !name_word(w->word[2], BODY_SYNC_NAME_MAX - 1) ||
+            (strcmp(w->word[3], "<=") != 0 && strcmp(w->word[3], ">=") != 0)) {
+            return refuse(p, "moved reads: expect moved <body> <=|>= <length> [layer <length>] | <=|>= solo <length> [interaction <length>]%s", "");
         }
-        float m;
-        if (!length_word(p, w->word[4], &m)) {
+        float m, lm = -1.0f, im = -1.0f;
+        if (!length_word(p, w->word[e.solo ? 5 : 4], &m) || (w->count == 7 && !length_word(p, w->word[6], &lm)) ||
+            (e.solo && w->count == 8 && !length_word(p, w->word[7], &im))) {
             return false;
         }
+        e.layer_limit = (double)lm;
+        e.interaction_limit = (double)im;
         copy_text(e.body, sizeof(e.body), w->word[2]);
         e.at_least = w->word[3][0] == '>';
         e.limit = (double)m;
+    } else if (strcmp(what, "effect") == 0) {
+        e.kind = BODY_SYNC_EXPECT_EFFECT;
+        if (w->count != 3 || !name_word(w->word[2], BODY_SYNC_NAME_MAX - 1)) {
+            return refuse(p, "effect needs one body%s", "");
+        }
+        copy_text(e.body, sizeof(e.body), w->word[2]);
+    } else if (strcmp(what, "held") == 0) {
+        e.kind = BODY_SYNC_EXPECT_HELD;
+        if (w->count < 4 || w->count > 3 + BODY_SYNC_PLAYERS_MAX || !name_word(w->word[2], BODY_SYNC_NAME_MAX - 1)) {
+            return refuse(p, "held reads: expect held <body> <player> ...%s", "");
+        }
+        for (uint32_t k = 3; k < w->count; k++) {
+            uint8_t player;
+            if (!player_word(w->word[k], &player) || (e.players & (1u << player))) {
+                return refuse(p, "held needs distinct players p0..p3, not '%s'", w->word[k]);
+            }
+            e.players |= (uint8_t)(1u << player);
+        }
+        copy_text(e.body, sizeof(e.body), w->word[2]);
     } else if (strcmp(what, "left") == 0) {
         e.kind = BODY_SYNC_EXPECT_LEFT;
         if (w->count != 3 || !guest_word(w->word[2], &e.endpoint)) {
@@ -558,6 +696,13 @@ static bool expect(parser_t *p, const line_words_t *w) {
         }
         if (!name_word(w->word[2], BODY_SYNC_LABEL_MAX - 1) || !outcome_word(w->word[3], &e.outcome)) {
             return refuse(p, "result needs a label and one of done granted refused hit missed rejected failed%s", "");
+        }
+        e.label_count = 1;
+        copy_text(e.labels[0], sizeof(e.labels[0]), w->word[2]);
+    } else if (strcmp(what, "pace") == 0) {
+        e.kind = BODY_SYNC_EXPECT_PACE;
+        if (w->count != 3 || !name_word(w->word[2], BODY_SYNC_LABEL_MAX - 1)) {
+            return refuse(p, "pace needs one label%s", "");
         }
         e.label_count = 1;
         copy_text(e.labels[0], sizeof(e.labels[0]), w->word[2]);
@@ -585,46 +730,22 @@ static bool expect(parser_t *p, const line_words_t *w) {
         if (!stand_metric_unit(what, &unit)) {
             return refuse(p, "unknown check or metric '%s'", what);
         }
-        if (w->count != 4 || strcmp(w->word[2], "<=") != 0) {
-            return refuse(p, "a metric check reads: expect %s <= <value>", what);
+        bool stub = w->count == 6 && strcmp(w->word[4], "stub") == 0;
+        if ((w->count != 4 && !stub) || (strcmp(w->word[2], "<=") != 0 && strcmp(w->word[2], ">=") != 0)) {
+            return refuse(p, "a metric check reads: expect %s <=|>= <value> [stub <value>]", what);
         }
+        /* The stub differs only in what it draws (no render offset, a copy at its newest state);
+           a bound on anything else holds on both implementations alike. */
+        if (stub && strcmp(what, "jump.max") != 0 && strcmp(what, "snap.count") != 0 && strcmp(what, "step.count") != 0 &&
+            strcmp(what, "offset_step.count") != 0) {
+            return refuse(p, "a stub bound is for what a copy draws (jump.max, snap.count, step.count, offset_step.count), not '%s'", what);
+        }
+        e.at_least = strcmp(w->word[2], ">=") == 0;
         e.kind = BODY_SYNC_EXPECT_METRIC_AT_MOST;
         copy_text(e.metric, sizeof(e.metric), what);
-        const char *value = w->word[3];
-        float f;
-        uint32_t ticks;
-        double v;
-        const char *suffix;
-        switch (unit) {
-        case STAND_UNIT_LENGTH:
-            if (!length_word(p, value, &f)) {
-                return false;
-            }
-            e.limit = (double)f;
-            break;
-        case STAND_UNIT_ANGLE:
-            if (!angle_word(p, value, &f)) {
-                return false;
-            }
-            e.limit = (double)f;
-            break;
-        case STAND_UNIT_TICKS:
-            if (!quantity(value, &v, &suffix) || strcmp(suffix, "t") != 0 || !time_word(p, value, &ticks)) {
-                return refuse(p, "'%s' needs ticks, as 6t", value);
-            }
-            e.limit = (double)ticks;
-            break;
-        case STAND_UNIT_RATE:
-            if (!rate_word(p, value, &e.limit)) {
-                return false;
-            }
-            break;
-        case STAND_UNIT_COUNT:
-            if (!bare_number(value, &v) || v < 0.0 || v != floor(v) || v > 1.0e9) {
-                return refuse(p, "'%s' needs a whole count", value);
-            }
-            e.limit = v;
-            break;
+        e.stub_limit = -1.0;
+        if (!metric_limit(p, unit, w->word[3], &e.limit) || (stub && !metric_limit(p, unit, w->word[5], &e.stub_limit))) {
+            return false;
         }
     }
     s->expects[s->expect_count++] = e;
@@ -709,6 +830,30 @@ static bool statement(parser_t *p, const line_words_t *w) {
             seed = seed * 10u + digit;
         }
         s->seed = seed;
+        return true;
+    }
+    if (strcmp(head, "light_mass") == 0) {
+        double kg;
+        const char *unit;
+        if (w->count != 2 || !quantity(w->word[1], &kg, &unit) || strcmp(unit, "kg") != 0 || !(kg >= 0.1 && kg <= 1000.0)) {
+            return refuse(p, "light_mass reads: light_mass <0.1..1000>kg%s", "");
+        }
+        if (s->light_mass_max > 0.0f) {
+            return refuse(p, "light_mass is set twice%s", "");
+        }
+        s->light_mass_max = (float)kg;
+        return true;
+    }
+    if (strcmp(head, "authority") == 0) {
+        bool host = w->count == 2 && strcmp(w->word[1], "host") == 0, interaction = w->count == 2 && strcmp(w->word[1], "interaction") == 0;
+        if (!host && !interaction) {
+            return refuse(p, "authority reads: authority host|interaction%s", "");
+        }
+        if (s->authority_set) {
+            return refuse(p, "authority is set twice%s", "");
+        }
+        s->authority = interaction ? BODY_SYNC_AUTHORITY_INTERACTION : BODY_SYNC_AUTHORITY_HOST;
+        s->authority_set = true;
         return true;
     }
     if (strcmp(head, "rate") == 0) {
@@ -827,20 +972,31 @@ static bool finish(parser_t *p) {
         const body_sync_expect_t *e = &s->expects[i];
         for (uint32_t l = 0; l < e->label_count; l++) {
             bool found = false;
-            for (uint32_t a = 0; a < s->action_count && !found; a++) {
+            uint32_t a = 0;
+            for (; a < s->action_count && !found; a++) {
                 found = strcmp(s->actions[a].label, e->labels[l]) == 0;
             }
             if (!found) {
                 p->line = e->line;
                 return refuse(p, "no action is labelled '%s'", e->labels[l]);
             }
+            /* Progress toward a point is the same measure on both runs; a body moves. */
+            const body_sync_action_t *walk = &s->actions[a - 1];
+            if (e->kind == BODY_SYNC_EXPECT_PACE && (walk->verb != BODY_SYNC_VERB_WALK || walk->target.is_body)) {
+                p->line = e->line;
+                return refuse(p, "pace needs a walk to a point, and '%s' is not one", e->labels[l]);
+            }
         }
         if (e->kind == BODY_SYNC_EXPECT_LEFT && e->endpoint > s->guests) {
             p->line = e->line;
             return refuse(p, "this guest is not in the run: raise 'guests'%s", "");
         }
+        if (e->kind == BODY_SYNC_EXPECT_HELD && (e->players >> (s->guests + 1u)) != 0) {
+            p->line = e->line;
+            return refuse(p, "a named player is not in the run: raise 'guests'%s", "");
+        }
         /* Without a guest these compare nothing and would pass on nothing. */
-        bool needs_guest = e->kind == BODY_SYNC_EXPECT_AGREE_AT_REST || e->kind == BODY_SYNC_EXPECT_LEFT ||
+        bool needs_guest = e->kind == BODY_SYNC_EXPECT_AGREE_AT_REST || e->kind == BODY_SYNC_EXPECT_LEFT || e->kind == BODY_SYNC_EXPECT_HELD ||
                            (e->kind == BODY_SYNC_EXPECT_METRIC_AT_MOST && strcmp(e->metric, "host_ticks.max") != 0 &&
                             strcmp(e->metric, "echo_ticks.max") != 0);
         if (needs_guest && s->guests == 0) {
@@ -856,6 +1012,10 @@ static bool finish(parser_t *p) {
     uint32_t last = 0;
     for (uint32_t i = 0; i < s->action_count; i++) {
         const body_sync_action_t *a = &s->actions[i];
+        if (a->trigger == BODY_SYNC_TRIGGER_CONTACT && a->trigger_player > s->guests) {
+            p->line = a->line;
+            return refuse(p, "this trigger's player is not in the run: raise 'guests'%s", "");
+        }
         uint32_t *t = &earliest[a->player];
         *t = a->timed ? a->tick : *t;
         if (*t >= cap) {

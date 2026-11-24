@@ -1,0 +1,38 @@
+# A guest throws a rock into the wall, then one into a standing dummy. Its own throws fly with no
+# delay (the seam never moves a body the guest simulates), and the dummy falls for everyone by the
+# guest's impact claim, once.
+scenario throw_dummy
+scene dummy_wall
+guests 1
+settle 8s
+
+net g1 rtt 100ms jitter 20ms loss 2%
+
+p1 grab rock_a as lift_a
+p1 wait 300ms
+p1 throw wall speed 9 as wall
+p1 wait 1s
+p1 walk rock_b
+p1 grab rock_b as lift_b
+p1 wait 300ms
+p1 throw dummy speed 9 as dummy
+
+expect result lift_a granted
+expect result lift_b granted
+expect result wall done
+expect result dummy done
+expect effect dummy
+expect effects_once
+# The dummy fell by the guest's claim, and an honest guest sends nothing the parser refuses.
+expect claims.count >= 1
+expect claim_effects.count >= 1
+expect claims_format.count <= 0
+# Derived as in layer_bounce: a body this guest simulates is moved by the seam only when it becomes
+# local, and the render offset takes that move: float noise, 1 cm.
+expect local_correction.max <= 1cm
+# Derived: the stand takes the thrown body's pose at the throw's first tick; one step at a throw's
+# speed (7 m/s and up: 12 cm) carries it past the 5 cm a move needs, and the seam never holds a
+# body its thrower simulates: 1.
+expect own_ticks.max <= 1t
+expect agree_at_rest 5cm 5deg
+expect no_stuck

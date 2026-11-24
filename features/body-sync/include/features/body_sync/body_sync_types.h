@@ -65,10 +65,22 @@ typedef enum body_sync_class {
 typedef enum body_sync_hold {
     BODY_SYNC_HOLD_UNTIL_RELEASE = 0, /* carried: authority stays until body_sync_release */
     /* Thrown or punched by its owner: the seam itself returns it to the host on its first
-       contact with a non-static body other than its last holder, or when it falls asleep, so
-       one side judges its contacts. Contacts are seen only on shapes with contact events on. */
+       contact with a non-static body other than its last holder, when it falls asleep, or after
+       600 ticks of flight (10 s at 60 Hz: one rolling for ever), so one side judges its contacts.
+       Contacts are seen only on shapes with contact events on. */
     BODY_SYNC_HOLD_UNTIL_SETTLED,
+    /* Owned by interaction (config authority INTERACTION): the seat whose action set it moving
+       simulates it until it and what it touches rest, then the seam hands it back to the host;
+       on the host's own body it marks one the host's agents set going. Only the seam sets it: a
+       caller's claim with it is INVALID. */
+    BODY_SYNC_HOLD_UNTIL_REST,
 } body_sync_hold_t;
+
+/* Who owns a free body (body_sync_config_t.authority). */
+typedef enum body_sync_authority_mode {
+    BODY_SYNC_AUTHORITY_HOST = 0,    /* the host, but for what a guest carries or threw in flight */
+    BODY_SYNC_AUTHORITY_INTERACTION, /* the seat whose action set it moving, until it rests */
+} body_sync_authority_mode_t;
 
 typedef struct body_sync_authority {
     uint8_t seat;    /* the seat that simulates the body */
@@ -87,6 +99,39 @@ typedef struct body_sync_claim_event {
     uint32_t tick;     /* the claimant's tick when it claimed */
     body_sync_hold_t hold;
 } body_sync_claim_event_t;
+
+/* The host's verdict on a guest's contact claim (body_sync_check_contact). */
+typedef enum body_sync_contact_verdict {
+    /* The seat simulates the agent under that number now, or that ownership ended by its own
+       release or the host's arbitration within the grace. */
+    BODY_SYNC_CONTACT_OK = 0,
+    /* Nothing to judge: a body, generation, seat or number the host does not know for that seat,
+       or an end past its grace. */
+    BODY_SYNC_CONTACT_STALE,
+    /* The host recalled that ownership (an assign, the seat leaving): its late claims are dropped. */
+    BODY_SYNC_CONTACT_REVOKED,
+} body_sync_contact_verdict_t;
+
+/* The host's own world around a contact claim, metres and m/s; the game sets its thresholds. */
+typedef struct body_sync_contact {
+    /* Between the boxes of the agent and the target, the agent along the nearest path its taken
+       states show (README "Contact claims"). INFINITY when the verdict is STALE or the host took
+       no state of that ownership within the grace. */
+    float gap;
+    /* How far apart they may be after a real touch along that path: the take slop, the target's
+       travel and the path's bend over its time. */
+    float reach;
+    /* The part of `reach` a touch itself adds (Box3D's contact distance, a pose's rounding and turn,
+       with margin): the rest is the evidence's own slop, what a rule judging a reach other than a
+       touch (a grab) adds to that reach instead. */
+    float slop;
+    /* The agent's fastest travel between its taken states, at most max_speed, plus the target's
+       shown speed. */
+    float approach_max;
+    /* The verdict read an ownership that ended, `ended_age_ticks` of the host's ticks ago. */
+    bool ended;
+    uint32_t ended_age_ticks;
+} body_sync_contact_t;
 
 typedef enum body_sync_traffic_kind {
     BODY_SYNC_TRAFFIC_HEADER = 0, /* the seam's own bytes in a packet: counts, ticks, acks */
@@ -114,6 +159,13 @@ typedef struct body_sync_traffic {
        but did not fit a packet, and the most ticks an awake body went between two packets. */
     uint64_t deferred;
     uint32_t stale_max_ticks;
+    /* Authority following interaction (zero under the host policy and for the stub). On a guest,
+       for the host: takes sent and bodies returned at rest. On the host, for a guest: its takes
+       granted and refused, and its bodies the host's agents took back. */
+    uint32_t takes;
+    uint32_t take_refusals;
+    uint32_t reclaims;
+    uint32_t returns;
 } body_sync_traffic_t;
 
 #ifdef __cplusplus

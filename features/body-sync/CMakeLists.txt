@@ -20,7 +20,7 @@ endfunction()
 
 # The parts that decide without touching a body: the codec, the sender, the naive receiver,
 # authority and the stub's record bytes. No Box3D, so their tests run alone.
-add_library(body_sync_parts STATIC src/sync_codec.c src/sync_sender.c src/sync_receiver.c src/sync_playback.c src/sync_authority.c src/stub_wire.c)
+add_library(body_sync_parts STATIC src/sync_codec.c src/sync_sender.c src/sync_receiver.c src/sync_playback.c src/sync_soft.c src/sync_policy.c src/sync_authority.c src/stub_wire.c)
 target_include_directories(body_sync_parts PUBLIC include src)
 target_link_libraries(body_sync_parts PUBLIC net_bits)
 body_sync_flags(body_sync_parts)
@@ -63,7 +63,7 @@ foreach(impl body_sync body_sync_stub)
         set(cli body_sync_stand_cli_stub)
     endif()
     add_library(${stand} STATIC src/stand_world.c src/stand_runner.c src/stand_main.c)
-    target_link_libraries(${stand} PUBLIC body_sync_stand_logic ${impl} PRIVATE coop_net net_link)
+    target_link_libraries(${stand} PUBLIC body_sync_stand_logic ${impl} PRIVATE coop_net net_link body_sync_parts)
     box3d_enable(${stand})
     body_sync_flags(${stand})
     add_executable(${cli} cli/main.c)

@@ -143,6 +143,7 @@ typedef struct sync_sender {
     sync_sent_packet_t sent[BODY_SYNC_SEATS_MAX][SYNC_SENT_WINDOW];
     uint32_t sent_next[BODY_SYNC_SEATS_MAX]; /* ring position of the next packet */
     sync_sender_stats_t stats[BODY_SYNC_SEATS_MAX];
+    float round_trip[BODY_SYNC_SEATS_MAX]; /* ticks from a packet's send to its arrival fate, smoothed; 0 unknown */
 } sync_sender_t;
 
 /* Room for one widest record for every seat's character and one more, with the end bit:
@@ -177,5 +178,10 @@ void sync_sender_sent(sync_sender_t *sender, uint8_t seat, uint16_t number);
 uint32_t sync_sender_unresolved(const sync_sender_t *sender, uint8_t seat, uint16_t *numbers, uint32_t max);
 /* A final fate; a number not in the window changes nothing. */
 void sync_sender_resolve(sync_sender_t *sender, uint8_t seat, uint16_t number, bool arrived);
+/* The round trip to a seat in ticks, as the fates measure it (send to acknowledgement, which
+   includes the other side's wait to acknowledge); 0 before the first fate. */
+float sync_sender_round_trip(const sync_sender_t *sender, uint8_t seat);
+/* `seat` acknowledged the body's current rest pose and every rare group it carries now. */
+bool sync_sender_rest_acked(const sync_sender_t *sender, uint8_t seat, uint16_t slot);
 
 #endif

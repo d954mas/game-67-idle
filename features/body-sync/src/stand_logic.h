@@ -71,6 +71,7 @@ typedef struct stand_schedule {
     uint32_t cursor[BODY_SYNC_PLAYERS_MAX];
     int32_t active[BODY_SYNC_PLAYERS_MAX]; /* action index, -1 idle */
     uint32_t net_next;
+    uint32_t fired[BODY_SYNC_SCENARIO_ACTIONS_MAX]; /* an `on` action's start tick + 1, 0 before its event */
 } stand_schedule_t;
 
 void stand_schedule_init(stand_schedule_t *schedule, const body_sync_scenario_t *scenario);
@@ -79,8 +80,17 @@ void stand_schedule_init(stand_schedule_t *schedule, const body_sync_scenario_t 
    start per player per tick, so instant actions in a row take one tick each. */
 int32_t stand_schedule_next(stand_schedule_t *schedule, uint8_t player, uint32_t tick);
 void stand_schedule_end(stand_schedule_t *schedule, uint8_t player);
+/* The event of action `index` (its `on`) happened at `tick`: from then it starts as a timed action
+   at tick plus its delay. Only the first counts; nothing for an action without one. */
+void stand_schedule_fire(stand_schedule_t *schedule, uint32_t index, uint32_t tick);
+/* Whether a hit on `endpoint`'s world fires action `a`'s `on <pN> <agent> contact <body>`: pN's
+   own world (any world for a reference run that holds every player), between its named agent,
+   which that world simulates, and the named body. A character has no scene name: "" never fires. */
+bool stand_trigger_contact(const body_sync_action_t *a, uint8_t endpoint, bool every_player, const char *agent, bool agent_local,
+                           const char *touched);
 int32_t stand_schedule_active(const stand_schedule_t *schedule, uint8_t player);
-/* Every player idle with nothing left to start, and every network item fired. */
+/* Every player idle with nothing left to start but actions whose event has not happened (and
+   the untimed ones behind them), and every network item fired. */
 bool stand_schedule_done(const stand_schedule_t *schedule);
 /* The next network item due at `tick`, or NULL; each is returned once. */
 const body_sync_net_event_t *stand_schedule_net(stand_schedule_t *schedule, uint32_t tick);
@@ -108,11 +118,56 @@ typedef struct stand_target {
 /* A grab claim: granted when the body is live, grabbable, not carried and the claimant's
    capsule centre is within reach plus slack of the body's footprint. */
 bool stand_rules_grab(const stand_target_t *target, const float claimant[3], float reach);
+/* The ownership (seat, number) under which the host last granted a body as a grab: the host's own
+   answer, so no state naming the holder need reach it first (at 250 ms a body carried for 300 ms
+   may show none there). */
+typedef struct stand_hand {
+    bool known;
+    uint8_t seat;
+    uint16_t number;
+} stand_hand_t;
+/* A catch's target: a throw in flight, from its thrower's release until its first contact or rest
+   (a hold until settled, which the seam ends there), no holder, under an ownership the host granted
+   as a grab. A body owned by interaction is pushed, not thrown; a catch claimed as anything but a
+   grab is granted into a hand the host does not know, so that owner's flight of it is never caught. */
+bool stand_rules_in_throw_flight(const stand_hand_t *hand, const body_sync_authority_t *now);
 /* A hit claim from a punch at `origin`: accepted when the target is live and within range plus
    slack; the effect says what the host does. A knocked mannequin or a static body is rejected. */
 bool stand_rules_hit(const stand_target_t *target, const float origin[3], float range, stand_effect_t *effect);
-/* An impact claim: a flying body hit a live breakable at `speed`. */
-bool stand_rules_impact(const stand_target_t *target, float speed);
+/* A flying body met `target` at `speed` (m/s, the contact's approach): a live breakable breaks
+   at its break_speed, a standing mannequin falls at its fall_speed, anything else is NONE. The
+   same rule judges on the owner (whether to claim) and on the host (what to apply). */
+stand_effect_t stand_rules_impact(const stand_target_t *target, float speed);
+
+/* The host's acceptance of a guest's impact claim beyond the seam's verdict: stand policy, not
+   the seam's contract (a game sets its own). The host measures on its late world, so the claimed
+   approach may exceed what it saw by a quarter plus 0.5 m/s, a hit event's approach against the
+   sampled speeds of the states; the gap must lie within the reach the seam derives. */
+#define STAND_IMPACT_SPEED_SCALE 1.25f
+/* The oldest contact an impact claim may name, ticks before the record's own stamp: a claim waits
+   behind its tick's seam records a tick or two; one this old names a contact the host's evidence
+   (12 states) no longer holds. A contact after the stamp never happened. */
+#define STAND_CONTACT_AGE_MAX_TICKS 120u
+#define STAND_IMPACT_SPEED_SLACK 0.5f
+bool stand_impact_accepts(float gap, float reach, float approach_max, float claimed_speed);
+
+/* Claim keys already sent or judged: (seat, agent, number, target). One flight of one owner
+   names one number, so a body bouncing on a target claims it once, and a new throw (a new
+   number) claims a target that survived again. A ring: the oldest key goes first, by then its
+   number is past the seam's grace. */
+enum { STAND_CLAIM_KEYS_MAX = 128 };
+typedef struct stand_claim_key {
+    uint32_t agent, target;
+    uint16_t number;
+    uint8_t seat;
+} stand_claim_key_t;
+typedef struct stand_claim_keys {
+    stand_claim_key_t keys[STAND_CLAIM_KEYS_MAX];
+    uint32_t next, count;
+} stand_claim_keys_t;
+/* False when `key` is in the table; otherwise adds it and returns true. */
+bool stand_claim_keys_add(stand_claim_keys_t *keys, stand_claim_key_t key);
+bool stand_claim_keys_has(const stand_claim_keys_t *keys, stand_claim_key_t key);
 /* Pose and velocity of debris piece `index` of a breaking body, drawn from the host's rng. */
 void stand_rules_debris(stand_rng_t *rng, const body_sync_body_desc_t *breakable, const float position[3], const float rotation[4],
                         float out_position[3], float out_velocity[3]);
@@ -137,12 +192,14 @@ typedef enum stand_record_type {
 typedef struct stand_record {
     stand_record_type_t type;
     uint32_t target;   /* HIT, IMPACT, VERDICT, REMOVE, SPAWN: a body_sync_id_t */
-    uint32_t body;     /* IMPACT: the flying body */
+    uint32_t body;     /* IMPACT: the flying body, the claim's agent */
+    uint16_t number;   /* IMPACT: the agent's authority number at the contact (body_sync_contact_number) */
     uint16_t action;   /* HIT, VERDICT: the claimant's action index */
     uint8_t accepted;  /* VERDICT */
     uint8_t source;    /* SPAWN: template index */
     float origin[3];   /* HIT */
     float speed;       /* IMPACT */
+    uint32_t tick;     /* IMPACT: the sender's tick of the contact, the one its states are stamped with */
     float position[3]; /* SPAWN */
     float rotation[4];
     float velocity[3];
@@ -152,10 +209,61 @@ typedef struct stand_record {
 /* Writes the family byte and the record; returns the size, 0 when `capacity` is short. */
 uint32_t stand_record_encode(const stand_record_t *record, uint8_t *buffer, uint32_t capacity);
 /* Parses untrusted bytes after the family byte. `from_host` says who sent them: each side
-   may send only its own types. False with `error` filled on anything out of range. */
-bool stand_record_decode(const uint8_t *data, uint32_t size, bool from_host, const stand_limits_t *limits, stand_record_t *out, char *error,
-                         size_t error_size);
+   may send only its own types. False with `error` filled on anything out of range: an unknown
+   type, a wrong size, a type of the other side, an id with a slot past the bodies or generation
+   0, and per type its fields (an impact's agent that is its target, a speed not finite, negative
+   or past the limits, a contact tick after `stamp`, the record's own, or more than
+   STAND_CONTACT_AGE_MAX_TICKS before it). Never asserts. */
+bool stand_record_decode(const uint8_t *data, uint32_t size, bool from_host, uint32_t stamp, const stand_limits_t *limits, stand_record_t *out,
+                         char *error, size_t error_size);
 body_sync_stand_kind_t stand_record_kind(stand_record_type_t type);
+
+/* ---- a rest's end ---- */
+
+/* A copy rests with its host body: slower than the run's rest (`slow`), drawn where its physics
+   is (`shown`: no render offset still decaying) and drawn within `near_m` of its host body. */
+bool stand_copy_rests(bool slow, bool shown, float host_gap_m, float near_m);
+/* The owner's exact path, oldest first, moved by the seam's test of a move (sync_soft_owner_rests):
+   at some tick it was more than `step_m` from where it was `ticks` before. */
+bool stand_path_moved(const float (*path)[3], uint32_t count, float step_m, uint32_t ticks);
+/* ...and its rotations, oldest first: at some tick it had turned more than `step_rad` from its
+   rotation `ticks` before. */
+bool stand_turns_moved(const float (*turns)[4], uint32_t count, float step_rad, uint32_t ticks);
+/* A copy that does not rest while its host body rests ends the world's rest by this guest's doing,
+   unless the host body's own path at the owner ticks the copy showed moved (`host_moved_at_play`):
+   the seam takes a copy of an owner moving that fast out of the rest hold and pulls it after, so
+   the copy's move is the host's physics (a host wake). The host body's speed now is no test: the
+   copy shows it a playback delay late, and an owner creeping between the seam's creep bound and the
+   run's rest speed is a move to the seam and a rest to the stand. */
+bool stand_copy_breaks(bool host_rests, bool copy_rests, bool host_moved_at_play);
+
+/* ---- a driven body's rest ---- */
+
+/* A driven (kinematic) body has no motion of its own: its velocity is what the last drive asked
+   of one step, and a copy of a still or creeping owner moves by the copy grid, up to a step (a
+   cell's diagonal, 3.4 mm; 0.0195 rad) in one tick, 0.2 m/s and 1.2 rad/s, now and then. Its rest
+   is judged by its mean speed and spin over the last STAND_DRIVE_TICKS ticks. Window: an owner
+   creeping at c (in the rest hold at most the seam's creep bound, a step an eighth of a second,
+   27 mm/s: a faster owner takes its copy out of the hold, stand_copy_breaks; nothing bounds a host
+   body's own creep, which the stand has seen reach 48 mm/s) and one step of rounding move a copy c*T + 3.4 mm over
+   T, under the rest speed (5 cm/s) for T > 0.15 s; 15 ticks (0.25 s) bound the path at 12.5 mm
+   against 10.2 mm at the creep bound, 7.2 mm at the sweep's creep. A tick's move past
+   STAND_DRIVE_STEP_M or STAND_DRIVE_STEP_RAD counts at its own speed: the rest hold lets a copy
+   trail its owner by a step and close it in one tick while the owner's record moves a step more
+   (twice a step); a centimetre's snap is no rounding. */
+enum { STAND_DRIVE_TICKS = 15 };
+#define STAND_DRIVE_STEP_M 0.0068f
+#define STAND_DRIVE_STEP_RAD 0.039f
+
+typedef struct stand_drive {
+    float speed[STAND_DRIVE_TICKS], spin[STAND_DRIVE_TICKS];
+    uint32_t next;
+} stand_drive_t;
+/* Notes one tick's speed (m/s) and spin (rad/s). */
+void stand_drive_note(stand_drive_t *drive, float speed, float spin);
+/* What the body moves at for its rest: the window's means, or the last tick's own speed or spin
+   when that tick moved it past a step (`dt` the tick, seconds). */
+void stand_drive_motion(const stand_drive_t *drive, float dt, float *speed, float *spin);
 
 /* ---- metrics ---- */
 
@@ -199,6 +307,28 @@ typedef struct stand_metrics {
     stand_hist_t lag[BODY_SYNC_GUESTS_MAX], path[BODY_SYNC_GUESTS_MAX], behind[BODY_SYNC_GUESTS_MAX];
     uint32_t steps[BODY_SYNC_GUESTS_MAX], offset_steps[BODY_SYNC_GUESTS_MAX], snaps[BODY_SYNC_GUESTS_MAX];
     double jump_max[BODY_SYNC_GUESTS_MAX];
+    /* Returns to the host: each window's largest jump, by picture (STAND_PICTURE_*), and how many
+       windows; the host's switch of a body it simulated to a guest's copy, likewise. */
+    double return_jump[BODY_SYNC_GUESTS_MAX][3];
+    uint32_t return_jumps[BODY_SYNC_GUESTS_MAX];
+    uint32_t return_unsettled[BODY_SYNC_GUESTS_MAX];
+    double switch_jump[BODY_SYNC_GUESTS_MAX];
+    uint32_t switch_jumps[BODY_SYNC_GUESTS_MAX];
+    stand_hist_t aligned[BODY_SYNC_GUESTS_MAX], prediction[BODY_SYNC_GUESTS_MAX], flight_pause[BODY_SYNC_GUESTS_MAX];
+    double local_correction[BODY_SYNC_GUESTS_MAX];
+    double local_turn_deg[BODY_SYNC_GUESTS_MAX];
+    uint32_t local_samples[BODY_SYNC_GUESTS_MAX];
+    uint32_t lost_takes[BODY_SYNC_GUESTS_MAX];
+    double lost_take_max[BODY_SYNC_GUESTS_MAX];
+    stand_hist_t response[BODY_SYNC_GUESTS_MAX];
+    double rest_jitter[BODY_SYNC_GUESTS_MAX], copy_speed[BODY_SYNC_GUESTS_MAX], pause_divergence[BODY_SYNC_GUESTS_MAX];
+    uint32_t first_hit[BODY_SYNC_GUESTS_MAX]; /* tick + 1 of the first hit answered or missed; 0 none */
+    uint32_t rest_wakes[BODY_SYNC_GUESTS_MAX], rest_breaks[BODY_SYNC_GUESTS_MAX], rest_ticks[BODY_SYNC_GUESTS_MAX], response_misses[BODY_SYNC_GUESTS_MAX];
+    uint32_t rest_lag[BODY_SYNC_GUESTS_MAX], soft_places[BODY_SYNC_GUESTS_MAX], host_wakes[BODY_SYNC_GUESTS_MAX];
+    uint32_t aligned_predicted[BODY_SYNC_GUESTS_MAX], pause_window[BODY_SYNC_GUESTS_MAX];
+    double creep[BODY_SYNC_GUESTS_MAX];
+    double carry_gap[BODY_SYNC_GUESTS_MAX];
+    uint32_t carry_ticks[BODY_SYNC_GUESTS_MAX];
     uint32_t bytes_second[BODY_SYNC_GUESTS_MAX][2][BODY_SYNC_KINDS_ALL][BODY_SYNC_TIME_MAX_S];
     uint64_t bytes_total[BODY_SYNC_GUESTS_MAX][2][BODY_SYNC_KINDS_ALL];
     double link_rate_sum[BODY_SYNC_GUESTS_MAX][2];
@@ -217,7 +347,50 @@ void stand_metrics_jerk(stand_metrics_t *metrics, uint32_t guest, double jerk_m)
    move since the last tick, and whether a render offset was giving a move back meanwhile. */
 void stand_metrics_playback(stand_metrics_t *metrics, uint32_t guest, double lag_m, double path_m, double behind_ticks, bool moved,
                             double drawn_move_m, double owner_move_m, bool offset_active);
+/* A drawn move no owner's move explains (a predicted copy's correction, a copy's move the tick its
+   owner changes): into jump.max, or a snap past 2 m. */
+void stand_metrics_correction(stand_metrics_t *metrics, uint32_t guest, double correction_m);
+/* Who draws a returned body: the host, the guest that owned it, or another guest. */
+typedef enum stand_picture {
+    STAND_PICTURE_HOST = 0,
+    STAND_PICTURE_OWN,
+    STAND_PICTURE_OTHER,
+} stand_picture_t;
+/* One return window's largest per-tick jump of one picture (body_sync_metrics.h return_jump). */
+void stand_metrics_return_jump(stand_metrics_t *metrics, uint32_t guest, stand_picture_t picture, double jump_m);
+/* A return window that closed before its picture played the host with no offset left. */
+void stand_metrics_return_unsettled(stand_metrics_t *metrics, uint32_t guest);
+/* The host's picture at the tick a body it simulated turns into this guest's copy. */
+void stand_metrics_switch_jump(stand_metrics_t *metrics, uint32_t guest, double jump_m);
+/* One sample of the lag-aligned gap (body_sync_metrics.h), `predicted` of a copy the layer predicts. */
+void stand_metrics_aligned(stand_metrics_t *metrics, uint32_t guest, double gap_m, bool predicted);
+/* The most paused ticks one copy of this guest's had in a pause window so far. */
+void stand_metrics_pause_window(stand_metrics_t *metrics, uint32_t guest, uint32_t ticks);
+/* A prediction in a pause from rest against the host's answer at the guest's moment: reported only. */
+void stand_metrics_prediction(stand_metrics_t *metrics, uint32_t guest, double gap_m);
+/* A prediction in a pause with no shared moment against its owner at the playback tick: reported only. */
+void stand_metrics_flight_pause(stand_metrics_t *metrics, uint32_t guest, double gap_m);
+/* A body the guest simulates moved and turned by the seam, not by its own step: into
+   local_correction.max and local_turn.max. */
+void stand_metrics_local_correction(stand_metrics_t *metrics, uint32_t guest, double correction_m, double correction_deg);
+/* A take of the guest's that lost, its drawn pose handed back `hand_back_m` from the winner's. */
+void stand_metrics_lost_take(stand_metrics_t *metrics, uint32_t guest, double hand_back_m);
 void stand_metrics_end_tick(stand_metrics_t *metrics);
+/* The second layer's measures (body_sync_metrics.h "local response", "rest"). */
+void stand_metrics_response(stand_metrics_t *metrics, uint32_t guest, double ticks);
+void stand_metrics_response_miss(stand_metrics_t *metrics, uint32_t guest);
+void stand_metrics_rest(stand_metrics_t *metrics, uint32_t guest, double jitter_m, bool wake);
+/* A tick the host shows a body this guest's character carries, `gap_m` from its hold point. */
+void stand_metrics_carry(stand_metrics_t *metrics, uint32_t guest, double gap_m);
+/* A guest's world at rest stopped resting: a break of its own, or a host wake (`host`: only host
+   bodies moved). */
+void stand_metrics_rest_break(stand_metrics_t *metrics, uint32_t guest, bool host);
+/* An awake host body's speed while the guest's world rests (m/s). */
+void stand_metrics_creep(stand_metrics_t *metrics, uint32_t guest, double speed);
+void stand_metrics_rest_lag(stand_metrics_t *metrics, uint32_t guest, uint32_t ticks);
+void stand_metrics_soft_place(stand_metrics_t *metrics, uint32_t guest, uint32_t places);
+void stand_metrics_copy_speed(stand_metrics_t *metrics, uint32_t guest, double speed);
+void stand_metrics_layer_hit(stand_metrics_t *metrics, uint32_t guest, uint32_t tick, double pause_divergence);
 void stand_metrics_bytes(stand_metrics_t *metrics, uint32_t guest, int direction, uint32_t kind, uint64_t bytes, uint32_t tick);
 void stand_metrics_link(stand_metrics_t *metrics, uint32_t guest, int direction, double bytes_per_s);
 void stand_metrics_closed(stand_metrics_t *metrics, uint8_t seat, uint32_t tick, uint32_t reason, const char *reason_name);

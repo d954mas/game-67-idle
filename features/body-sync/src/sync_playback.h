@@ -40,13 +40,15 @@
    cut path), its rare groups passed on to the next. At playback time t a body
    takes the snapshots around t: position by cubic Hermite when both carry velocities (sim
    records) kept inside the box of the two snapshots' positions, linearly otherwise;
-   rotation by normalized lerp on the shorter arc; velocities
+   rotation by normalized lerp on the shorter arc; velocities (for copy records, which carry
+   none, the line's between the two snapshots)
    linearly. Before its first snapshot it holds that one's pose; past its newest it holds that
-   pose with that snapshot's velocities (for a dynamic hold; none once frozen), frozen once t
-   is SYNC_FREEZE_TICKS past it, and is driven on when the
+   pose with that snapshot's velocities (for a dynamic hold; none once frozen); past it, waiting
+   (the seam lets a flight go on its own motion), frozen once t is SYNC_FREEZE_TICKS past it, and is driven on when the
    next snapshot comes. A rest snapshot at or before t gives its pose exactly and stops it.
    Rare groups (flags, motion, authority, holder, data) are those of the newest snapshot at or
-   before t that carried them. */
+   before t that carried them, of its current timeline only: a new owner's first snapshot
+   forgets the groups played of the old one. */
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -78,12 +80,20 @@ enum {
 #define SYNC_RATE_HIGH 2.0
 
 /* Render offset decay per tick, as the review sets it: 0.95 up to 25 cm, 0.85 from 1 m, by
-   distance between; past SYNC_OFFSET_SNAP_M none at all (the copy is seen to jump). */
+   distance between; past SYNC_OFFSET_SNAP_M none at all (the copy is seen to jump), but for a
+   lost take's (SYNC_OFFSET_LOST_M). */
 #define SYNC_OFFSET_SLOW 0.95f
 #define SYNC_OFFSET_FAST 0.85f
 #define SYNC_OFFSET_NEAR_M 0.25f
 #define SYNC_OFFSET_FAR_M 1.0f
 #define SYNC_OFFSET_SNAP_M 2.0f
+/* A take that lost while its claim waited keeps the drawn pose up to this far, closing 0.15 m a
+   tick past SYNC_OFFSET_SNAP_M: the loser's picture glides to the winner's instead of jumping. A
+   cap, not a derivation: how far two simulations of one contested body part over a round trip is
+   chaos (the random three-participant sweep's farthest is 3.1 m), and a glide of 5 m, 20 ticks
+   past 2 m, is the longest still read as one body moving; past it the pictures are of different
+   places and a jump is the honest picture. */
+#define SYNC_OFFSET_LOST_M 5.0f
 
 /* A dynamic copy's velocity: the owner's plus the error closed over SYNC_CORRECT_TICKS, the
    correction no faster than SYNC_CORRECT_SPEED (m/s) and SYNC_CORRECT_SPIN (rad/s). */
@@ -134,6 +144,7 @@ typedef struct sync_buffered {
     uint8_t known;    /* rare groups played so far */
     sync_rare_t rare; /* their values at playback time */
     uint32_t rare_tick[SYNC_RARE_GROUPS];
+    bool ended; /* its owner changed (sync_playback_end): past its newest snapshot it holds still */
 } sync_buffered_t;
 
 typedef struct sync_playback {
@@ -149,6 +160,10 @@ void sync_playback_init(sync_playback_t *p, uint32_t tick_hz, uint32_t delay_min
 void sync_playback_forget_body(sync_playback_t *p, uint16_t slot);
 /* The newest snapshot tick a body holds; false when none. */
 bool sync_playback_newest(const sync_playback_t *p, uint16_t slot, uint32_t *tick);
+/* The body's owner changed and the snapshots are the old owner's: it plays on to the first one
+   after its playback time, drops the rest (a path its new owner never saw) and holds there with no
+   motion, frozen, until a snapshot is filed again. */
+void sync_playback_end(sync_playback_t *p, uint16_t slot);
 /* Drops a body's snapshots at or before `tick` (its rare groups stay as played). */
 void sync_playback_forget_until(sync_playback_t *p, uint16_t slot, uint32_t tick);
 /* A join forgets that seat's timeline and every snapshot on it; a leave forgets the timeline
@@ -176,12 +191,16 @@ typedef struct sync_play {
     float angular[3];
     bool at_rest;
     bool frozen;
-    bool jumped; /* its timeline jumped this tick */
+    bool waiting; /* at or past its newest snapshot, not frozen: no later one to play toward yet */
+    bool past;    /* waiting with playback past that snapshot: its timeline went on without it */
+    bool jumped;  /* its timeline jumped this tick */
 } sync_play_t;
 
 void sync_playback_sample(const sync_playback_t *p, uint16_t slot, sync_play_t *out);
 /* The rare groups as of playback time; *known: which groups ever played. */
 const sync_rare_t *sync_playback_rare(const sync_playback_t *p, uint16_t slot, uint8_t *known);
+/* The owner tick the slot plays; false while it has nothing to play (sync_play_t.known): a
+   timeline's tick is no picture of a body whose snapshots were all dropped. */
 bool sync_playback_tick(const sync_playback_t *p, uint16_t slot, double *owner_tick);
 
 /* False for a sample further ahead of the timeline's clock line than SYNC_FAR_TICKS, from the
@@ -198,6 +217,9 @@ bool sync_playback_admit(sync_playback_t *p, uint8_t timeline, uint32_t sample, 
    timeline has heard anything. */
 bool sync_playback_line_tick(const sync_playback_t *p, uint8_t timeline, uint32_t sample, uint32_t *local);
 
+/* The rotation taking `from` to `to` on the shorter arc, as world axis times angle (radians). */
+void sync_turn_between(const float from[4], const float to[4], float out[3]);
+
 /* A kinematic copy: false when reaching the pose in one step needs more than max_speed or
    max_spin; the shell then places it there and hands the jump to the render offset. */
 bool sync_drive_reachable(const float now_position[3], const float now_rotation[4], const sync_play_t *play, float dt, float max_speed,
@@ -209,7 +231,15 @@ bool sync_drive_reachable(const float now_position[3], const float now_rotation[
 #define SYNC_FACING_SET_RAD 0.00872665f /* half a degree */
 bool sync_drive_locked_turn(const float now[4], const float target[4], uint8_t locked_axes, float out[4]);
 
-/* A dynamic copy's velocities for this step: the owner's plus the bounded correction. */
+/* A dynamic copy's velocities for this step: the owner's plus the bounded correction. An owner
+   standing still (its velocities under these) whose pose is within SYNC_CORRECT_REST_M and
+   SYNC_CORRECT_REST_RAD gets zero: a correction of a hair it cannot close (pressed by what it
+   stands among) would set a velocity every tick, and any velocity set wakes the island, so the
+   bodies around it would never sleep. */
+#define SYNC_CORRECT_REST_M 0.001f
+#define SYNC_CORRECT_REST_RAD 0.0035f
+#define SYNC_CORRECT_STILL_SPEED 0.001f
+#define SYNC_CORRECT_STILL_SPIN 0.002f
 void sync_drive_dynamic(const float now_position[3], const float now_rotation[4], const sync_play_t *play, float dt, float velocity[3],
                         float angular[3]);
 
@@ -220,9 +250,10 @@ typedef struct sync_offset {
 
 void sync_offset_clear(sync_offset_t *o);
 /* The physics pose jumped from `before` to `after`: the offset takes the difference so the drawn
-   pose stays; past SYNC_OFFSET_SNAP_M it is cleared and the copy is seen to jump. */
+   pose stays; past `reach` (SYNC_OFFSET_SNAP_M, or SYNC_OFFSET_LOST_M for a lost take) it is
+   cleared and the copy is seen to jump. */
 void sync_offset_absorb(sync_offset_t *o, const float before_position[3], const float before_rotation[4], const float after_position[3],
-                        const float after_rotation[4]);
+                        const float after_rotation[4], float reach);
 /* Once per local tick. Physics never sees the offset; body_sync_render_offset reports it. */
 void sync_offset_decay(sync_offset_t *o);
 

@@ -4,6 +4,57 @@
 
 #include "stand_logic.h"
 
+/* ---- a rest's end ---- */
+
+bool stand_copy_rests(bool slow, bool shown, float host_gap_m, float near_m) { return slow && shown && host_gap_m <= near_m; }
+
+bool stand_path_moved(const float (*path)[3], uint32_t count, float step_m, uint32_t ticks) {
+    for (uint32_t k = ticks; k < count; k++) {
+        float d[3] = {path[k][0] - path[k - ticks][0], path[k][1] - path[k - ticks][1], path[k][2] - path[k - ticks][2]};
+        if (sqrtf(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]) > step_m) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool stand_turns_moved(const float (*turns)[4], uint32_t count, float step_rad, uint32_t ticks) {
+    for (uint32_t k = ticks; k < count; k++) {
+        const float *a = turns[k - ticks], *b = turns[k];
+        /* conj(a) * b: its vector part's length against its scalar gives the angle without acos's
+           loss near 1, where a step of 0.0195 rad lies. */
+        float x = a[3] * b[0] - a[0] * b[3] - a[1] * b[2] + a[2] * b[1];
+        float y = a[3] * b[1] + a[0] * b[2] - a[1] * b[3] - a[2] * b[0];
+        float z = a[3] * b[2] - a[0] * b[1] + a[1] * b[0] - a[2] * b[3];
+        float w = a[3] * b[3] + a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+        if (2.0f * atan2f(sqrtf(x * x + y * y + z * z), fabsf(w)) > step_rad) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool stand_copy_breaks(bool host_rests, bool copy_rests, bool host_moved_at_play) { return host_rests && !copy_rests && !host_moved_at_play; }
+
+/* ---- a driven body's rest ---- */
+
+void stand_drive_note(stand_drive_t *drive, float speed, float spin) {
+    drive->speed[drive->next] = speed;
+    drive->spin[drive->next] = spin;
+    drive->next = (drive->next + 1u) % STAND_DRIVE_TICKS;
+}
+
+void stand_drive_motion(const stand_drive_t *drive, float dt, float *speed, float *spin) {
+    uint32_t last = (drive->next + STAND_DRIVE_TICKS - 1u) % STAND_DRIVE_TICKS;
+    float v = 0.0f, w = 0.0f;
+    for (uint32_t i = 0; i < STAND_DRIVE_TICKS; i++) {
+        v += drive->speed[i];
+        w += drive->spin[i];
+    }
+    *speed = drive->speed[last] * dt > STAND_DRIVE_STEP_M ? drive->speed[last] : v / (float)STAND_DRIVE_TICKS;
+    *spin = drive->spin[last] * dt > STAND_DRIVE_STEP_RAD ? drive->spin[last] : w / (float)STAND_DRIVE_TICKS;
+}
+
 /* ---- random draws ---- */
 
 void stand_rng_seed(stand_rng_t *rng, uint64_t seed) { rng->state = seed ^ 0x6A09E667F3BCC909ull; }
@@ -102,6 +153,36 @@ void stand_schedule_init(stand_schedule_t *schedule, const body_sync_scenario_t 
     }
 }
 
+/* A timed action's tick, or a fired `on` action's; false while the start is not known. */
+static bool fixed_start(const stand_schedule_t *schedule, uint32_t index, uint32_t *tick) {
+    const body_sync_action_t *a = &schedule->scenario->actions[index];
+    if (a->timed) {
+        *tick = a->tick;
+        return true;
+    }
+    if (schedule->fired[index] != 0) {
+        *tick = schedule->fired[index] - 1u;
+        return true;
+    }
+    return false;
+}
+
+static bool untimed(const body_sync_action_t *a) { return !a->timed && a->trigger == BODY_SYNC_TRIGGER_NONE; }
+
+void stand_schedule_fire(stand_schedule_t *schedule, uint32_t index, uint32_t tick) {
+    const body_sync_scenario_t *s = schedule->scenario;
+    if (index < s->action_count && s->actions[index].trigger != BODY_SYNC_TRIGGER_NONE && schedule->fired[index] == 0) {
+        uint64_t at = (uint64_t)tick + s->actions[index].trigger_ticks;
+        schedule->fired[index] = at >= UINT32_MAX ? UINT32_MAX : (uint32_t)at + 1u;
+    }
+}
+
+bool stand_trigger_contact(const body_sync_action_t *a, uint8_t endpoint, bool every_player, const char *agent, bool agent_local,
+                           const char *touched) {
+    return a->trigger == BODY_SYNC_TRIGGER_CONTACT && (a->trigger_player == endpoint || every_player) && agent_local && agent[0] &&
+           strcmp(agent, a->trigger_agent) == 0 && strcmp(touched, a->trigger_body) == 0;
+}
+
 int32_t stand_schedule_next(stand_schedule_t *schedule, uint8_t player, uint32_t tick) {
     if (player >= BODY_SYNC_PLAYERS_MAX) {
         return -1;
@@ -111,15 +192,15 @@ int32_t stand_schedule_next(stand_schedule_t *schedule, uint8_t player, uint32_t
     uint32_t count = schedule->count[player];
     int64_t due = -1;
     for (uint32_t j = cursor; j < count; j++) {
-        const body_sync_action_t *a = &actions[schedule->order[player][j]];
-        if (a->timed && a->tick <= tick) {
+        uint32_t at;
+        if (fixed_start(schedule, schedule->order[player][j], &at) && at <= tick) {
             due = j;
         }
     }
     uint32_t start;
     if (due >= 0) {
         start = (uint32_t)due;
-    } else if (schedule->active[player] < 0 && cursor < count && !actions[schedule->order[player][cursor]].timed) {
+    } else if (schedule->active[player] < 0 && cursor < count && untimed(&actions[schedule->order[player][cursor]])) {
         start = cursor;
     } else {
         return -1;
@@ -141,8 +222,17 @@ int32_t stand_schedule_active(const stand_schedule_t *schedule, uint8_t player) 
 
 bool stand_schedule_done(const stand_schedule_t *schedule) {
     for (uint32_t p = 0; p < BODY_SYNC_PLAYERS_MAX; p++) {
-        if (schedule->active[p] >= 0 || schedule->cursor[p] < schedule->count[p]) {
+        if (schedule->active[p] >= 0) {
             return false;
+        }
+        bool waiting = false; /* behind an `on` action whose event has not happened */
+        for (uint32_t j = schedule->cursor[p]; j < schedule->count[p]; j++) {
+            uint32_t index = schedule->order[p][j], at;
+            const body_sync_action_t *a = &schedule->scenario->actions[index];
+            if (fixed_start(schedule, index, &at) || (untimed(a) && !waiting)) {
+                return false;
+            }
+            waiting = true;
         }
     }
     return schedule->net_next >= schedule->scenario->net_count;
@@ -172,6 +262,11 @@ bool stand_rules_grab(const stand_target_t *target, const float claimant[3], flo
     return horizontal_gap(target->position, claimant) - stand_footprint_radius(target->desc) <= reach + STAND_CLAIM_SLACK_M;
 }
 
+bool stand_rules_in_throw_flight(const stand_hand_t *hand, const body_sync_authority_t *now) {
+    return hand->known && now->seat != BODY_SYNC_SEAT_HOST && now->hold == BODY_SYNC_HOLD_UNTIL_SETTLED && now->holder == BODY_SYNC_ID_NONE &&
+           hand->seat == now->seat && hand->number == now->number;
+}
+
 bool stand_rules_hit(const stand_target_t *target, const float origin[3], float range, stand_effect_t *effect) {
     *effect = STAND_EFFECT_NONE;
     if (!target->live || !target->desc || target->character || target->desc->motion == BODY_SYNC_MOTION_STATIC) {
@@ -197,8 +292,44 @@ bool stand_rules_hit(const stand_target_t *target, const float origin[3], float 
     return false;
 }
 
-bool stand_rules_impact(const stand_target_t *target, float speed) {
-    return target->live && target->desc && target->desc->role == BODY_SYNC_ROLE_BREAKABLE && isfinite(speed) && speed >= target->desc->break_speed;
+stand_effect_t stand_rules_impact(const stand_target_t *target, float speed) {
+    if (!target->live || !target->desc || target->character || !isfinite(speed)) {
+        return STAND_EFFECT_NONE;
+    }
+    switch (target->desc->role) {
+    case BODY_SYNC_ROLE_BREAKABLE:
+        return speed >= target->desc->break_speed ? STAND_EFFECT_BREAK : STAND_EFFECT_NONE;
+    case BODY_SYNC_ROLE_MANNEQUIN:
+        return !target->knocked && speed >= target->desc->fall_speed ? STAND_EFFECT_KNOCK : STAND_EFFECT_NONE;
+    case BODY_SYNC_ROLE_PROP:
+        break;
+    }
+    return STAND_EFFECT_NONE;
+}
+
+bool stand_impact_accepts(float gap, float reach, float approach_max, float claimed_speed) {
+    /* NaN fails every comparison, so a non-finite measure refuses. */
+    return gap <= reach && claimed_speed <= approach_max * STAND_IMPACT_SPEED_SCALE + STAND_IMPACT_SPEED_SLACK;
+}
+
+bool stand_claim_keys_has(const stand_claim_keys_t *keys, stand_claim_key_t key) {
+    for (uint32_t i = 0; i < keys->count; i++) {
+        const stand_claim_key_t *k = &keys->keys[i];
+        if (k->agent == key.agent && k->target == key.target && k->number == key.number && k->seat == key.seat) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool stand_claim_keys_add(stand_claim_keys_t *keys, stand_claim_key_t key) {
+    if (stand_claim_keys_has(keys, key)) {
+        return false;
+    }
+    keys->keys[keys->next] = key;
+    keys->next = (keys->next + 1u) % STAND_CLAIM_KEYS_MAX;
+    keys->count += keys->count < STAND_CLAIM_KEYS_MAX ? 1u : 0u;
+    return true;
 }
 
 void stand_rules_debris(stand_rng_t *rng, const body_sync_body_desc_t *breakable, const float position[3], const float rotation[4],
@@ -270,7 +401,7 @@ static uint32_t record_size(stand_record_type_t type) {
     case STAND_REC_HIT:
         return 2 + 4 + 2 + 12;
     case STAND_REC_IMPACT:
-        return 2 + 4 + 4 + 4;
+        return 2 + 4 + 4 + 2 + 4 + 4;
     case STAND_REC_VERDICT:
         return 2 + 4 + 2 + 1;
     case STAND_REC_SPAWN:
@@ -301,7 +432,9 @@ uint32_t stand_record_encode(const stand_record_t *r, uint8_t *buffer, uint32_t 
         break;
     case STAND_REC_IMPACT:
         put_u32(p, r->body);
-        put_f32(p + 4, r->speed);
+        put_u16(p + 4, r->number);
+        put_f32(p + 6, r->speed);
+        put_u32(p + 10, r->tick);
         break;
     case STAND_REC_VERDICT:
         put_u16(p, r->action);
@@ -353,8 +486,8 @@ static bool bad(char *error, size_t size, const char *what) {
     return false;
 }
 
-bool stand_record_decode(const uint8_t *data, uint32_t size, bool from_host, const stand_limits_t *limits, stand_record_t *out, char *error,
-                         size_t error_size) {
+bool stand_record_decode(const uint8_t *data, uint32_t size, bool from_host, uint32_t stamp, const stand_limits_t *limits, stand_record_t *out,
+                         char *error, size_t error_size) {
     memset(out, 0, sizeof(*out));
     if (!data || size < 1) {
         return bad(error, error_size, "empty");
@@ -393,9 +526,20 @@ bool stand_record_decode(const uint8_t *data, uint32_t size, bool from_host, con
         break;
     case STAND_REC_IMPACT:
         out->body = get_u32(p);
-        out->speed = get_f32(p + 4);
-        if (!id_ok(out->body) || !(isfinite(out->speed) && out->speed >= 0.0f && out->speed <= limits->max_speed)) {
-            return bad(error, error_size, "impact out of range");
+        out->number = get_u16(p + 4);
+        out->speed = get_f32(p + 6);
+        out->tick = get_u32(p + 10);
+        if (!id_ok(out->body)) {
+            return bad(error, error_size, "impact agent id out of range");
+        }
+        if (out->body == out->target) {
+            return bad(error, error_size, "impact agent is its target");
+        }
+        if (!(isfinite(out->speed) && out->speed >= 0.0f && out->speed <= limits->max_speed)) {
+            return bad(error, error_size, "impact speed out of range");
+        }
+        if (stamp - out->tick > STAND_CONTACT_AGE_MAX_TICKS) {
+            return bad(error, error_size, "impact tick out of range");
         }
         break;
     case STAND_REC_VERDICT:
@@ -466,12 +610,12 @@ body_sync_stand_kind_t stand_record_kind(stand_record_type_t type) {
 /* ---- names ---- */
 
 const char *stand_verb_name(body_sync_verb_t verb) {
-    static const char *names[] = {"none", "walk", "grab", "throw", "drop", "punch", "wait"};
+    static const char *names[] = {"none", "walk", "grab", "throw", "drop", "punch", "wait", "recall", "remove"};
     return (unsigned)verb < sizeof(names) / sizeof(names[0]) ? names[verb] : "none";
 }
 
 const char *stand_expect_name(body_sync_expect_kind_t kind) {
-    static const char *names[] = {"none", "agree_at_rest", "no_stuck", "effects_once", "result", "one_of", "metric", "left", "moved"};
+    static const char *names[] = {"none", "agree_at_rest", "no_stuck", "effects_once", "result", "one_of", "metric", "left", "moved", "pace", "effect", "held"};
     return (unsigned)kind < sizeof(names) / sizeof(names[0]) ? names[kind] : "none";
 }
 

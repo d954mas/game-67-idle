@@ -114,6 +114,153 @@ void stand_metrics_playback(stand_metrics_t *metrics, uint32_t guest, double lag
     metrics->jump_max[guest] = jump > metrics->jump_max[guest] ? jump : metrics->jump_max[guest];
 }
 
+void stand_metrics_correction(stand_metrics_t *metrics, uint32_t guest, double correction_m) {
+    if (guest >= metrics->guests || !isfinite(correction_m)) {
+        return;
+    }
+    if (correction_m > 2.0) {
+        metrics->snaps[guest]++;
+        return;
+    }
+    metrics->jump_max[guest] = correction_m > metrics->jump_max[guest] ? correction_m : metrics->jump_max[guest];
+}
+
+void stand_metrics_return_jump(stand_metrics_t *metrics, uint32_t guest, stand_picture_t picture, double jump_m) {
+    if (guest < metrics->guests && (unsigned)picture < 3u && isfinite(jump_m)) {
+        double *worst = &metrics->return_jump[guest][picture];
+        *worst = jump_m > *worst ? jump_m : *worst;
+        metrics->return_jumps[guest]++;
+    }
+}
+
+void stand_metrics_return_unsettled(stand_metrics_t *metrics, uint32_t guest) {
+    if (guest < metrics->guests) {
+        metrics->return_unsettled[guest]++;
+    }
+}
+
+void stand_metrics_switch_jump(stand_metrics_t *metrics, uint32_t guest, double jump_m) {
+    if (guest < metrics->guests && isfinite(jump_m)) {
+        metrics->switch_jump[guest] = jump_m > metrics->switch_jump[guest] ? jump_m : metrics->switch_jump[guest];
+        metrics->switch_jumps[guest]++;
+    }
+}
+
+void stand_metrics_aligned(stand_metrics_t *metrics, uint32_t guest, double gap_m, bool predicted) {
+    if (guest < metrics->guests && isfinite(gap_m)) {
+        stand_hist_add(&metrics->aligned[guest], gap_m);
+        metrics->aligned_predicted[guest] += predicted ? 1u : 0u;
+    }
+}
+
+void stand_metrics_pause_window(stand_metrics_t *metrics, uint32_t guest, uint32_t ticks) {
+    if (guest < metrics->guests && ticks > metrics->pause_window[guest]) {
+        metrics->pause_window[guest] = ticks;
+    }
+}
+
+void stand_metrics_prediction(stand_metrics_t *metrics, uint32_t guest, double gap_m) {
+    if (guest < metrics->guests && isfinite(gap_m)) {
+        stand_hist_add(&metrics->prediction[guest], gap_m);
+    }
+}
+
+void stand_metrics_flight_pause(stand_metrics_t *metrics, uint32_t guest, double gap_m) {
+    if (guest < metrics->guests && isfinite(gap_m)) {
+        stand_hist_add(&metrics->flight_pause[guest], gap_m);
+    }
+}
+
+void stand_metrics_lost_take(stand_metrics_t *metrics, uint32_t guest, double hand_back_m) {
+    if (guest < metrics->guests && isfinite(hand_back_m)) {
+        metrics->lost_takes[guest]++;
+        metrics->lost_take_max[guest] = hand_back_m > metrics->lost_take_max[guest] ? hand_back_m : metrics->lost_take_max[guest];
+    }
+}
+
+void stand_metrics_local_correction(stand_metrics_t *metrics, uint32_t guest, double correction_m, double correction_deg) {
+    if (guest < metrics->guests) {
+        metrics->local_samples[guest]++;
+    }
+    if (guest < metrics->guests && isfinite(correction_deg) && correction_deg > metrics->local_turn_deg[guest]) {
+        metrics->local_turn_deg[guest] = correction_deg;
+    }
+    if (guest < metrics->guests && isfinite(correction_m) && correction_m > metrics->local_correction[guest]) {
+        metrics->local_correction[guest] = correction_m;
+    }
+}
+
+void stand_metrics_response(stand_metrics_t *metrics, uint32_t guest, double ticks) {
+    if (guest < metrics->guests && isfinite(ticks)) {
+        stand_hist_add(&metrics->response[guest], ticks);
+    }
+}
+
+void stand_metrics_response_miss(stand_metrics_t *metrics, uint32_t guest) {
+    if (guest < metrics->guests) {
+        metrics->response_misses[guest]++;
+    }
+}
+
+void stand_metrics_rest(stand_metrics_t *metrics, uint32_t guest, double jitter_m, bool wake) {
+    if (guest >= metrics->guests) {
+        return;
+    }
+    metrics->rest_jitter[guest] = jitter_m > metrics->rest_jitter[guest] ? jitter_m : metrics->rest_jitter[guest];
+    metrics->rest_wakes[guest] += wake ? 1u : 0u;
+    metrics->rest_ticks[guest]++;
+}
+
+void stand_metrics_carry(stand_metrics_t *metrics, uint32_t guest, double gap_m) {
+    if (guest >= metrics->guests) {
+        return;
+    }
+    metrics->carry_gap[guest] = gap_m > metrics->carry_gap[guest] ? gap_m : metrics->carry_gap[guest];
+    metrics->carry_ticks[guest]++;
+}
+
+void stand_metrics_rest_break(stand_metrics_t *metrics, uint32_t guest, bool host) {
+    if (guest < metrics->guests) {
+        (host ? metrics->host_wakes : metrics->rest_breaks)[guest]++;
+    }
+}
+
+void stand_metrics_creep(stand_metrics_t *metrics, uint32_t guest, double speed) {
+    if (guest < metrics->guests && isfinite(speed) && speed > metrics->creep[guest]) {
+        metrics->creep[guest] = speed;
+    }
+}
+
+void stand_metrics_rest_lag(stand_metrics_t *metrics, uint32_t guest, uint32_t ticks) {
+    if (guest < metrics->guests && ticks > metrics->rest_lag[guest]) {
+        metrics->rest_lag[guest] = ticks;
+    }
+}
+
+void stand_metrics_soft_place(stand_metrics_t *metrics, uint32_t guest, uint32_t places) {
+    if (guest < metrics->guests && places > metrics->soft_places[guest]) {
+        metrics->soft_places[guest] = places;
+    }
+}
+
+void stand_metrics_layer_hit(stand_metrics_t *metrics, uint32_t guest, uint32_t tick, double pause_divergence) {
+    if (guest >= metrics->guests) {
+        return;
+    }
+    if (metrics->first_hit[guest] == 0u) {
+        metrics->first_hit[guest] = tick + 1u;
+    }
+    if (isfinite(pause_divergence) && pause_divergence > metrics->pause_divergence[guest]) {
+        metrics->pause_divergence[guest] = pause_divergence;
+    }
+}
+
+void stand_metrics_copy_speed(stand_metrics_t *metrics, uint32_t guest, double speed) {
+    if (guest < metrics->guests && isfinite(speed) && speed > metrics->copy_speed[guest]) {
+        metrics->copy_speed[guest] = speed;
+    }
+}
+
 void stand_metrics_end_tick(stand_metrics_t *metrics) {
     if (metrics->ticks >= BODY_SYNC_STAND_TICKS_MAX) {
         return;
@@ -203,8 +350,48 @@ void stand_metrics_summarize(const stand_metrics_t *metrics, body_sync_report_t 
         out->behind_max_ticks = metrics->behind[g].max;
         out->behind_p95_ticks = stand_hist_quantile(&metrics->behind[g], 0.95);
         out->playback_samples = metrics->lag[g].count;
+        out->response_events = (uint32_t)metrics->response[g].count;
+        out->response_misses = metrics->response_misses[g];
+        out->response_max_ticks = metrics->response[g].max;
+        out->response_p95_ticks = stand_hist_quantile(&metrics->response[g], 0.95);
+        out->rest_jitter_max_m = metrics->rest_jitter[g];
+        out->rest_wakes = metrics->rest_wakes[g];
+        out->rest_breaks = metrics->rest_breaks[g];
+        out->host_wakes = metrics->host_wakes[g];
+        out->creep_max = metrics->creep[g];
+        out->carry_gap_max_m = metrics->carry_gap[g];
+        out->carry_ticks = metrics->carry_ticks[g];
+        out->rest_ticks = metrics->rest_ticks[g];
+        out->rest_lag_max_ticks = metrics->rest_lag[g];
+        out->soft_places_max = metrics->soft_places[g];
+        out->pause_window_max_ticks = metrics->pause_window[g];
+        out->aligned_predicted_samples = metrics->aligned_predicted[g];
+        out->copy_speed_max = metrics->copy_speed[g];
+        out->first_hit_tick = metrics->first_hit[g] ? (double)(metrics->first_hit[g] - 1u) : -1.0;
+        out->pause_divergence_max_m = metrics->pause_divergence[g];
         out->snap_count = metrics->snaps[g];
         out->jump_max_m = metrics->jump_max[g];
+        out->return_jump_host_m = metrics->return_jump[g][STAND_PICTURE_HOST];
+        out->return_jump_own_m = metrics->return_jump[g][STAND_PICTURE_OWN];
+        out->return_jump_other_m = metrics->return_jump[g][STAND_PICTURE_OTHER];
+        out->return_jump_max_m = out->return_jump_host_m > out->return_jump_own_m ? out->return_jump_host_m : out->return_jump_own_m;
+        out->return_jump_max_m = out->return_jump_other_m > out->return_jump_max_m ? out->return_jump_other_m : out->return_jump_max_m;
+        out->return_jumps = metrics->return_jumps[g];
+        out->return_unsettled = metrics->return_unsettled[g];
+        out->switch_jump_max_m = metrics->switch_jump[g];
+        out->switch_jumps = metrics->switch_jumps[g];
+        out->aligned_samples = (uint32_t)metrics->aligned[g].count;
+        out->aligned_gap_max_m = metrics->aligned[g].max;
+        out->aligned_gap_p95_m = stand_hist_quantile(&metrics->aligned[g], 0.95);
+        out->prediction_gap_max_m = metrics->prediction[g].max;
+        out->prediction_gap_p95_m = stand_hist_quantile(&metrics->prediction[g], 0.95);
+        out->flight_pause_gap_max_m = metrics->flight_pause[g].max;
+        out->flight_pause_gap_p95_m = stand_hist_quantile(&metrics->flight_pause[g], 0.95);
+        out->local_correction_max_m = metrics->local_correction[g];
+        out->local_turn_max_deg = metrics->local_turn_deg[g];
+        out->local_samples = metrics->local_samples[g];
+        out->lost_takes = metrics->lost_takes[g];
+        out->lost_take_max_m = metrics->lost_take_max[g];
         summarize_bytes(metrics, g, STAND_DIR_TO_GUEST, &out->to_guest);
         summarize_bytes(metrics, g, STAND_DIR_TO_HOST, &out->to_host);
     }
@@ -224,8 +411,19 @@ static const struct {
     {"stale_ticks.max", STAND_UNIT_TICKS},       {"deferred.count", STAND_UNIT_COUNT},
     {"lag_divergence.max", STAND_UNIT_LENGTH},   {"lag_divergence.p95", STAND_UNIT_LENGTH},    {"path_error.max", STAND_UNIT_LENGTH},
     {"path_error.p95", STAND_UNIT_LENGTH},       {"jump.max", STAND_UNIT_LENGTH},              {"step.count", STAND_UNIT_COUNT},
+    {"return_jump.max", STAND_UNIT_LENGTH},      {"return_jump.count", STAND_UNIT_COUNT},      {"switch_jump.max", STAND_UNIT_LENGTH},
     {"snap.count", STAND_UNIT_COUNT},         {"offset_step.count", STAND_UNIT_COUNT},     {"behind_ticks.max", STAND_UNIT_TICKS},
-    {"behind_ticks.p95", STAND_UNIT_TICKS},
+    {"behind_ticks.p95", STAND_UNIT_TICKS},      {"response_ticks.max", STAND_UNIT_TICKS},    {"response_ticks.p95", STAND_UNIT_TICKS},
+    {"rest_jitter.max", STAND_UNIT_LENGTH},      {"rest_wakes.count", STAND_UNIT_COUNT},      {"rest_breaks.count", STAND_UNIT_COUNT},      {"host_wakes.count", STAND_UNIT_COUNT},      {"rest_lag_ticks.max", STAND_UNIT_TICKS},
+    {"soft_places.max", STAND_UNIT_COUNT},       {"response_misses.count", STAND_UNIT_COUNT},  {"pause_window.max", STAND_UNIT_TICKS},
+    {"aligned_gap.max", STAND_UNIT_LENGTH},      {"aligned_gap.p95", STAND_UNIT_LENGTH},      {"local_correction.max", STAND_UNIT_LENGTH},
+    {"local_turn.max", STAND_UNIT_ANGLE},
+    {"takes.count", STAND_UNIT_COUNT},           {"take_refusals.count", STAND_UNIT_COUNT},   {"reclaims.count", STAND_UNIT_COUNT},
+    {"returns.count", STAND_UNIT_COUNT},         {"lost_takes.count", STAND_UNIT_COUNT},      {"lost_takes.max", STAND_UNIT_LENGTH},
+    {"claims.count", STAND_UNIT_COUNT},          {"claims_rejected.count", STAND_UNIT_COUNT}, {"claims_format.count", STAND_UNIT_COUNT},
+    {"claims_repeat.count", STAND_UNIT_COUNT},   {"claim_effects.count", STAND_UNIT_COUNT},   {"claims_overflow.count", STAND_UNIT_COUNT},
+    {"claims_idle.count", STAND_UNIT_COUNT},     {"carry_gap.max", STAND_UNIT_LENGTH},       {"claims_ended.count", STAND_UNIT_COUNT},
+    {"own_ticks.max", STAND_UNIT_TICKS},         {"late_drops.count", STAND_UNIT_COUNT},
 };
 
 bool stand_metric_unit(const char *name, stand_metric_unit_t *unit) {
@@ -249,6 +447,17 @@ static double peak_total(const stand_metrics_t *m, uint32_t g, int dir) {
         peak = sum > peak ? sum : peak;
     }
     return peak;
+}
+
+/* A throw by `seat`'s player that ended done. */
+static bool threw(const body_sync_report_t *report, uint8_t seat) {
+    for (uint32_t i = 0; i < report->action_count; i++) {
+        const body_sync_action_metrics_t *a = &report->actions[i];
+        if (a->player == seat && a->start_tick != UINT32_MAX && a->verb == BODY_SYNC_VERB_THROW && a->outcome == BODY_SYNC_OUTCOME_DONE) {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool stand_metric_value(const body_sync_report_t *report, const stand_metrics_t *metrics, const char *name, double *value, char *detail,
@@ -282,6 +491,29 @@ bool stand_metric_value(const body_sync_report_t *report, const stand_metrics_t 
         *value = worst;
         return true;
     }
+    if (strcmp(name, "own_ticks.max") == 0) {
+        uint32_t throws = 0;
+        for (uint32_t i = 0; i < report->action_count; i++) {
+            const body_sync_action_metrics_t *a = &report->actions[i];
+            if (a->start_tick == UINT32_MAX || a->verb != BODY_SYNC_VERB_THROW || a->outcome != BODY_SYNC_OUTCOME_DONE) {
+                continue;
+            }
+            throws++;
+            if (a->own_ticks < 0) {
+                if (detail && detail_size) {
+                    snprintf(detail, detail_size, "%s on line %u never flew on its thrower", a->label[0] ? a->label : "throw", a->line);
+                }
+                *value = (double)INFINITY;
+                return true;
+            }
+            worst = (double)a->own_ticks > worst ? (double)a->own_ticks : worst;
+        }
+        if (throws == 0 && detail && detail_size) {
+            snprintf(detail, detail_size, "no throw was measured");
+        }
+        *value = throws == 0 ? (double)INFINITY : worst;
+        return true;
+    }
     for (uint32_t g = 0; g < report->guest_count; g++) {
         const body_sync_guest_metrics_t *m = &report->guests[g];
         double v = 0.0;
@@ -312,6 +544,46 @@ bool stand_metric_value(const body_sync_report_t *report, const stand_metrics_t 
             }
             *value = (double)INFINITY;
             return true;
+        } else if (m->rest_ticks == 0 && (strcmp(name, "rest_jitter.max") == 0 || strcmp(name, "rest_wakes.count") == 0)) {
+            if (detail && detail_size) {
+                snprintf(detail, detail_size, "g%u: no rest was measured", (unsigned)m->seat);
+            }
+            *value = (double)INFINITY;
+            return true;
+        } else if (m->carry_ticks == 0 && strcmp(name, "carry_gap.max") == 0) {
+            if (detail && detail_size) {
+                snprintf(detail, detail_size, "g%u: no carry was measured", (unsigned)m->seat);
+            }
+            *value = (double)INFINITY;
+            return true;
+        } else if (strcmp(name, "carry_gap.max") == 0) {
+            v = m->carry_gap_max_m;
+        } else if (m->response_events == 0 && strncmp(name, "response_ticks", 14) == 0) {
+            if (detail && detail_size) {
+                snprintf(detail, detail_size, "g%u: no hit was measured", (unsigned)m->seat);
+            }
+            *value = (double)INFINITY;
+            return true;
+        } else if (strcmp(name, "response_ticks.max") == 0) {
+            v = m->response_max_ticks;
+        } else if (strcmp(name, "response_ticks.p95") == 0) {
+            v = m->response_p95_ticks;
+        } else if (strcmp(name, "rest_jitter.max") == 0) {
+            v = m->rest_jitter_max_m;
+        } else if (strcmp(name, "rest_wakes.count") == 0) {
+            v = (double)m->rest_wakes;
+        } else if (strcmp(name, "rest_breaks.count") == 0) {
+            v = (double)m->rest_breaks;
+        } else if (strcmp(name, "host_wakes.count") == 0) {
+            v = (double)m->host_wakes;
+        } else if (strcmp(name, "rest_lag_ticks.max") == 0) {
+            v = (double)m->rest_lag_max_ticks;
+        } else if (strcmp(name, "soft_places.max") == 0) {
+            v = (double)m->soft_places_max;
+        } else if (strcmp(name, "pause_window.max") == 0) {
+            v = (double)m->pause_window_max_ticks;
+        } else if (strcmp(name, "response_misses.count") == 0) {
+            v = (double)m->response_misses;
         } else if (strcmp(name, "behind_ticks.max") == 0) {
             v = m->behind_max_ticks;
         } else if (strcmp(name, "behind_ticks.p95") == 0) {
@@ -328,6 +600,78 @@ bool stand_metric_value(const body_sync_report_t *report, const stand_metrics_t 
             v = m->path_error_p95_m;
         } else if (strcmp(name, "jump.max") == 0) {
             v = m->jump_max_m;
+        } else if (strcmp(name, "return_jump.count") == 0) {
+            v = (double)m->return_jumps;
+        } else if (strcmp(name, "return_jump.max") == 0 && m->return_unsettled > 0) {
+            /* A window cut short may have closed before the jump showed. */
+            if (detail && detail_size) {
+                snprintf(detail, detail_size, "g%u: %u return windows closed before their picture played the host", (unsigned)m->seat,
+                         (unsigned)m->return_unsettled);
+            }
+            *value = (double)INFINITY;
+            return true;
+        } else if ((strcmp(name, "return_jump.max") == 0 && m->return_jumps == 0) || (strcmp(name, "switch_jump.max") == 0 && m->switch_jumps == 0)) {
+            /* No handover measured is no evidence of a smooth one. */
+            if (detail && detail_size) {
+                snprintf(detail, detail_size, "g%u: no %s was measured", (unsigned)m->seat, name[0] == 'r' ? "return" : "switch");
+            }
+            *value = (double)INFINITY;
+            return true;
+        } else if (strcmp(name, "return_jump.max") == 0) {
+            v = m->return_jump_max_m;
+        } else if (strcmp(name, "switch_jump.max") == 0) {
+            v = m->switch_jump_max_m;
+        } else if (strncmp(name, "aligned_gap", 11) == 0 && m->aligned_samples == 0) {
+            if (detail && detail_size) {
+                snprintf(detail, detail_size, "no aligned sample was measured");
+            }
+            v = (double)INFINITY;
+        } else if (strcmp(name, "aligned_gap.max") == 0) {
+            v = m->aligned_gap_max_m;
+        } else if (strcmp(name, "aligned_gap.p95") == 0) {
+            v = m->aligned_gap_p95_m;
+        } else if ((strcmp(name, "local_correction.max") == 0 || strcmp(name, "local_turn.max") == 0) && m->local_samples == 0 &&
+                   threw(report, m->seat)) {
+            /* A thrower simulates what it throws: none measured is no evidence of no correction. */
+            if (detail && detail_size) {
+                snprintf(detail, detail_size, "g%u threw but no body it simulates was measured", (unsigned)m->seat);
+            }
+            *value = (double)INFINITY;
+            return true;
+        } else if (strcmp(name, "local_correction.max") == 0) {
+            v = m->local_correction_max_m;
+        } else if (strcmp(name, "local_turn.max") == 0) {
+            v = m->local_turn_max_deg;
+        } else if (strcmp(name, "takes.count") == 0) {
+            v = (double)m->takes;
+        } else if (strcmp(name, "take_refusals.count") == 0) {
+            v = (double)m->take_refusals;
+        } else if (strcmp(name, "reclaims.count") == 0) {
+            v = (double)m->reclaims;
+        } else if (strcmp(name, "returns.count") == 0) {
+            v = (double)m->returns;
+        } else if (strcmp(name, "lost_takes.count") == 0) {
+            v = (double)m->lost_takes;
+        } else if (strcmp(name, "lost_takes.max") == 0) {
+            v = m->lost_take_max_m;
+        } else if (strcmp(name, "claims.count") == 0) {
+            v = (double)m->claims;
+        } else if (strcmp(name, "claims_rejected.count") == 0) {
+            v = (double)m->claims_rejected;
+        } else if (strcmp(name, "claims_format.count") == 0) {
+            v = (double)m->claims_format;
+        } else if (strcmp(name, "claims_repeat.count") == 0) {
+            v = (double)m->claims_repeat;
+        } else if (strcmp(name, "claim_effects.count") == 0) {
+            v = (double)m->claim_effects;
+        } else if (strcmp(name, "claims_overflow.count") == 0) {
+            v = (double)m->claims_overflow;
+        } else if (strcmp(name, "claims_idle.count") == 0) {
+            v = (double)m->claims_idle;
+        } else if (strcmp(name, "claims_ended.count") == 0) {
+            v = (double)m->claims_ended;
+        } else if (strcmp(name, "late_drops.count") == 0) {
+            v = (double)m->late_drops;
         } else if (strcmp(name, "step.count") == 0) {
             v = (double)m->step_count;
         } else if (strcmp(name, "snap.count") == 0) {
@@ -511,6 +855,12 @@ bool stand_json_write(const body_sync_report_t *r, const stand_metrics_t *m, boo
     key(&j, "tick_hz");
     putf(&j, "%u", r->tick_hz);
     put(&j, ",");
+    key(&j, "light_mass_max");
+    number(&j, (double)r->light_mass_max);
+    put(&j, ",");
+    key(&j, "authority");
+    put(&j, r->authority == BODY_SYNC_AUTHORITY_INTERACTION ? "\"interaction\"" : "\"host\"");
+    put(&j, ",");
     key(&j, "ticks");
     putf(&j, "%u", r->ticks);
     put(&j, ",");
@@ -577,6 +927,102 @@ bool stand_json_write(const body_sync_report_t *r, const stand_metrics_t *m, boo
         key(&j, "jump_max");
         number(&j, gm->jump_max_m);
         put(&j, ",");
+        key(&j, "return_jump_max");
+        number(&j, gm->return_jump_max_m);
+        put(&j, ",");
+        key(&j, "return_jump_host");
+        number(&j, gm->return_jump_host_m);
+        put(&j, ",");
+        key(&j, "return_jump_own");
+        number(&j, gm->return_jump_own_m);
+        put(&j, ",");
+        key(&j, "return_jump_other");
+        number(&j, gm->return_jump_other_m);
+        put(&j, ",");
+        key(&j, "return_jumps");
+        putf(&j, "%u", gm->return_jumps);
+        put(&j, ",");
+        key(&j, "return_unsettled");
+        putf(&j, "%u", gm->return_unsettled);
+        put(&j, ",");
+        key(&j, "switch_jump_max");
+        number(&j, gm->switch_jump_max_m);
+        put(&j, ",");
+        key(&j, "switch_jumps");
+        putf(&j, "%u", gm->switch_jumps);
+        put(&j, ",");
+        key(&j, "aligned_gap_max");
+        number(&j, gm->aligned_gap_max_m);
+        put(&j, ",");
+        key(&j, "aligned_gap_p95");
+        number(&j, gm->aligned_gap_p95_m);
+        put(&j, ",");
+        key(&j, "aligned_samples");
+        putf(&j, "%u", gm->aligned_samples);
+        put(&j, ",");
+        key(&j, "prediction_gap_max");
+        number(&j, gm->prediction_gap_max_m);
+        put(&j, ",");
+        key(&j, "prediction_gap_p95");
+        number(&j, gm->prediction_gap_p95_m);
+        put(&j, ",");
+        key(&j, "flight_pause_gap_max");
+        number(&j, gm->flight_pause_gap_max_m);
+        put(&j, ",");
+        key(&j, "flight_pause_gap_p95");
+        number(&j, gm->flight_pause_gap_p95_m);
+        put(&j, ",");
+        key(&j, "local_correction_max");
+        number(&j, gm->local_correction_max_m);
+        put(&j, ",");
+        key(&j, "local_turn_max");
+        number(&j, gm->local_turn_max_deg);
+        put(&j, ",");
+        key(&j, "local_samples");
+        putf(&j, "%u", gm->local_samples);
+        put(&j, ",");
+        key(&j, "takes");
+        putf(&j, "%u", gm->takes);
+        put(&j, ",");
+        key(&j, "take_refusals");
+        putf(&j, "%u", gm->take_refusals);
+        put(&j, ",");
+        key(&j, "reclaims");
+        putf(&j, "%u", gm->reclaims);
+        put(&j, ",");
+        key(&j, "returns");
+        putf(&j, "%u", gm->returns);
+        put(&j, ",");
+        key(&j, "lost_takes");
+        putf(&j, "%u", gm->lost_takes);
+        put(&j, ",");
+        key(&j, "lost_takes_max");
+        number(&j, gm->lost_take_max_m);
+        put(&j, ",");
+        key(&j, "claims");
+        putf(&j, "%u", gm->claims);
+        put(&j, ",");
+        key(&j, "claims_rejected");
+        putf(&j, "%u", gm->claims_rejected);
+        put(&j, ",");
+        key(&j, "claims_format");
+        putf(&j, "%u", gm->claims_format);
+        put(&j, ",");
+        key(&j, "claims_repeat");
+        putf(&j, "%u", gm->claims_repeat);
+        put(&j, ",");
+        key(&j, "claim_effects");
+        putf(&j, "%u", gm->claim_effects);
+        put(&j, ",");
+        key(&j, "claims_ended");
+        putf(&j, "%u", gm->claims_ended);
+        put(&j, ",");
+        key(&j, "claims_overflow");
+        putf(&j, "%u", gm->claims_overflow);
+        put(&j, ",");
+        key(&j, "claims_idle");
+        putf(&j, "%u", gm->claims_idle);
+        put(&j, ",");
         key(&j, "steps");
         putf(&j, "%u", gm->step_count);
         put(&j, ",");
@@ -595,6 +1041,62 @@ bool stand_json_write(const body_sync_report_t *r, const stand_metrics_t *m, boo
         key(&j, "samples");
         putf(&j, "%llu", (unsigned long long)gm->playback_samples);
         put(&j, "},");
+        key(&j, "layer");
+        put(&j, "{");
+        key(&j, "response_events");
+        putf(&j, "%u", gm->response_events);
+        put(&j, ",");
+        key(&j, "response_misses");
+        putf(&j, "%u", gm->response_misses);
+        put(&j, ",");
+        key(&j, "response_ticks_max");
+        number(&j, gm->response_max_ticks);
+        put(&j, ",");
+        key(&j, "response_ticks_p95");
+        number(&j, gm->response_p95_ticks);
+        put(&j, ",");
+        key(&j, "rest_jitter_max");
+        number(&j, gm->rest_jitter_max_m);
+        put(&j, ",");
+        key(&j, "rest_wakes");
+        putf(&j, "%u", gm->rest_wakes);
+        put(&j, ",");
+        key(&j, "rest_breaks");
+        putf(&j, "%u", gm->rest_breaks);
+        put(&j, ",");
+        key(&j, "host_wakes");
+        putf(&j, "%u", gm->host_wakes);
+        put(&j, ",");
+        key(&j, "creep_max");
+        number(&j, gm->creep_max);
+        put(&j, ",");
+        key(&j, "carry_gap_max");
+        number(&j, gm->carry_gap_max_m);
+        put(&j, ",");
+        key(&j, "rest_ticks");
+        putf(&j, "%u", gm->rest_ticks);
+        put(&j, ",");
+        key(&j, "rest_lag_ticks_max");
+        putf(&j, "%u", gm->rest_lag_max_ticks);
+        put(&j, ",");
+        key(&j, "soft_places_max");
+        putf(&j, "%u", gm->soft_places_max);
+        put(&j, ",");
+        key(&j, "pause_window_max_ticks");
+        putf(&j, "%u", gm->pause_window_max_ticks);
+        put(&j, ",");
+        key(&j, "aligned_predicted_samples");
+        putf(&j, "%u", gm->aligned_predicted_samples);
+        put(&j, ",");
+        key(&j, "copy_speed_max");
+        number(&j, gm->copy_speed_max);
+        put(&j, ",");
+        key(&j, "first_hit_tick");
+        number(&j, gm->first_hit_tick);
+        put(&j, ",");
+        key(&j, "pause_divergence_max");
+        number(&j, gm->pause_divergence_max_m);
+        put(&j, "},");
         key(&j, "to_guest");
         bytes_object(&j, &gm->to_guest);
         put(&j, ",");
@@ -610,8 +1112,10 @@ bool stand_json_write(const body_sync_report_t *r, const stand_metrics_t *m, boo
         number(&j, gm->loss);
         put(&j, "},");
         key(&j, "seam");
-        putf(&j, "{\"refused\":%u,\"stale\":%u,\"rejected\":%u,\"deferred\":%llu,\"stale_max_ticks\":%u,\"flush_over_limit\":%u,\"packets_to_guest\":%u}",
-             gm->refused, gm->stale, gm->rejected, (unsigned long long)gm->deferred, gm->stale_max_ticks, gm->flush_over_limit, gm->packets_to_guest);
+        putf(&j, "{\"refused\":%u,\"stale\":%u,\"rejected\":%u,\"late_drops\":%u,\"deferred\":%llu,\"stale_max_ticks\":%u,"
+                 "\"flush_over_limit\":%u,\"packets_to_guest\":%u}",
+             gm->refused, gm->stale, gm->rejected, gm->late_drops, (unsigned long long)gm->deferred, gm->stale_max_ticks,
+             gm->flush_over_limit, gm->packets_to_guest);
         if (with_series && m) {
             series(&j, m, g);
         }
@@ -639,7 +1143,8 @@ bool stand_json_write(const body_sync_report_t *r, const stand_metrics_t *m, boo
         put(&j, ",");
         key(&j, "outcome");
         string(&j, body_sync_outcome_name(a->outcome));
-        putf(&j, ",\"host_ticks\":%d,\"echo_ticks\":%d,\"seen_ticks\":%d,\"shows\":%s,\"answered\":%s}", a->host_ticks, a->echo_ticks, a->seen_ticks,
+        putf(&j, ",\"host_ticks\":%d,\"echo_ticks\":%d,\"seen_ticks\":%d,\"own_ticks\":%d,\"shows\":%s,\"answered\":%s}", a->host_ticks, a->echo_ticks,
+             a->seen_ticks, a->own_ticks,
              a->shows ? "true" : "false", a->answered ? "true" : "false");
     }
     put(&j, "],");
