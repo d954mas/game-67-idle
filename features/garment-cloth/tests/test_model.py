@@ -20,14 +20,19 @@ BODY = set(JOINTS[:3])
 LABEL = 7  # any unique positive integer names a piece
 
 
-def model(label=None, freedom=None, weights=None, cloth_joint=None):
+def model(label=None, freedom=None, weights=None, cloth_joint=None, split=False):
     """Legs on Root/Left/Right and a panel in front of them labelled LABEL; a skin flap below stays unlabelled."""
     body_points, body_faces, body_weights = legs()
     panel, panel_faces = grid(-0.16, 0.16, 0.2, 0.6, 0.07, 9, 7)
     flap, flap_faces = grid(-0.16, 0.16, 0.6, 0.66, 0.07, 9, 2)
-    # The flap's bottom row is the panel's top row: the panel is sewn to it there.
-    points = np.concatenate([panel, flap[9:]])
-    faces = np.concatenate([panel_faces, np.where(flap_faces < 9, flap_faces + 54, flap_faces - 9 + 63)])
+    # The flap's bottom row is the panel's top row: the panel is sewn to it there. Split, the flap keeps its own
+    # copy of that row at the same positions, as a UV or material split would.
+    if split:
+        points = np.concatenate([panel, flap])
+        faces = np.concatenate([panel_faces, flap_faces + 63])
+    else:
+        points = np.concatenate([panel, flap[9:]])
+        faces = np.concatenate([panel_faces, np.where(flap_faces < 9, flap_faces + 54, flap_faces - 9 + 63)])
     labels = np.zeros(len(points))
     labels[:63] = LABEL
     # The panel's own skin weights: the left leg's share grows from the right leg to the left one.
@@ -113,16 +118,67 @@ class ModelCook(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "_CLOTH_PIECE must hold non-negative integers"):
             cook_outfit("synthetic", model(label=labels)[0], [piece()], BODY)
 
-    def test_freedom_off_the_piece_or_on_its_border_is_refused(self):
+    def test_freedom_off_the_piece_is_refused(self):
         _, labels, paint = model()
         outside = paint.copy()
         outside[-1] = 0.5
         with self.assertRaisesRegex(ValueError, "_CLOTH is set on a vertex without a piece label"):
             cook_outfit("synthetic", model(freedom=outside)[0], [piece()], BODY)
+
+    def test_a_free_row_next_to_the_skinned_border_is_accepted(self):
+        _, labels, paint = model()
         border = paint.copy()
-        border[56] = 0.5  # on the row sewn to the flap
-        with self.assertRaisesRegex(ValueError, "a piece border must be pinned"):
-            cook_outfit("synthetic", model(freedom=border)[0], [piece()], BODY)
+        border[56] = 0.5  # on the row sewn to the flap: the flap's skinned vertices hold the seam
+        cook_outfit("synthetic", model(freedom=border)[0], [piece()], BODY)
+
+    def test_a_free_vertex_split_from_an_unlabelled_one_is_refused(self):
+        m, _, paint = model(split=True)
+        cook_outfit("synthetic", m, [piece()], BODY)
+        torn = paint.copy()
+        torn[56] = 0.5  # its flap copy is skinned, so moving it would open the seam
+        with self.assertRaisesRegex(ValueError, "would open a crack"):
+            cook_outfit("synthetic", model(freedom=torn, split=True)[0], [piece()], BODY)
+
+    def test_a_piece_primitive_without_skin_weights_is_refused(self):
+        m, _, _ = model()
+        cloth = m.primitives()[1]["attributes"]
+        del cloth["JOINTS_0"], cloth["WEIGHTS_0"]
+        with self.assertRaisesRegex(ValueError, "have no skin weights"):
+            cook_outfit("synthetic", m, [piece()], BODY)
+
+    def test_bones_take_the_skins_inverse_bind_matrices(self):
+        m, _, _ = model()
+        ibm = m.json["skins"][0]["inverseBindMatrices"]
+        matrices = np.tile(np.eye(4), (len(JOINTS), 1, 1))
+        matrices[:, 3, :3] = [[0.0, -0.1 * i, 0.02] for i in range(len(JOINTS))]  # column-major translation
+        m.overwrite(ibm, matrices.reshape(len(JOINTS), 16).astype(np.float32))
+        cooked = decode(cook_outfit("synthetic", m, [piece()], BODY)[0])["pieces"][0]
+        expected = m.inverse_binds()
+        for name, matrix in cooked["bones"]:
+            np.testing.assert_allclose(matrix.reshape(3, 4), expected[name][:3], atol=1e-6)
+
+    def test_a_model_the_reader_cannot_describe_is_refused(self):
+        cases = []
+        m, _, _ = model()
+        m.json["meshes"].append(m.json["meshes"][0])
+        cases.append((m, "expected one mesh"))
+        m, _, _ = model()
+        m.json["skins"].append(m.json["skins"][0])
+        cases.append((m, "expected one skin"))
+        m, _, _ = model()
+        m.json["meshes"][0]["primitives"][1]["mode"] = 1
+        cases.append((m, "not a triangle list"))
+        m, _, _ = model()
+        next(n for n in m.nodes if "mesh" in n)["translation"] = [0, 1, 0]
+        cases.append((m, "mesh node carries a transform"))
+        for broken, message in cases:
+            with self.subTest(message), self.assertRaisesRegex(ValueError, message):
+                cook_outfit("synthetic", broken, [piece()], BODY)
+
+    def test_truncating_the_rig_refuses_a_weight_on_a_dropped_joint(self):
+        m, _, _ = model(cloth_joint=3)
+        with self.assertRaisesRegex(ValueError, "weighted to a joint the truncated rig drops"):
+            m.truncate_skin(3)
 
     def test_weights_outside_the_body_rig_are_refused(self):
         with self.assertRaisesRegex(ValueError, r"joints outside the body rig: \['Ribbon'\]"):

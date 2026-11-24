@@ -267,7 +267,7 @@ static void test_target_inside_a_capsule_is_pushed_to_its_surface(void) {
     TEST_ASSERT_EQUAL_MEMORY(target[0], cloth.target[0], sizeof target[0]);
 }
 
-/* A target that crosses a limb's axis between substeps keeps exiting on the side it came from. */
+/* A target that crosses a limb's axis between pose samples keeps exiting on the side it came from. */
 static void test_pushed_target_keeps_its_side_when_the_target_crosses_the_axis(void) {
     float drive[3] = {0.0F, 0.0F, 100.0F};
     ClothMesh mesh = seam;
@@ -324,10 +324,65 @@ static void test_pushed_target_leaves_a_support_through_its_entry_face(void) {
     memcpy(target, seam.rest, sizeof target);
     target[2][0] = 0.0F; target[2][1] = 1.05F; target[2][2] = 0.0F;
     cloth_reset(&cloth, &mesh, target);
-    target[2][1] = 0.96F; /* sank below the top face, nearer the top than the underside */
+    target[2][1] = 0.90F; /* sank through the top face to nearer the underside: only the memory says top */
     cloth_push_targets(&cloth, &mesh, &material, target, NULL, NULL, 0, &seat);
     cloth_step(&cloth, &mesh, &material, dt, &frame, target, NULL, NULL, 0);
     TEST_ASSERT_TRUE(fabsf(cloth.target[2][1] - (seat.center[1] + material.thickness)) < 1e-5F);
+}
+
+static float capsule_depth(const float p[3], const ClothCapsule *c, float margin) {
+    const float dx = p[0] - c->a[0], dz = p[2] - c->a[2];
+    return c->radius + margin - sqrtf(dx * dx + dz * dz);
+}
+
+/* A target inside two overlapping limbs ends outside both: the second pass undoes what the first capsule's exit did
+   to the other one. */
+static void test_pushed_target_leaves_two_overlapping_capsules(void) {
+    ClothMesh mesh = seam;
+    mesh.tether = NULL;
+    ClothMaterial m = stiff;
+    m.thickness = 0.005F;
+    const ClothCapsule legs[2] = {{.a = {0, 0, 0}, .b = {0, 2, 0}, .radius = 0.1F, .flags = CLOTH_COLLIDER_INSIDE},
+                                  {.a = {0.15F, 0, 0}, .b = {0.15F, 2, 0}, .radius = 0.1F, .flags = CLOTH_COLLIDER_INSIDE}};
+    float target[3][3];
+    memcpy(target, seam.rest, sizeof target);
+    target[2][0] = 0.075F; target[2][1] = 1.0F; target[2][2] = 0.3F;
+    cloth_reset(&cloth, &mesh, target);
+    target[2][2] = 0.05F;
+    TEST_ASSERT_TRUE(cloth_push_targets(&cloth, &mesh, &m, target, NULL, legs, 2, NULL));
+    TEST_ASSERT_TRUE(capsule_depth(target[2], &legs[0], m.thickness) < 1e-3F);
+    TEST_ASSERT_TRUE(capsule_depth(target[2], &legs[1], m.thickness) < 1e-3F);
+    TEST_ASSERT_TRUE(target[2][2] > 0.05F);
+}
+
+/* The support is applied after the capsules, so a target the limb pushes into the seat still ends on the seat. */
+static void test_support_has_the_last_word_after_a_capsule(void) {
+    ClothMesh mesh = seam;
+    mesh.tether = NULL;
+    ClothMaterial m = stiff;
+    m.thickness = 0.005F;
+    const ClothCapsule thigh = {.a = {-1, 1.08F, 0}, .b = {1, 1.08F, 0}, .radius = 0.1F, .flags = CLOTH_COLLIDER_INSIDE};
+    const ClothSupport seat = {.center = {0, 1.0F, 0}, .half_u = {1, 0, 0}, .half_v = {0, 0, -1}, .depth = 0.12F};
+    float target[3][3];
+    memcpy(target, seam.rest, sizeof target);
+    target[2][0] = 0.0F; target[2][1] = 1.005F; target[2][2] = 0.0F; /* on the seat, under the thigh */
+    cloth_reset(&cloth, &mesh, target);
+    target[2][1] = 1.03F; /* inside the thigh from below: its exit along -Y lands inside the seat */
+    TEST_ASSERT_TRUE(cloth_push_targets(&cloth, &mesh, &m, target, NULL, &thigh, 1, &seat));
+    TEST_ASSERT_TRUE(target[2][1] >= seat.center[1] + m.thickness - 1e-5F);
+}
+
+/* An invalid support is refused by the push as by the step. */
+static void test_push_refuses_an_invalid_support(void) {
+    ClothMesh mesh = seam;
+    mesh.tether = NULL;
+    const ClothSupport flat = {.center = {0, 1.0F, 0}, .half_u = {1, 0, 0}, .half_v = {2, 0, 0}, .depth = 0.1F};
+    float target[3][3];
+    memcpy(target, seam.rest, sizeof target);
+    cloth_reset(&cloth, &mesh, target);
+    TEST_ASSERT_FALSE(cloth_push_targets(&cloth, &mesh, &stiff, target, NULL, NULL, 0, &flat));
+    TEST_ASSERT_FALSE(cloth.frame_valid);
+    TEST_ASSERT_EQUAL_MEMORY(seam.rest, target, sizeof target);
 }
 
 static void test_anisotropic_warp_weft_edges(void) {
@@ -724,6 +779,9 @@ int main(void) {
     RUN_TEST(test_pushed_target_keeps_its_side_when_the_target_crosses_the_axis);
     RUN_TEST(test_pushed_target_leaves_a_support_through_its_entry_face);
     RUN_TEST(test_backstop_limits_sinking_below_the_target);
+    RUN_TEST(test_pushed_target_leaves_two_overlapping_capsules);
+    RUN_TEST(test_support_has_the_last_word_after_a_capsule);
+    RUN_TEST(test_push_refuses_an_invalid_support);
     RUN_TEST(test_anisotropic_warp_weft_edges);
     RUN_TEST(test_contact_velocity_friction_and_max_speed);
     RUN_TEST(test_invalid_frame_motion_is_rejected_without_mutating_state);

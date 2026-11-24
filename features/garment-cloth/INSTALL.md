@@ -19,23 +19,33 @@ game's `dependencies.json`.
 The cook reads its contract from the garment GLB. Each piece is the set of vertices whose float attribute
 `_CLOTH_PIECE` holds the piece's number (any unique positive integer; 0 or no attribute is not cloth), across every
 primitive. `_CLOTH` is the piece's freedom: 0 is a pin that follows skinning and anchors the tethers, and a free
-vertex is driven toward its target at `drive_hz` x (1 - `_CLOTH`). A piece's border with any other part must be a pin,
-so the render seam is closed by construction. Skin weights reference the body's joints only. They are the cloth's
+vertex is driven toward its target at `drive_hz` x (1 - `_CLOTH`). The seam of a piece is its unlabelled side: those
+vertices are skinned and hold the border, so the labelled row next to them may move. A labelled vertex split from an
+unlabelled one at the same position must be a pin, or the render seam would open there. Skin weights reference the body's joints only. They are the cloth's
 target, the pose each free vertex is driven toward, and are authored like the weights of any skinned garment; the
 feature does not generate them.
 
-Put the feature's `tools/` on the authoring Python path. To paint `_CLOTH` and drop the garment joints:
+Put the feature's `tools/` on the authoring Python path. To paint `_CLOTH` of piece 1 in one primitive:
 
 ```python
 from garment_glb import Glb
-from garment_paint import baseline_freedom
+from garment_paint import baseline_freedom, coincident
 
-freedom = baseline_freedom(piece_points, piece_faces, seam_fraction=0.05, curve=(0.85, 0.42, 0.8), sewn=border)
 model = Glb(path)
-model.set_attribute(primitive, "_CLOTH", freedom)            # appended once, rewritten in place afterwards
-model.truncate_skin(len(body_joints))                         # garment joints must be the trailing nodes
+primitive = model.primitives()[0]
+positions = model.accessor(primitive["attributes"]["POSITION"])
+label = model.accessor(primitive["attributes"]["_CLOTH_PIECE"]).ravel()
+faces = model.accessor(primitive["indices"], False).reshape(-1, 3)
+piece = label == 1
+split = np.flatnonzero(piece & coincident(positions, positions[label == 0]))  # copies of an unlabelled vertex stay pins
+freedom = baseline_freedom(positions, faces[piece[faces].all(1)], seam_fraction=0.05, curve=(0.85, 0.42, 0.8),
+                           pinned=split)
+model.set_attribute(primitive, "_CLOTH", np.where(piece, freedom, 0.0).astype(np.float32))  # the cook refuses NaN
 path.write_bytes(model.to_bytes())
 ```
+
+A rig that still lists garment joints after the body's drops them with `model.truncate_skin(len(body_joints))`, which
+refuses a vertex still weighted to a dropped joint.
 
 ## Cook
 
@@ -48,7 +58,7 @@ vertices of the model, or of another model wearing the same garment, to the prox
 from garment_cook import bind_outfit, cook_outfit, depfile_text, stage_model
 
 piece = dict(id="coat", piece=1, source_material="cloth", outer_surface=None, budget=240, drive_hz=1.9, swing=0.33,
-             material=dict(density=0.24, stretch=1e-5, bend=0.4, drag=2.0, thickness=0.003, iterations=2),
+             backstop_per_m=0.3, material=dict(density=0.24, stretch=1e-5, bend=0.4, drag=2.0, thickness=0.003, iterations=2),
              colliders=[("Hips", [-0.07, 0.9, 0], "Hips", [0.07, 0.9, 0], 0.09, 0.0, 0)],
              linear_inertia=0.45, angular_inertia=0.35, downward_follow=0.85)
 blob, sheets, report = cook_outfit("coat", Glb(path), [piece], body_joints)
@@ -59,8 +69,8 @@ depfile_path.write_text(depfile_text(blob_path, inputs))
 `swing` is the travel radius per metre of fabric to the nearest pin and `backstop_per_m` how far below its target, along the skinned normal, a free vertex may sink per metre. Colliders are round cones in rest model space,
 the margin is the fabric thickness, and flag 1 marks an outside obstacle. The report lists, per piece, the free
 proxy vertices that already lie inside their own colliders at rest. The cook refuses a lost label, a label no
-recipe piece names, `_CLOTH` off a piece or on a free border, and weights outside the body rig; `garment_blob.encode`
-checks every value the solver trusts and names the outfit, piece and field it rejects. Add the blob to the pack with
+recipe piece names, `_CLOTH` off a piece, a free vertex split from an unlabelled one, and weights outside the body
+rig; `garment_blob.encode` checks every value the solver trusts and names the outfit, piece and field it rejects. Add the blob to the pack with
 `nt_builder_add_blob`; tools read it back with `garment_blob.decode`.
 
 For radii measured from a character mesh, pass rest-space points in meters, one joint name per point, and the
@@ -128,9 +138,10 @@ Keep the view and its blob alive and immutable through every use of
 `state`. Reset succeeds when `state.mesh == panel`. Each pose and guide
 array must cover every simulation vertex. Pins follow their current anchor.
 The capsule endpoints define the centerline. Sample the rig and colliders
-at physics frequency, then present `state.x`. A known translation can be
-applied to both `state.x` and `state.previous` to carry inertia through a
-world-origin shift.
+at physics frequency, then present `state.x`. To carry inertia through a
+world-origin shift, apply the same translation to `state.x` and
+`state.target`: the target holds the last pushed targets, whose side keeps
+each push exit on its side.
 
 ## Scene contact
 

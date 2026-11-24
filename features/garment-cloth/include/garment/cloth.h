@@ -111,8 +111,9 @@ bool cloth_reset_supported(ClothState *s, const ClothMesh *mesh, const ClothMate
                            const ClothCapsule *body, int count, const ClothSupport *support);
 /* Push the free vertices' skinned anchors out of the body capsules and then the support, in place: two
    Gauss-Seidel passes with the contact margin, each exit on the side the last pushed target was on. Call it once
-   per pose sample; the steps between two samples interpolate the pushed targets. Pins keep their anchors. */
-void cloth_push_targets(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, float anchors[][3],
+   per pose sample; the steps between two samples interpolate the pushed targets. Pins keep their anchors. An invalid
+   support is refused as cloth_step refuses it: false, the frame is invalid and the anchors stay unchanged. */
+bool cloth_push_targets(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, float anchors[][3],
                         const ClothGuide *guide, const ClothCapsule *body, int count, const ClothSupport *support);
 /* NULL frame: an inertial frame without fictitious forces, ground plane or scene support. */
 void cloth_step(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, float dt,

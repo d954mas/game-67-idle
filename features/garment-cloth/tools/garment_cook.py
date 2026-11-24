@@ -14,6 +14,7 @@ from scipy.spatial import cKDTree
 
 from garment_binding import bind_render
 from garment_blob import encode
+from garment_paint import coincident
 from garment_proxy import (classify_edges, closest_surface_points, corner_owners, geodesic_depth, outer_faces,
                            round_cone_signed_distance, sewn_sheet, simplify)
 
@@ -146,16 +147,10 @@ def _labels(model, primitive, where):
     if np.any((label == 0) & (freedom > 0)):
         raise ValueError(f"{where}: {FREEDOM} is set on a vertex without a piece label")
     faces = model.accessor(primitive["indices"], False).reshape(-1, 3)
-    mixed = faces[(label[faces] != label[faces][:, :1]).any(1)]
-    loose = (freedom[mixed] > 0) & (label[mixed] > 0)
-    if loose.any():
-        vertex = int(mixed[loose][0])
-        raise ValueError(f"{where}: vertex {vertex} of piece {int(label[vertex])} is free but shares a triangle with "
-                         "another part; a piece border must be pinned")
     return label.astype(np.int64), freedom, faces
 
 
-def cook_piece(outfit_id, model, piece, rows, joints, body_joints, rest_world, tether_slack):
+def cook_piece(outfit_id, model, piece, rows, joints, body_joints, inverse_binds, tether_slack):
     """One piece's blob record, its proxy sheet for the render binding and its report row."""
     name = f"{outfit_id}/{piece['id']}"
     value = piece["piece"]
@@ -180,13 +175,17 @@ def cook_piece(outfit_id, model, piece, rows, joints, body_joints, rest_world, t
     pins = np.flatnonzero(proxy_freedom == 0)
     if len(pins) < 2:
         raise ValueError(f"{name}: fewer than two proxy vertices are pins")
-    # Target weights are inverse-square distance blends of the four nearest sheet vertices: the rule the garments'
-    # weights were authored and proven against.
+    # Inverse-square blend of the four nearest sheet vertices: a proxy vertex on a sheet vertex takes its weights.
     distance, near = cKDTree(sheet_p).query(p, k=min(4, len(sheet_p)))
     inverse = 1 / np.maximum(distance, 1e-4) ** 2
     order, influence = top_influences(np.einsum("nk,nkj->nj", inverse, weights[orig][near]) / inverse.sum(1, keepdims=True))
     reach, _ = geodesic_depth(p, f, pins)
-    drive = (2 * math.pi * piece["drive_hz"] * (1 - proxy_freedom)) ** 2
+    drive_hz = piece.get("drive_hz", 0.0)
+    driven = np.any((proxy_freedom > 0) & (proxy_freedom < 1))
+    if driven != (drive_hz > 0):
+        raise ValueError(f"{name}: drive_hz {drive_hz} does not match the freedom map, which "
+                         f"{'drives' if driven else 'leaves undriven'} the free vertices")
+    drive = (2 * math.pi * drive_hz * (1 - proxy_freedom)) ** 2
     drive[pins] = 0
     used = sorted({joints[j] for j in np.unique(order[influence > 0])} |
                   {c[k] for c in piece["colliders"] for k in (0, 2)})
@@ -194,7 +193,7 @@ def cook_piece(outfit_id, model, piece, rows, joints, body_joints, rest_world, t
     if missing:
         raise ValueError(f"{name}: joints outside the body rig: {sorted(missing)}")
     index = {joint: i for i, joint in enumerate(used)}
-    bones = [(joint, np.linalg.inv(rest_world[model.by_name[joint]])[:3].ravel()) for joint in used]
+    bones = [(joint, inverse_binds[joint][:3].ravel()) for joint in used]
     mesh = cook_mesh(name, p, f, pins, wearable=True, tether_slack=tether_slack,
                      edge_kinds=classify_edges(p, f, pins), drive=drive)
     a, b, c = p[f].transpose(1, 0, 2)
@@ -234,10 +233,22 @@ def _rows(model, body_joints):
         here = f"{where}/{model.material(primitive)}"
         label, freedom, faces = _labels(model, primitive, here)
         weights = model.skin_weights(primitive, len(joints))
+        unweighted = np.flatnonzero((label > 0) & (weights.sum(1) <= 0))
+        if len(unweighted):
+            raise ValueError(f"{here}: {len(unweighted)} piece vertices have no skin weights (JOINTS_0/WEIGHTS_0); "
+                             "the cloth target is skinned from them")
         outside = sorted(joints[j] for j in np.flatnonzero(weights.any(0)) if joints[j] not in body_joints)
         if outside:
             raise ValueError(f"{here}: weights on joints outside the body rig: {outside}")
         rows.append((primitive, label, faces, weights, freedom))
+    skinned = np.concatenate([model.accessor(r[0]["attributes"]["POSITION"])[r[1] == 0] for r in rows])
+    for primitive, label, _, _, freedom in rows:
+        free = np.flatnonzero((label > 0) & (freedom > 0))
+        torn = free[coincident(model.accessor(primitive["attributes"]["POSITION"])[free], skinned)]
+        if len(torn):
+            raise ValueError(f"{where}/{model.material(primitive)}: vertex {int(torn[0])} of piece "
+                             f"{int(label[torn[0]])} is free at the position of an unlabelled vertex and would open a "
+                             "crack; it must be a pin")
     return joints, rows
 
 
@@ -245,7 +256,7 @@ def cook_outfit(outfit_id, model, pieces, body_joints, *, tether_slack=1.05):
     """Blob bytes, the proxy sheets the render binding needs and a report row per piece.
 
     model: a garment_glb.Glb. pieces: dicts with id, piece (its `_CLOTH_PIECE` value), source_material (the primitive
-    the proxy is built from), optional outer_surface, budget, drive_hz, swing, backstop_per_m (how far below its
+    the proxy is built from), optional outer_surface, budget, drive_hz (absent for an undriven piece), swing, backstop_per_m (how far below its
     target a free vertex may sink per metre of fabric to its pin), material (ClothMaterial fields),
     colliders [(joint_a, point_a, joint_b, point_b, radius_a, radius_b, flags)] in rest model space, and the
     linear_inertia, angular_inertia and downward_follow of the reference frame.
@@ -260,10 +271,10 @@ def cook_outfit(outfit_id, model, pieces, body_joints, *, tether_slack=1.05):
     if unknown or lost:
         raise ValueError(f"{model.path or outfit_id}: labels without a recipe piece {sorted(unknown)}, "
                          f"recipe pieces without vertices {sorted(lost)}")
-    rest_world = model.world_rest()
+    inverse_binds = model.inverse_binds()
     records, sheets, report = [], [], []
     for piece in pieces:
-        record, sheet, info = cook_piece(outfit_id, model, piece, rows, joints, body_joints, rest_world, tether_slack)
+        record, sheet, info = cook_piece(outfit_id, model, piece, rows, joints, body_joints, inverse_binds, tether_slack)
         records.append(record)
         sheets.append(sheet[:5] + (piece["source_material"],))
         report.append(info)

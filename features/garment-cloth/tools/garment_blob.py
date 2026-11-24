@@ -115,6 +115,8 @@ def _material(check, material):
             check(INT32[0] <= value <= INT32[1], field, f"must be in [{INT32[0]}, {INT32[1]}]")
             record[name] = value
         else:
+            check(isinstance(value, (int, float, np.integer, np.floating)) and not isinstance(value, bool), field,
+                  "must be a number")
             record[name] = single(value)
     check.number(record["density"], "material.density", 0, low_open=True)
     check(int(record["iterations"]) >= 1, "material.iterations", "must be at least 1")
@@ -200,6 +202,9 @@ def _piece(check, piece, strings):
         check.each(np.isfinite(values) & (values >= 0 if field in ("travel_m", "backstop_m") else True),
                    f"vertices.{field}", "must be finite" + (" and non-negative" if values.ndim == 1 else ""))
         vertex[field] = values
+    check.each(vertex["weight"] >= 0, "vertices.weight", "must be non-negative")
+    check.each(np.abs(vertex["weight"].sum(1) - 1) <= 1e-3, "vertices.weight", "must sum to 1 within 1e-3")
+    check.each(np.linalg.norm(vertex["normal"], axis=1) > 0, "vertices.normal", "must be non-zero")
     records["vertices"] = vertex
     colliders = list(piece.get("colliders", ()))
     check(len(colliders) <= CAPSULES_MAX, "colliders", f"exceed {CAPSULES_MAX} capsules")

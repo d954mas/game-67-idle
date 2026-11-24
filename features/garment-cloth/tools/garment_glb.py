@@ -69,11 +69,32 @@ class Glb:
     def name(self, i):
         return self.nodes[i].get("name")
 
+    def _skin(self):
+        skins = self.json.get("skins", [])
+        if len(skins) != 1:
+            raise ValueError(f"{self.path}: expected one skin, found {len(skins)}")
+        return skins[0]
+
     def skin_joints(self):
-        return [self.name(j) for j in self.json["skins"][0]["joints"]]
+        return [self.name(j) for j in self._skin()["joints"]]
+
+    def inverse_binds(self):
+        """Joint name to the 4x4 inverse bind matrix the skin stores, which is what the render mesh is skinned with."""
+        skin = self._skin()
+        matrices = self.accessor(skin["inverseBindMatrices"]).reshape(-1, 4, 4).transpose(0, 2, 1)
+        return {self.name(j): m for j, m in zip(skin["joints"], matrices)}
 
     def primitives(self):
-        return self.json["meshes"][0]["primitives"]
+        meshes = self.json.get("meshes", [])
+        if len(meshes) != 1:
+            raise ValueError(f"{self.path}: expected one mesh, found {len(meshes)}")
+        for node in self.nodes:
+            if "mesh" in node and any(k in node for k in ("matrix", "translation", "rotation", "scale")):
+                raise ValueError(f"{self.path}: the mesh node carries a transform; skinned vertices ignore it")
+        primitives = meshes[0]["primitives"]
+        if any(primitive.get("mode", 4) != 4 for primitive in primitives):
+            raise ValueError(f"{self.path}: a primitive is not a triangle list")
+        return primitives
 
     def material(self, primitive):
         return self.json["materials"][primitive["material"]]["name"]
@@ -136,11 +157,26 @@ class Glb:
 
     def truncate_skin(self, keep):
         """Drop the joints after the first `keep` from the skin and delete their nodes, which must be leaves of
-        the kept hierarchy listed after every other node. The dropped inverse bind matrices stay as unused bytes."""
-        skin = self.json["skins"][0]
+        the kept hierarchy listed after every other node. A weight on a dropped joint is refused. The dropped inverse
+        bind matrices stay as unused bytes."""
+        skin = self._skin()
         dropped = skin["joints"][keep:]
         if not dropped:
             return
+        for primitive in self.primitives():
+            a = primitive["attributes"]
+            layer = 0
+            while f"JOINTS_{layer}" in a:
+                joints = self.accessor(a[f"JOINTS_{layer}"], False)
+                weights = self.accessor(a[f"WEIGHTS_{layer}"])
+                lost = joints >= keep
+                if np.any(lost & (weights > 0)):
+                    raise ValueError(f"{self.path}/{self.material(primitive)}: a vertex is weighted to a joint the "
+                                     "truncated rig drops")
+                # A zero-weight lane on a dropped joint would index past the rig; point it at a kept joint.
+                if lost.any():
+                    self.overwrite(a[f"JOINTS_{layer}"], np.where(lost, 0, joints))
+                layer += 1
         first = len(self.nodes) - len(dropped)
         if sorted(dropped) != list(range(first, len(self.nodes))):
             raise ValueError(f"{self.path}: dropped joints must be the last nodes")

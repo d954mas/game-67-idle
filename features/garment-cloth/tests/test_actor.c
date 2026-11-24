@@ -5,6 +5,7 @@
 
 #include <math.h>
 #include <stdint.h>
+#include <stdio.h>
 
 /* The two flaps touch along an unsewn edge in the rest pose and attach to different joints. */
 static const float rest[][3] = {
@@ -217,11 +218,81 @@ static void test_world_support_applies_only_to_the_wearer_above_its_finite_face(
     }
 }
 
+static void near(float value, float expected, float tolerance) {
+    char message[96];
+    snprintf(message, sizeof message, "%.6f, expected %.6f", (double)value, (double)expected);
+    TEST_ASSERT_TRUE_MESSAGE(fabsf(value - expected) <= tolerance, message);
+}
+
+/* A strongly driven corner slides up inside a fixed post: its target is pushed out of the post, so the corner stays
+   outside it. The pushed targets move linearly with the pose, so every pose rate, with or without samples that run
+   no step, gives the same corner. Interpolating from an unpushed previous sample, or skipping the push on
+   a sample without steps, would make the result depend on the rate. */
+static void test_pushed_targets_are_interpolated_between_pose_samples(void) {
+    static const float positions[][3] = {{0, 0, 0}, {1, 0, 0}, {0, 1, 0}};
+    static const float slide_inv_area[] = {0, 0, 1};
+    static const float drive[] = {0, 0, 4000};
+    static const ClothFace face = {0, 1, 2};
+    static const ClothEdge slide_edges[] = {{0, 1, 2, -1, 1, 0, 0}, {0, 2, 1, -1, 1, 0, 0}, {1, 2, 0, -1, 1.41421356F, 0, 0}};
+    static const ClothMesh slide_mesh = {.vertices = 3, .faces = 1, .edges = 3, .rest = positions, .inv_area = slide_inv_area,
+                                         .face = &face, .edge = slide_edges, .drive = drive};
+    static const GarmentBone slide_bones[] = {{"slide", {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0}},
+                                              {"post", {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0}}};
+    static const GarmentVertex slide_vertices[] = {{.weight = {1}, .normal = {0, 0, 1}},
+                                                   {.weight = {1}, .normal = {0, 0, 1}},
+                                                   {.weight = {1}, .normal = {1, 0, 0}, .travel_m = 1.0F, .backstop_m = 1.0F}};
+    static const GarmentCollider post = {.bone_a = 1, .bone_b = 1, .point_a = {-0.05F, 0.5F, 0}, .point_b = {-0.05F, 4, 0},
+                                         .radius_m = 0.1F};
+    static const GarmentAsset piece = {.id = "slide", .bones = slide_bones, .bone_count = 2, .mesh = &slide_mesh,
+                                       .vertices = slide_vertices,
+                                       .material = {.density = 0.2F, .iterations = 2, .stretch = 1.0F, .thickness = 0.005F},
+                                       .colliders = &post, .collider_count = 1};
+    static const GarmentSet outfit = {.id = "slide", .pieces = &piece, .piece_count = 1};
+    const uint32_t ids[] = {nt_hash32_str("slide").value, nt_hash32_str("post").value};
+    const nt_skeletal_skeleton_t rig = {.joint_id = ids, .joint_count = 2};
+    const float surface = -0.05F + 0.1F + 0.005F;
+    GarmentActor *actor = &actors[0];
+    float reference[3] = {0};
+    for (int trial = 0; trial < 3; ++trial) {
+        nt_skeletal_mat34_t pose[] = {identity, identity};
+        garment_actor_clear(actor);
+        TEST_ASSERT_TRUE(garment_actor_update(actor, &outfit, &rig, pose, world, 0.0F, true, NULL));
+        TEST_ASSERT_TRUE(actor->palette[2].r[0][0] >= surface - 1e-4F);
+        const int samples = trial == 0 ? 10 : 20;
+        float elapsed = 0.0F;
+        for (int i = 0; i < samples; ++i) {
+            const float dt = 1.0F / 3.0F / (float)samples;
+            if (trial == 2) {
+                /* A sample too short for a step between two that step. */
+                pose[0].r[1][3] = 0.6F * (elapsed + 0.0005F);
+                TEST_ASSERT_TRUE(garment_actor_update(actor, &outfit, &rig, pose, world, 0.0005F, true, NULL));
+                elapsed += 0.0005F;
+                TEST_ASSERT_TRUE(garment_actor_update(actor, &outfit, &rig, pose, world, 0.0F, true, NULL));
+                elapsed += dt - 0.0005F;
+                pose[0].r[1][3] = 0.6F * elapsed;
+                TEST_ASSERT_TRUE(garment_actor_update(actor, &outfit, &rig, pose, world, dt - 0.0005F, true, NULL));
+            } else {
+                elapsed += dt;
+                pose[0].r[1][3] = 0.6F * elapsed;
+                TEST_ASSERT_TRUE(garment_actor_update(actor, &outfit, &rig, pose, world, dt, true, NULL));
+            }
+        }
+        TEST_ASSERT_EQUAL_UINT(GARMENT_SIM_HZ / 3, actor->stats.steps);
+        const float *corner = actor->palette[2].r[0];
+        TEST_ASSERT_TRUE(corner[0] >= surface - 1e-3F);
+        for (int axis = 0; axis < 3; ++axis) {
+            if (trial == 0) reference[axis] = corner[axis];
+            else near(corner[axis], reference[axis], 1e-4F);
+        }
+    }
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_shared_asset_instances_keep_their_own_pins_contacts_and_inspection);
     RUN_TEST(test_world_support_applies_only_to_the_wearer_above_its_finite_face);
     RUN_TEST(test_body_guide_reaches_surface_palette_before_first_physics_tick);
     RUN_TEST(test_moving_capsule_contact_matches_across_pose_rates);
+    RUN_TEST(test_pushed_targets_are_interpolated_between_pose_samples);
     return UNITY_END();
 }

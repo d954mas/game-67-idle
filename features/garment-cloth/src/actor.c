@@ -22,7 +22,6 @@ typedef struct GarmentPiece {
     float sim_anchors[CLOTH_VERTICES][3];
     ClothCapsule sim_caps[GARMENT_CAPSULES_MAX];
     int sim_cap_count;
-    int continuous_cap_count; /* A pose-only frame can remove a generated collider between physical steps. */
 } GarmentPiece;
 
 /* Concurrent actor updates use separate scratch; simulation never calls back into user code. */
@@ -172,21 +171,14 @@ static void interpolate(const GarmentAsset *asset, GarmentPiece *piece, float u)
     step->cap_count = curr->cap_count;
     for (int i = 0; i < curr->cap_count; ++i) {
         step->caps[i] = curr->caps[i];
-        if (i < prev->cap_count) {
-            blend3(prev->caps[i].a, curr->caps[i].a, u, step->caps[i].a);
-            blend3(prev->caps[i].b, curr->caps[i].b, u, step->caps[i].b);
-        }
+        blend3(prev->caps[i].a, curr->caps[i].a, u, step->caps[i].a);
+        blend3(prev->caps[i].b, curr->caps[i].b, u, step->caps[i].b);
         /* A render pose can fall between physical steps. Sweep from the last solved endpoint. */
-        if (i < piece->continuous_cap_count) {
-            memcpy(step->caps[i].prev_a, piece->sim_caps[i].a, sizeof step->caps[i].prev_a);
-            memcpy(step->caps[i].prev_b, piece->sim_caps[i].b, sizeof step->caps[i].prev_b);
-            step->caps[i].has_prev = 1U;
-        } else {
-            step->caps[i].has_prev = 0U;
-        }
+        memcpy(step->caps[i].prev_a, piece->sim_caps[i].a, sizeof step->caps[i].prev_a);
+        memcpy(step->caps[i].prev_b, piece->sim_caps[i].b, sizeof step->caps[i].prev_b);
+        step->caps[i].has_prev = 1U;
     }
     piece->sim_cap_count = step->cap_count;
-    piece->continuous_cap_count = step->cap_count;
     /* A step on a pose timestamp shares the exact input endpoint with the next interval. */
     memcpy(piece->sim_caps, u == 1.0F ? curr->caps : step->caps, (size_t)step->cap_count * sizeof *step->caps);
 }
@@ -316,8 +308,6 @@ static bool simulate(GarmentActor *a, const GarmentSet *set, const nt_skeletal_s
             break;
         }
         size_t bytes = (size_t)g->mesh->vertices * sizeof s->sim_anchors[0];
-        if (s->continuous_cap_count > scratch.current.cap_count)
-            s->continuous_cap_count = scratch.current.cap_count;
         if (reset) {
             cloth_reset_supported(&s->cloth, g->mesh, &g->material, scratch.current.anchors,
                                   scratch.current.guide, scratch.current.caps, scratch.current.cap_count,
@@ -326,21 +316,21 @@ static bool simulate(GarmentActor *a, const GarmentSet *set, const nt_skeletal_s
             memcpy(scratch.current.anchors, s->cloth.target, bytes);
             memcpy(s->sim_anchors, scratch.current.anchors, bytes);
             s->sim_cap_count = scratch.current.cap_count;
-            s->continuous_cap_count = scratch.current.cap_count;
             memcpy(s->sim_caps, scratch.current.caps, (size_t)s->sim_cap_count * sizeof *s->sim_caps);
         } else {
             /* The pushed target depends on the pose alone, so it is found once per sample; the sweep from the last
                sample's capsules keeps each exit on its side. */
             for (int c = 0; c < scratch.current.cap_count; ++c) {
                 ClothCapsule *cap = &scratch.current.caps[c];
-                cap->has_prev = c < s->previous.cap_count ? 1U : 0U;
-                if (cap->has_prev) {
-                    memcpy(cap->prev_a, s->previous.caps[c].a, sizeof cap->prev_a);
-                    memcpy(cap->prev_b, s->previous.caps[c].b, sizeof cap->prev_b);
-                }
+                cap->has_prev = 1U;
+                memcpy(cap->prev_a, s->previous.caps[c].a, sizeof cap->prev_a);
+                memcpy(cap->prev_b, s->previous.caps[c].b, sizeof cap->prev_b);
             }
-            cloth_push_targets(&s->cloth, g->mesh, &g->material, scratch.current.anchors, scratch.current.guide,
-                               scratch.current.caps, scratch.current.cap_count, world_support ? &support : NULL);
+            if (!cloth_push_targets(&s->cloth, g->mesh, &g->material, scratch.current.anchors, scratch.current.guide,
+                                    scratch.current.caps, scratch.current.cap_count, world_support ? &support : NULL)) {
+                a->stats.finite = false;
+                break;
+            }
         }
         ClothFrame frame = {
             .linear_accel = {local_accel[0], local_accel[1], local_accel[2]},

@@ -648,7 +648,7 @@ enum { TARGET_PASSES = 2 };
 
 /* The target of a free vertex is its skinned anchor pushed out of the body capsules, then out of the support, in
    TARGET_PASSES Gauss-Seidel passes with the cloth's own contact margin. previous holds the pushed targets of the
-   last substep, which keep each exit on the side the target came from. Pins keep their anchor. */
+   last pose sample, which keep each exit on the side the target came from. Pins keep their anchor. */
 static void push_targets(const ClothMesh *mesh, const ClothMaterial *m, const float anchors[][3],
                          const ClothGuide *guide, const ClothCapsule *body, const CapsuleBroadphase *bp,
                          SupportPlane *support, const float (*previous)[3], float out[][3]) {
@@ -670,17 +670,21 @@ static void push_targets(const ClothMesh *mesh, const ClothMaterial *m, const fl
     }
 }
 
-void cloth_push_targets(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, float anchors[][3],
+bool cloth_push_targets(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, float anchors[][3],
                         const ClothGuide *guide, const ClothCapsule *body, int count, const ClothSupport *support) {
     NT_ASSERT(s && mesh && m && anchors && count >= 0 && count <= CLOTH_CAPSULES);
     SupportPlane plane;
-    if (!prepare_support(support, &plane)) support = NULL;
+    if (!prepare_support(support, &plane)) {
+        s->frame_valid = false;
+        return false;
+    }
     StepWork *w = &work.entry.step;
     build_broadphase(m, body, count, &w->bp);
     const float (*previous)[3] = s->frame_valid && s->mesh == mesh ? (const float (*)[3])s->target : NULL;
     push_targets(mesh, m, (const float (*)[3])anchors, guide, body, &w->bp, support ? &plane : NULL, previous, w->pushed);
     memcpy(anchors, w->pushed, (size_t)mesh->vertices * sizeof anchors[0]);
     memcpy(s->target, w->pushed, (size_t)mesh->vertices * sizeof s->target[0]);
+    return true;
 }
 
 static void project_body(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m,

@@ -1,17 +1,30 @@
 """Paint the freedom map `_CLOTH` of a garment piece from its geometry.
 
 `_CLOTH` is 0 on a pin (the vertex follows skinning) and in (0, 1] elsewhere; a free vertex is driven toward
-its target at drive_hz * (1 - _CLOTH). The helper reproduces the pin band and the drive falloff a cook used to
-derive per piece: pins are the top `seam_fraction` of the piece's height, and the drive weight falls along the
-surface distance from those pins. A drive weight w is a frequency ratio of sqrt(w), so _CLOTH = 1 - sqrt(w).
-Vertices sewn to the rest of the model are pins as well, and so are vertices covered by an outer layer: an inner
-piece under another piece follows skinning there, since nothing keeps two simulated layers apart.
+its target at drive_hz * (1 - _CLOTH). Pins are the top `seam_fraction` of the piece's height, and the drive weight
+falls along the surface distance from the pins. A drive weight w is a frequency ratio of sqrt(w), so
+_CLOTH = 1 - sqrt(w).
+A piece's seam is its not-cloth side: an unlabelled vertex is skinned and holds the border, so the labelled row next
+to it stays free. Two kinds of vertex are pins besides the band: one covered by an outer layer (an inner piece
+follows skinning there, since nothing keeps two simulated layers apart) and one split from an unlabelled vertex at
+the same position (`coincident`), which would open a crack if it moved.
 """
 import heapq
 
 import numpy as np
+from scipy.spatial import cKDTree
 
 FREE_FLOOR = 1.0 / 64.0  # a free vertex never reads as a pin
+COINCIDENT_M = 1e-6
+
+
+def coincident(points, others, tolerance=COINCIDENT_M):
+    """Mask of `points` that sit on one of `others` within `tolerance` metres."""
+    points, others = np.asarray(points, float).reshape(-1, 3), np.asarray(others, float).reshape(-1, 3)
+    if not len(points) or not len(others):
+        return np.zeros(len(points), bool)
+    distance, _ = cKDTree(others).query(points, distance_upper_bound=tolerance)
+    return np.isfinite(distance)
 
 
 def weld(points):
@@ -56,9 +69,9 @@ def surface_distance(points, faces, sources):
         rest = np.array([v for v in used if not np.isfinite(dist[v])])
         if not len(rest):
             break
-        gap = np.linalg.norm(points[rest][:, None] - points[reached][None], axis=2)
-        i, j = np.unravel_index(np.argmin(gap), gap.shape)
-        dist[int(rest[i])] = dist[int(reached[j])] + float(gap[i, j])
+        gap, nearest = cKDTree(points[reached]).query(points[rest])
+        i = int(np.argmin(gap))
+        dist[int(rest[i])] = dist[int(reached[nearest[i]])] + float(gap[i])
         queue = [(dist[int(rest[i])], int(rest[i]))]
     out = np.full(len(points), np.nan)
     out[every] = [dist[int(v)] for v in rep[every]]
@@ -90,11 +103,11 @@ def covered(points, normals, cover_points, cover_faces, max_distance):
     return hit
 
 
-def baseline_freedom(points, faces, seam_fraction, curve=None, sewn=None):
+def baseline_freedom(points, faces, seam_fraction, curve=None, pinned=None):
     """Freedom per vertex used by `faces` (NaN elsewhere).
 
     seam_fraction: share of the piece's height, measured from its top, that is pinned.
-    sewn: vertices joined to a part outside the piece, or covered by an outer piece; they are pins too.
+    pinned: further pins, such as covered or coincident vertices.
     curve: (start, end, reach) drive weights at surface distance 0 and at `reach` of the largest distance,
     linear between and clamped; None means an undriven piece (freedom 1).
     """
@@ -105,8 +118,8 @@ def baseline_freedom(points, faces, seam_fraction, curve=None, sewn=None):
     y = points[used, 1]
     height = (y.max() - y) / max(np.ptp(y), 1e-12)
     pins = used[height <= seam_fraction]
-    if sewn is not None:
-        pins = np.union1d(pins, np.asarray(sewn, int))
+    if pinned is not None:
+        pins = np.union1d(pins, np.asarray(pinned, int))
     if len(np.intersect1d(pins, used)) < 2:
         raise ValueError("the seam band holds fewer than two vertices")
     freedom = np.full(len(points), np.nan)

@@ -6,7 +6,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from garment_paint import FREE_FLOOR, baseline_freedom, covered, surface_distance, weld
+from garment_paint import FREE_FLOOR, baseline_freedom, coincident, covered, surface_distance, weld
 from synthetic import grid
 
 
@@ -24,15 +24,22 @@ class Paint(unittest.TestCase):
         by_height = f[column[np.argsort(-y[column])]]
         self.assertTrue(np.all(np.diff(by_height) >= -1e-12))
 
-    def test_sewn_vertices_are_pins_and_an_undriven_piece_is_free(self):
-        sewn = [0, 1]
-        f = baseline_freedom(self.points, self.faces, 0.1, None, sewn)
-        self.assertTrue(np.all(f[sewn] == 0))
+    def test_further_pins_are_pins_and_an_undriven_piece_is_free(self):
+        extra = [0, 1]
+        f = baseline_freedom(self.points, self.faces, 0.1, None, extra)
+        self.assertTrue(np.all(f[extra] == 0))
         self.assertTrue(np.all((f == 0) | (f == 1)))
 
     def test_a_full_drive_weight_stays_free(self):
         f = baseline_freedom(self.points, self.faces, 0.1, (1.0, 1.0, 1.0))
         self.assertTrue(np.all(f[f > 0] == FREE_FLOOR))
+
+    def test_coincident_finds_split_copies_only(self):
+        others = np.array([[0.0, 0.6, 0.0], [5.0, 5.0, 5.0]])
+        hit = coincident(self.points, others)
+        np.testing.assert_array_equal(np.flatnonzero(hit), np.flatnonzero(np.all(np.isclose(self.points, others[0]), 1)))
+        self.assertFalse(coincident(self.points + [0, 0, 1e-4], others).any())
+        self.assertEqual(len(coincident(self.points, np.zeros((0, 3)))), len(self.points))
 
     def test_weld_maps_equal_positions_to_one_vertex(self):
         rep = weld([[0, 0, 0], [1, 0, 0], [0, 0, 0]])
