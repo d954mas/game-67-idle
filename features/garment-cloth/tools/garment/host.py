@@ -19,9 +19,10 @@ from scipy.optimize import linprog
 FEATURE = Path(__file__).resolve().parents[2]
 STUDIO = FEATURE.parents[1]
 # The feature-test consumer builds the library (node ai_studio/feature_testing/run.mjs); GARMENT_HOST names another.
+# Either must carry the stamp of the current runtime sources (check_stamp).
 LIBRARY = STUDIO / "ai_studio/feature_testing/consumer/build/feature-verify/_garment_cloth/garment_host.dll"
 BUILD = "node ai_studio/feature_testing/run.mjs"
-# The runtime the default library is built from: a library older than any of them steps another runtime than the game's.
+# The runtime sources a library steps, in the order its stamp hashes them (tools/host/runtime_stamp.cmake).
 RUNTIME = [*sorted((FEATURE / "src").glob("*.c")), *sorted((FEATURE / "include/garment").glob("*.h")),
            FEATURE / "tools/host/garment_host.c"]
 
@@ -259,17 +260,27 @@ class Host:
             raise ValueError(f"no piece {piece} or corrective {index}")
 
 
+def check_stamp(lib, path):
+    """Refuse a loaded library unless its runtime stamp (gh_runtime_sha256, written by its build) is the hash of the
+    current runtime sources: a bake records runtime_sha256 for the solver it ran, so it must run that one."""
+    try:
+        stamp = lib.gh_runtime_sha256
+    except AttributeError:
+        raise ValueError(f"{path} carries no runtime stamp (gh_runtime_sha256): rebuild it with `{BUILD}`") from None
+    stamp.restype, stamp.argtypes = ctypes.c_char_p, []
+    built, current = (stamp() or b"").decode("ascii", "replace"), runtime_sha256()
+    if built != current:
+        raise ValueError(f"{path} was built from other runtime sources (stamp {built[:12]}, the sources are "
+                         f"{current[:12]}): rebuild it with `{BUILD}`")
+
+
 def _library(path=None):
-    chosen = path or os.environ.get("GARMENT_HOST")
-    path = Path(chosen or LIBRARY)
+    path = Path(path or os.environ.get("GARMENT_HOST") or LIBRARY)
     if not path.is_file():
         raise FileNotFoundError(f"{path}: the garment_host library (the feature's runtime for offline tools) is not built; "
                                 f"build it with `{BUILD}`, or set GARMENT_HOST")
-    if not chosen:
-        newer = [str(f.relative_to(STUDIO)) for f in RUNTIME if f.stat().st_mtime > path.stat().st_mtime]
-        if newer:
-            raise FileNotFoundError(f"{path} is older than the runtime ({', '.join(newer[:3])}): rebuild it with `{BUILD}`")
     lib = ctypes.CDLL(str(path))
+    check_stamp(lib, path)
     f, i, b, p = ctypes.POINTER(ctypes.c_float), ctypes.c_int, ctypes.c_bool, ctypes.c_void_p
     signatures = {
         "gh_load": (p, [ctypes.c_char_p, ctypes.c_uint32, i, ctypes.POINTER(ctypes.c_char_p), ctypes.POINTER(ctypes.c_uint16)]),

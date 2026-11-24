@@ -4,6 +4,7 @@
 #include "garment/asset.h"
 #include "garment/surface_transfer.h"
 #include "hash/nt_hash.h"
+#include "garment_host_runtime.gen.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -39,6 +40,10 @@ GH_API void gh_free(GarmentHost *h) {
     free(h->blob);
     free(h);
 }
+
+/* The hash of the runtime sources this library was compiled from (runtime_stamp.cmake): host.py steps no library
+   whose stamp is not the hash of the current sources. */
+GH_API const char *gh_runtime_sha256(void) { return GH_RUNTIME_SHA256; }
 
 /* The render transfer frames come from the authored rest, as the game's do: a corrective moves the reference, and the
    shader's frames do not move with it. */

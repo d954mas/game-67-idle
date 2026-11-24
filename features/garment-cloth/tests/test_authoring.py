@@ -79,6 +79,8 @@ def body_scene():
     body = glb([("skin", points, faces, *lanes(len(points), 0), {})], JOINTS)
     scene = Scene(data)
     (scene.root / "body.glb").write_bytes(body)
+    (scene.root / "body.provenance.json").write_text(json.dumps(
+        {"id": "body", "origin": "mine", "license": "Studio-made test body"}), encoding="utf-8")
     return scene
 
 
@@ -747,6 +749,65 @@ class TestCook(unittest.TestCase):
             {"name": "other", "resource": "held.glb", "game": {"corrective": "missing"}}]}), encoding="utf-8")
         self.assertEqual(gates.clip_correctives(sc.read(data), self.scene.root / "clips.json"), {"held": "in"})
 
+    def test_cross_fades_between_seated_clips_on_one_seat_are_reported_at_their_weights(self):
+        # Two held seated clips on one seat, one playing a corrective that draws the free cloth halfway into the body:
+        # fading out of it shows a share of the corrective on a blend of the poses, measured under its own report.
+        from synthetic import glb as write_glb
+        cloth_p, cloth_f = tube(0.0, CLOTH_R, 0.40, 0.90, around=24, rows=12)
+        clip = write_glb([("cloth", cloth_p, cloth_f, *lanes(len(cloth_p), 0), {})], JOINTS,
+                         animation={"left": ([0.0, 0.5, 1.0], np.zeros((3, 3)))})
+        (self.scene.root / "held.glb").write_bytes(clip)
+        skirt(self.o)
+        built = self.o.built()
+        piece = built.piece("skirt")
+        free = piece.r[:, None] > 0
+        inward = np.where(free, (piece.points * [1, 0, 1]) * -(CLOTH_R - 0.5 * BODY_R) / CLOTH_R, 0.0)
+        piece.correctives["in"] = (inward.astype(np.float32), np.zeros_like(piece.points), np.column_stack([piece.d, piece.R]))
+        built.correctives = [dict(name="in", clip="sit", t=0.5)]
+        data = sc.write(built)
+        seat = [[0.0, 1.0, 0.0, -0.2]]
+        gd = gate_data(self.o, data, complete=True, seats={"sit": seat, "perch": seat, "stand": [[0, 1, 0, 0]]})
+        path = self.scene.root / "held.glb"
+        gd.clips = [(gates.REST, None), ("sit", path), ("perch", path), ("stand", path)]
+        gd.clip_correctives = {"sit": "in"}
+        specs = gates.crossfade_specs(gd)
+        self.assertEqual(sorted({s[0].split("@")[0] for s in specs}), ["crossfade:perch>sit", "crossfade:sit>perch"])
+        self.assertEqual(len(specs), 2 * len(gates.CROSSFADE_U))
+        early = next(s for s in specs if s[0] == f"{gates.CROSSFADE}sit>perch@0.25")
+        late = next(s for s in specs if s[0] == f"{gates.CROSSFADE}sit>perch@0.75")
+        deep = gates.clip_gates(gd, early, ("G4",))[("crossfade", "G4", "skirt", "sit>perch")]
+        shallow = gates.clip_gates(gd, late, ("G4",))[("crossfade", "G4", "skirt", "sit>perch")]
+        self.assertTrue(deep["failed"] and not deep["enforced"])
+        self.assertEqual((deep["measure"], deep["frames"]), ("G4", 3))
+        self.assertGreater(deep["worst"]["value_mm"], shallow["worst"]["value_mm"] if shallow["worst"] else 0.0)
+        # The blend's ends are the configurations themselves.
+        p = sc.read(data).piece("skirt")
+        for got, want in zip(gates.blend(p, {"in": 1.0}), gates.configuration(p, "in")):
+            np.testing.assert_array_equal(got, want)
+        for got, want in zip(gates.blend(p, {}), gates.configuration(p, None)):
+            np.testing.assert_array_equal(got, want)
+
+    def test_the_gates_blend_backstops_and_directions_by_the_runtime_rule(self):
+        skirt(self.o)
+        p = sc.read(sc.write(self.o.built())).piece("skirt")
+        free = np.flatnonzero((p.r > 0) & (p.R > 0))[:2]
+        rest = p.b[free].astype(float)
+        rest /= np.linalg.norm(rest, axis=1, keepdims=True)
+        side = np.cross(rest, [0.0, 1.0, 0.0])
+        side /= np.linalg.norm(side, axis=1, keepdims=True)
+        turn = np.zeros(p.points.shape)
+        turn[free] = side - p.b[free]
+        key = np.column_stack([p.d, p.R]).astype(float)
+        key[free] = [0.0, 0.0]
+        p.correctives["side"] = (np.zeros(p.points.shape, np.float32), turn.astype(np.float32), key)
+        for w in (0.25, 0.5):
+            _, b, d, R = gates.blend(p, {"side": w})
+            angle = np.arccos(np.clip(np.einsum("ij,ij->i", b[free], rest), -1, 1))
+            np.testing.assert_allclose(angle, w * np.arccos(np.clip(np.einsum("ij,ij->i", side, rest), -1, 1)), atol=1e-5)
+            # An off key is a flat body at the reach: d moves toward r, the curvature toward 0.
+            np.testing.assert_allclose(d[free], (1 - w) * p.d[free] + w * p.r[free], rtol=1e-5)
+            self.assertTrue(np.all(R[free] > 0))
+
     def test_the_layer_gate_reads_the_backstop_of_the_corrected_reference(self):
         inner = skirt(self.o)
         outer = self.o.piece("over", 2, "plain")
@@ -814,14 +875,20 @@ class TestCook(unittest.TestCase):
         self.assertEqual([r["convexes"] for r in o.corrective_requests], [[], []])
 
 
+COLLIDERS = dict(schema="garment.colliders.v1", body_sha256="", cones=[[0, 1]],
+                 spheres=[dict(name="a", bone="root", center=[0, 0, 0], radius=0.1),
+                          dict(name="b", bone="root", center=[0, 1, 0], radius=0.1)])
+
+
 class TestReceipt(unittest.TestCase):
-    """check.py writes the receipt the cook trusts instead of running the gates."""
+    """check.py writes the receipt the cook accepts instead of running the per-frame gates: one that certifies exactly
+    what the gates read, that no hand edit or change during the check gets past, on colliders the declaration names."""
 
     SCRIPT = """import sys
 sys.path.insert(0, {tools!r})
 from garment.outfit import Outfit
 FABRIC = {fabric!r}
-o = Outfit(__file__, {root!r}, "model.glb", body=["skin"], fabrics={{"plain": FABRIC}})
+o = Outfit(__file__, {root!r}, "model.glb", body=["skin"], fabrics={{"plain": FABRIC}}{extra})
 p = o.piece("skirt", 1, "plain")
 p.create("cloth", 120)
 p.pin(p.from_render(~p.render.labelled | (p.render.height <= 0.1)))
@@ -829,51 +896,196 @@ p.weights_transfer(p.render.surface(), nearest=4)
 p.gradient(rate=0.5, cap=0.2)
 o.write()
 """
+    DECLARATION = {"script": "outfit.py", "stage": 1, "sidecar": "model.cloth.glb", "colliders": "colliders.json"}
 
-    def test_a_check_writes_a_receipt_the_cook_verifies(self):
+    def setUp(self):
         import runpy
+        self.scene = Scene(cylinder_scene())
+        self.root = self.scene.root
+        self.script = self.root / "outfit.py"
+        self.declaration = self.root / "outfit.json"
+        for name in ("colliders.json", "other-colliders.json"):
+            (self.root / name).write_text(json.dumps(COLLIDERS), encoding="utf-8")
+        self.write_script()
+        self.declaration.write_text(json.dumps(self.DECLARATION), encoding="utf-8")
+        runpy.run_path(str(self.script), run_name="__main__")
+
+    def tearDown(self):
+        self.scene.close()
+
+    def write_script(self, extra=""):
+        self.script.write_text(self.SCRIPT.format(tools=str(HERE.parent / "tools"), fabric=FABRIC, root=str(self.root),
+                                                  extra=extra), encoding="utf-8")
+
+    def check(self, *args):
+        from garment import check
+        return check.main([str(self.script), "--workers", "1", *args])
+
+    def test_a_check_writes_a_receipt_the_cook_accepts(self):
+        from garment import receipt as R
+        self.assertEqual(self.check(), 0)
+        path = R.path_for(self.script)
+        first = path.read_bytes()
+        findings = R.accept(self.root, self.declaration)
+        self.assertIn("G1", {f["gate"] for f in findings})
+        doc = json.loads(first)
+        self.assertTrue({"outfit.py", "outfit.json", "colliders.json", "model.glb", "model.cloth.glb"} <= set(doc["files"]))
+        self.assertIn("features/garment-cloth/tools/garment/gates.py", doc["modules"])
+        self.assertIn("python", doc["versions"])
+        # The same check writes the same bytes.
+        self.assertEqual(self.check(), 0)
+        self.assertEqual(path.read_bytes(), first)
+        # A changed input makes the receipt stale, and the refusal names it.
+        sidecar = self.root / "model.cloth.glb"
+        kept = sidecar.read_bytes()
+        sidecar.write_bytes(kept + b"\0")
+        with self.assertRaisesRegex(ValueError, "stale .*file model.cloth.glb"):
+            R.verify(self.root, self.declaration)
+        sidecar.write_bytes(kept)
+        path.unlink()
+        with self.assertRaisesRegex(ValueError, "no check receipt"):
+            R.verify(self.root, self.declaration)
+        # A partial check writes none.
+        self.assertEqual(self.check("--gates", "G1"), 0)
+        self.assertFalse(path.exists())
+
+    def test_a_hand_edited_receipt_is_refused(self):
+        from garment import receipt as R
+        self.assertEqual(self.check(), 0)
+        path = R.path_for(self.script)
+        original = json.loads(path.read_text(encoding="utf-8"))
+
+        def edited(change, digest):
+            doc = json.loads(json.dumps(original))
+            change(doc)
+            if digest:
+                doc["digest"] = R._digest(doc)
+            path.write_text(json.dumps(doc), encoding="utf-8")
+
+        # Any edit without check.py's digest: a deleted file, a pasted hash, a deleted failing finding.
+        for change in (lambda d: d["files"].pop("colliders.json"),
+                       lambda d: d["files"].__setitem__("model.glb", "0" * 64),
+                       lambda d: d["findings"].pop()):
+            edited(change, digest=False)
+            with self.assertRaisesRegex(ValueError, "not what check.py wrote"):
+                R.verify(self.root, self.declaration)
+        # Even with the digest redone, the files and modules must be exactly those a check of the outfit reads.
+        edited(lambda d: d["files"].pop("colliders.json"), digest=True)
+        with self.assertRaisesRegex(ValueError, "file colliders.json not checked"):
+            R.verify(self.root, self.declaration)
+        edited(lambda d: d["modules"].__setitem__("features/garment-cloth/tools/garment/extra.py", "0" * 64), digest=True)
+        with self.assertRaisesRegex(ValueError, "extra.py not read by this outfit's check"):
+            R.verify(self.root, self.declaration)
+        # A recorded failure of a gate the stage enforces is refused; a reported one is not.
+        edited(lambda d: d["findings"].append(dict(gate="G1", piece="skirt", failed=True, enforced=True)), digest=True)
+        with self.assertRaisesRegex(ValueError, "records enforced failures: G1 skirt"):
+            R.verify(self.root, self.declaration)
+        edited(lambda d: d["findings"].append(dict(gate="G4", piece="skirt", failed=True, enforced=False)), digest=True)
+        R.accept(self.root, self.declaration)
+        # The receipt must be of the declared script, sidecar and stage.
+        edited(lambda d: d.__setitem__("stage", 2), digest=True)
+        with self.assertRaisesRegex(ValueError, "checked stage 2, the declaration ships 1"):
+            R.verify(self.root, self.declaration)
+
+    def test_an_input_changed_during_the_check_writes_no_receipt(self):
         from garment import check, receipt as R
+        path = R.path_for(self.script)
+        colliders = self.root / "colliders.json"
+        gates_run = check.run_gates
+
+        def changing(*args, **kwargs):
+            out = gates_run(*args, **kwargs)
+            colliders.write_text(json.dumps(dict(COLLIDERS, cones=[])), encoding="utf-8")
+            return out
+        check.run_gates = changing
+        try:
+            self.assertEqual(self.check(), 1)
+        finally:
+            check.run_gates = gates_run
+        self.assertFalse(path.exists())
+        colliders.write_text(json.dumps(COLLIDERS), encoding="utf-8")
+        # Between the build and the first gate: the declaration, a build input, differs from what the build hashed.
+        built = check.build
+
+        def edited_after_build(script):
+            out = built(script)
+            self.declaration.write_text(json.dumps(self.DECLARATION, indent=2), encoding="utf-8")
+            return out
+        check.build = edited_after_build
+        try:
+            self.assertEqual(self.check(), 1)
+        finally:
+            check.build = built
+        self.assertFalse(path.exists())
+
+    def test_the_declaration_is_the_one_source_of_the_colliders(self):
+        import runpy
+        from garment import cook as C, receipt as R
+        from garment.sidecar import read
+        # The script may name the declared colliders, not others.
+        self.write_script(', colliders="other-colliders.json"')
+        with self.assertRaisesRegex(ValueError, "one source of the outfit's body shapes"):
+            runpy.run_path(str(self.script), run_name="__main__")
+        self.write_script(', colliders="colliders.json"')
+        runpy.run_path(str(self.script), run_name="__main__")
+        self.assertEqual(self.check(), 0)
+        sidecar = read((self.root / "model.cloth.glb").read_bytes())
+        self.assertEqual(sidecar.check["colliders"], "colliders.json")
+        # Declaring other colliders after the check makes the sidecar and its receipt stale: the declaration is a
+        # build and check input.
+        self.declaration.write_text(json.dumps(dict(self.DECLARATION, colliders="other-colliders.json")), encoding="utf-8")
+        self.assertIn("input outfit.json", C.stale(sidecar, self.root, self.script))
+        with self.assertRaisesRegex(ValueError, "stale .*file outfit.json"):
+            R.accept(self.root, self.declaration)
+
+
+class TestRecord(unittest.TestCase):
+    """A built file's record lists every source that fed it; one derived from a purchased export needs the project
+    owner's grant, and the build never writes it otherwise."""
+
+    def test_a_sidecar_derived_from_a_purchased_body_needs_the_grant(self):
+        scene = body_scene()
+        try:
+            o = Outfit(None, scene.root, "model.glb", body="body.glb", fabrics={"plain": FABRIC})
+            skirt(o)
+            o.write()
+            record = json.loads((scene.root / "model.cloth.provenance.json").read_text(encoding="utf-8"))
+            self.assertEqual([(s["file"], s["record"], s["purchased"]) for s in record["sources"]],
+                             [("model.glb", "model.provenance.json", False),
+                              ("body.glb", "body.provenance.json", False)])
+            (scene.root / "model.cloth.glb").unlink()
+            grant = scene.root / Bd.GRANT
+            grant.parent.mkdir(parents=True)
+            grant.write_text("# Grant\n\n## A pack\n\n| Tracked export | Source |\n| --- | --- |\n"
+                             "| `body.glb` | pack/body.fbx |\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, r"model.cloth.glb is derived from .*\(body.glb\).*PURCHASED_EXPORTS"):
+                o.write()
+            self.assertFalse((scene.root / "model.cloth.glb").exists())
+            grant.write_text(grant.read_text(encoding="utf-8") + "| `model.cloth.glb` | body.glb |\n", encoding="utf-8")
+            o.write()
+            record = json.loads((scene.root / "model.cloth.provenance.json").read_text(encoding="utf-8"))
+            self.assertEqual([s["purchased"] for s in record["sources"]], [False, True])
+        finally:
+            scene.close()
+
+    def test_a_clip_is_found_by_its_manifest_row_and_listed_by_folder_and_name(self):
         scene = Scene(cylinder_scene())
         try:
-            script = scene.root / "outfit.py"
-            script.write_text(self.SCRIPT.format(tools=str(HERE.parent / "tools"), fabric=FABRIC, root=str(scene.root)),
-                              encoding="utf-8")
-            (scene.root / "outfit.json").write_text(json.dumps({"stage": 1}), encoding="utf-8")
-            runpy.run_path(str(script), run_name="__main__")
-            self.assertEqual(check.main([str(script), "--workers", "1"]), 0)
-            path = R.path_for(script)
-            first = path.read_bytes()
-            findings = R.verify(path, scene.root, 1, "model.cloth.glb")
-            self.assertIn("G1", {f["gate"] for f in findings})
-            doc = json.loads(first)
-            self.assertTrue({"outfit.py", "model.glb", "model.cloth.glb"} <= set(doc["files"]))
-            self.assertIn("features/garment-cloth/tools/garment/gates.py", doc["modules"])
-            # The same check writes the same bytes.
-            self.assertEqual(check.main([str(script), "--workers", "1"]), 0)
-            self.assertEqual(path.read_bytes(), first)
-            with self.assertRaisesRegex(ValueError, "checked at stage 1"):
-                R.verify(path, scene.root, 2, "model.cloth.glb")
-            # A changed input makes the receipt stale, and the refusal names it.
-            sidecar = scene.root / "model.cloth.glb"
-            kept = sidecar.read_bytes()
-            sidecar.write_bytes(kept + b"\0")
-            with self.assertRaisesRegex(ValueError, "stale .*file model.cloth.glb"):
-                R.verify(path, scene.root, 1, "model.cloth.glb")
-            sidecar.write_bytes(kept)
-            # A recorded failure of a gate the stage enforces is refused; a reported one is not.
-            doc["findings"].append(dict(gate="G1", piece="skirt", failed=True, enforced=True))
-            path.write_text(json.dumps(doc), encoding="utf-8")
-            with self.assertRaisesRegex(ValueError, "records enforced failures: G1 skirt"):
-                R.verify(path, scene.root, 1, "model.cloth.glb")
-            doc["findings"][-1]["gate"] = "G4"
-            path.write_text(json.dumps(doc), encoding="utf-8")
-            R.verify(path, scene.root, 1, "model.cloth.glb")
-            path.unlink()
-            with self.assertRaisesRegex(ValueError, "no check receipt"):
-                R.verify(path, scene.root, 1, "model.cloth.glb")
-            # A partial check writes none.
-            self.assertEqual(check.main([str(script), "--gates", "G1", "--workers", "1"]), 0)
-            self.assertFalse(path.exists())
+            clips = scene.root / "assets/clips"
+            clips.mkdir(parents=True)
+            (clips / "walk.glb").write_bytes(b"clip")
+            (clips / "animations.manifest.json").write_text(json.dumps({"animations": [
+                {"name": "walk", "resource": "assets/clips/walk.glb", "origin": "sourced", "license": "Mixamo terms"}]}),
+                encoding="utf-8")
+            grant = scene.root / Bd.GRANT
+            grant.parent.mkdir(parents=True, exist_ok=True)
+            grant.write_text("## Mixamo\n\n| Tracked export (`assets/clips/`) |\n| --- |\n| `walk.glb` |\n", encoding="utf-8")
+            entry, = Bd.derived_sources(scene.root, [clips / "walk.glb"], clips / "walk.glb")
+            self.assertEqual((entry["record"], entry["row"], entry["license"], entry["purchased"]),
+                             ("assets/clips/animations.manifest.json", "walk", "Mixamo terms", True))
+            with self.assertRaisesRegex(ValueError, "needs its own entry"):
+                Bd.derived_sources(scene.root, [scene.root / "model.glb", clips / "walk.glb"], scene.root / "model.cloth.glb")
+            self.assertFalse(Bd.granted(scene.root, clips / "run.glb"))
         finally:
             scene.close()
 
@@ -902,7 +1114,7 @@ class TestStale(unittest.TestCase):
             built = sc.read((root / "model.cloth.glb").read_bytes())
             self.assertTrue(any(name.endswith("helper.py") for name in built.build["modules"]))
             self.assertEqual(C.stale(built, root, script), [])
-            self.assertEqual(set(built.build["versions"]), {"numpy", "scipy"})
+            self.assertEqual(set(built.build["versions"]), {"numpy", "scipy", "python"})
             colliders = root / "colliders.json"
             colliders.write_text(json.dumps(dict(body_sha256=Bd.sha256(root / "model.glb"))), encoding="utf-8")
             self.assertEqual(C.stale(built, root, script, "colliders.json"), [])

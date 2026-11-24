@@ -5,6 +5,7 @@
 
 #include <math.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
 /* A panel on a two-joint arm: the shoulder carries the pinned edge, the free corner hangs below it, and a sphere
@@ -418,8 +419,9 @@ static void test_two_correctives_at_once_add_and_blend_the_backstop(void) {
     TEST_ASSERT_EQUAL_PTR(backed_backstop, bs);
 }
 
-/* A key whose body has a hole behind the vertex (R = 0) turns the backstop off wherever that key weighs. */
-static void test_a_key_without_a_body_behind_turns_the_backstop_off(void) {
+/* A key whose body has a hole behind the vertex (R = 0) weighs as a flat body at the vertex's reach (0.5 m): at 0.2
+   it pulls the backstop that far toward the reach, and it turns the backstop off only where it carries all the weight. */
+static void test_a_key_without_a_body_behind_weighs_as_a_body_beyond_reach(void) {
     static const GarmentCorrective open[] = {{{0, 0, 0}, {0, 0, 0}, {0, 0}}, {{0, 0, 0}, {0, 0, 0}, {0, 0}},
                                              {{0, 0, 0}, {0, 0, 0}, {0.02F, 0}}};
     static const GarmentAsset holed = {.id = "panel", .mesh = &backed_mesh, .skin = skin, .direction = direction,
@@ -432,17 +434,153 @@ static void test_a_key_without_a_body_behind_turns_the_backstop_off(void) {
     const GarmentInput in = {.pose = pose, .world = identity_world, .reset = true, .max_distance_scale = 1.0F,
                              .corrective_weight = &weight};
     TEST_ASSERT_TRUE(garment_actor_update(&actors[0], &one, &rig, &in));
+    const ClothBackstop partial = garment_actor_backstop(&actors[0], 0)[2];
+    NEAR(1e-6F, 0.8F * 0.01F + 0.2F * 0.5F, partial.d);
+    NEAR(1e-4F, 0.2F / 0.8F, partial.R);
+    const float full = 1.0F;
+    const GarmentInput all = {.pose = pose, .world = identity_world, .reset = true, .max_distance_scale = 1.0F,
+                              .corrective_weight = &full};
+    TEST_ASSERT_TRUE(garment_actor_update(&actors[0], &one, &rig, &all));
     TEST_ASSERT_TRUE(garment_actor_backstop(&actors[0], 0)[2].R == 0.0F);
 }
 
-/* Directions that cancel never fail the update: two keys turning the rest direction to +X and -X at equal weights
-   take the first key's direction (the first of the largest coefficients). */
-static void test_cancelling_corrective_directions_take_the_heaviest_one(void) {
+static float angle_between(const float a[3], const float b[3]) {
+    const float c = a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    const float x = a[1] * b[2] - a[2] * b[1], y = a[2] * b[0] - a[0] * b[2], z = a[0] * b[1] - a[1] * b[0];
+    return atan2f(sqrtf(x * x + y * y + z * z), c);
+}
+
+/* A cross-fade between the two keys, which turn the rest direction a quarter turn to +X and to -X: the direction
+   moves through the rest one, and no step of the weight turns it further than its share of the half turn. */
+static void test_a_cross_fade_between_opposite_keys_turns_the_direction_continuously(void) {
+    enum { STEPS = 100 };
     const ClothBackstop *bs = NULL;
+    float last[3] = {0};
+    for (int k = 0; k <= STEPS; ++k) {
+        const float u = (float)k / (float)STEPS, weights[2] = {1.0F - u, u};
+        const float *b = two_at(weights, &bs)[2].b;
+        if (k > 0) {
+            char message[96];
+            (void)snprintf(message, sizeof message, "the direction turned %.2f deg at u %.2f", (double)(angle_between(last, b) * 57.29578F), (double)u);
+            TEST_ASSERT_TRUE_MESSAGE(angle_between(last, b) <= 3.14159265F / (float)STEPS * 1.01F + 1e-4F, message);
+        }
+        memcpy(last, b, sizeof last);
+    }
     const float half[2] = {0.5F, 0.5F};
-    const ClothReference *ref = two_at(half, &bs);
-    NEAR(1e-6F, 1.0F, ref[2].b[0]);
-    NEAR(1e-6F, 0.0F, ref[2].b[2]);
+    NEAR(1e-5F, -1.0F, two_at(half, &bs)[2].b[2]);
+}
+
+/* A fade turns the direction along the shortest arc from the rest one to the key's, by the weight's share of it. */
+static void test_a_fade_turns_the_direction_by_the_weight_share_of_the_turn(void) {
+    nt_skeletal_mat34_t pose[2];
+    arm(0.0F, pose);
+    for (int k = 0; k <= 10; ++k) {
+        const float w = (float)k / 10.0F;
+        const ClothReference *ref = reference_at(&actors[0], pose, w, true, 0.0F);
+        NEAR(1e-4F, w * 1.5707964F, angle_between(direction[2], ref[2].b));
+        NEAR(1e-5F, 0.0F, ref[2].b[1]);
+    }
+}
+
+/* The effective depth of a backstop behind its reference: a backstop at or beyond the vertex's reach never acts, so
+   an off one (R = 0) is at the reach. Its curvature is 0 for the plane form and for an off one. */
+static float reached_depth(ClothBackstop bs, float reach) {
+    return bs.R > 0.0F ? fminf(bs.d, reach) : reach;
+}
+static float curvature_of(ClothBackstop bs) {
+    return bs.R > 0.0F && !isinf(bs.R) ? 1.0F / bs.R : 0.0F;
+}
+
+/* Fades the one corrective of `outfit` from 0 to 1 in steps and bounds each step's change of the free vertex's
+   backstop surface (its depth within reach and its curvature) by the step's share of the whole change. */
+static void fade_backstop_continuously(const GarmentSet *outfit) {
+    enum { STEPS = 100 };
+    nt_skeletal_mat34_t pose[2];
+    arm(0.0F, pose);
+    const float reach = max_distance[2];
+    float depth[STEPS + 1], curvature[STEPS + 1];
+    for (int k = 0; k <= STEPS; ++k) {
+        const float w = (float)k / (float)STEPS;
+        const GarmentInput in = {.pose = pose, .world = identity_world, .reset = true, .max_distance_scale = 1.0F,
+                                 .corrective_weight = &w};
+        TEST_ASSERT_TRUE(garment_actor_update(&actors[0], outfit, &rig, &in));
+        const ClothBackstop bs = garment_actor_backstop(&actors[0], 0)[2];
+        depth[k] = reached_depth(bs, reach);
+        curvature[k] = curvature_of(bs);
+    }
+    const float depth_span = fabsf(depth[STEPS] - depth[0]), curvature_span = fabsf(curvature[STEPS] - curvature[0]);
+    TEST_ASSERT_TRUE(depth_span > 0.1F);
+    for (int k = 1; k <= STEPS; ++k) {
+        char message[120];
+        (void)snprintf(message, sizeof message, "at w %.2f the backstop moved %.4f m and its curvature %.3f /m in one step",
+                       (double)k / (double)STEPS, (double)fabsf(depth[k] - depth[k - 1]), (double)fabsf(curvature[k] - curvature[k - 1]));
+        TEST_ASSERT_TRUE_MESSAGE(fabsf(depth[k] - depth[k - 1]) <= depth_span / (float)STEPS * 1.01F + 1e-6F, message);
+        TEST_ASSERT_TRUE_MESSAGE(fabsf(curvature[k] - curvature[k - 1]) <= curvature_span / (float)STEPS * 1.01F + 1e-4F, message);
+    }
+}
+
+/* A key with a body behind a vertex whose rest has none (a hole at rest): the surface comes in from beyond reach as
+   the key fades in, instead of appearing at full depth when the rest's coefficient reaches 0. */
+static void test_a_key_backstop_fades_in_from_beyond_reach(void) {
+    static const GarmentCorrective seated[] = {{{0, 0, 0}, {0, 0, 0}, {0, 0}}, {{0, 0, 0}, {0, 0, 0}, {0, 0}},
+                                               {{0, 0, 0}, {0, 0, 0}, {0.02F, 0.1F}}};
+    static const GarmentAsset holed = {.id = "panel", .mesh = &mesh, .skin = skin, .direction = direction,
+                                       .corrective = seated, .material = {.density = 0.2F, .stretch = 0.03F, .iterations = 1}};
+    static const GarmentSet one = {.id = "arm", .bones = bones, .bone_count = 2, .pieces = &holed, .piece_count = 1,
+                                   .corrective_names = lift_names, .corrective_count = 1};
+    fade_backstop_continuously(&one);
+}
+
+/* The mirror case: the rest has a body (d 0.01, R 0.2), the key a hole. */
+static void test_a_rest_backstop_fades_out_to_beyond_reach(void) {
+    static const GarmentCorrective open[] = {{{0, 0, 0}, {0, 0, 0}, {0, 0}}, {{0, 0, 0}, {0, 0, 0}, {0, 0}},
+                                             {{0, 0, 0}, {0, 0, 0}, {0.02F, 0}}};
+    static const GarmentAsset holed = {.id = "panel", .mesh = &backed_mesh, .skin = skin, .direction = direction,
+                                       .corrective = open, .material = {.density = 0.2F, .stretch = 0.03F, .iterations = 1}};
+    static const GarmentSet one = {.id = "arm", .bones = bones, .bone_count = 2, .pieces = &holed, .piece_count = 1,
+                                   .corrective_names = lift_names, .corrective_count = 1};
+    fade_backstop_continuously(&one);
+}
+
+/* The weights of one update share the reference: their sum is at most 1, within float rounding. */
+static void test_weights_summing_above_one_are_refused(void) {
+    nt_skeletal_mat34_t pose[2];
+    arm(0.0F, pose);
+    const float over[2] = {0.6F, 0.6F}, rounded[2] = {0.7F, 0.3000001F};
+    GarmentInput in = {.pose = pose, .world = identity_world, .reset = true, .max_distance_scale = 1.0F,
+                       .corrective_weight = over};
+    TEST_ASSERT_FALSE(garment_actor_update(&actors[0], &two, &rig, &in));
+    in.corrective_weight = rounded;
+    TEST_ASSERT_TRUE(garment_actor_update(&actors[0], &two, &rig, &in));
+}
+
+/* A vertex split evenly over two bones whose blend of its direction shrinks to nothing as the elbow turns toward a
+   half turn: the direction moves continuously onto the heaviest bone's, without a jump where the blend gets short. */
+static void test_a_shrinking_bone_blend_turns_the_direction_continuously(void) {
+    static const GarmentSkin split[] = {{.weight = {1}}, {.weight = {1}}, {.bone = {0, 1}, .weight = {0.5F, 0.5F}}};
+    static const float sideways[][3] = {{0, 0, -1}, {0, 0, -1}, {1, 0, 0}};
+    static const GarmentAsset torn = {.id = "panel", .mesh = &mesh, .skin = split, .direction = sideways,
+                                      .material = {.density = 0.2F, .stretch = 0.03F, .iterations = 1}};
+    static const GarmentSet outfit = {.id = "arm", .bones = bones, .bone_count = 2, .pieces = &torn, .piece_count = 1};
+    float last[3] = {0};
+    for (int k = 0; k <= 80; ++k) {
+        const float phi = (160.0F + 0.25F * (float)k) * 3.14159265F / 180.0F, c = cosf(phi), s = sinf(phi);
+        nt_skeletal_mat34_t pose[2];
+        arm(0.0F, pose);
+        pose[1] = (nt_skeletal_mat34_t){.r = {{c, -s, 0, 1}, {s, c, 0, 0}, {0, 0, 1, 0}}};
+        const GarmentInput in = {.pose = pose, .world = identity_world, .reset = true, .max_distance_scale = 1.0F};
+        TEST_ASSERT_TRUE(garment_actor_update(&actors[0], &outfit, &rig, &in));
+        const ClothReference *ref = NULL;
+        TEST_ASSERT_TRUE(garment_actor_piece(&actors[0], 0, NULL, &ref));
+        if (k > 0) {
+            char message[96];
+            (void)snprintf(message, sizeof message, "the direction turned %.2f deg at %.2f deg of the elbow",
+                           (double)(angle_between(last, ref[2].b) * 57.29578F), (double)(phi * 57.29578F));
+            TEST_ASSERT_TRUE_MESSAGE(angle_between(last, ref[2].b) <= 5.0F * 3.14159265F / 180.0F, message);
+        }
+        memcpy(last, ref[2].b, sizeof last);
+    }
+    NEAR(1e-5F, 1.0F, last[0]);
 }
 
 /* Directions that the bones cancel never fail the update either: a vertex split evenly over two bones turned half a
@@ -499,8 +637,13 @@ int main(void) {
     RUN_TEST(test_null_weights_after_given_ones_ramp_to_zero);
     RUN_TEST(test_an_outfit_switch_resets_the_weights);
     RUN_TEST(test_two_correctives_at_once_add_and_blend_the_backstop);
-    RUN_TEST(test_a_key_without_a_body_behind_turns_the_backstop_off);
-    RUN_TEST(test_cancelling_corrective_directions_take_the_heaviest_one);
+    RUN_TEST(test_a_key_without_a_body_behind_weighs_as_a_body_beyond_reach);
+    RUN_TEST(test_a_cross_fade_between_opposite_keys_turns_the_direction_continuously);
+    RUN_TEST(test_a_fade_turns_the_direction_by_the_weight_share_of_the_turn);
+    RUN_TEST(test_a_key_backstop_fades_in_from_beyond_reach);
+    RUN_TEST(test_a_rest_backstop_fades_out_to_beyond_reach);
+    RUN_TEST(test_weights_summing_above_one_are_refused);
+    RUN_TEST(test_a_shrinking_bone_blend_turns_the_direction_continuously);
     RUN_TEST(test_cancelling_bone_directions_take_the_heaviest_bone);
     return UNITY_END();
 }

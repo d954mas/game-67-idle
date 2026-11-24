@@ -167,6 +167,9 @@ const GarmentSet *garment_asset_view(const void *blob, uint32_t size) {
             NT_ASSERT(e->a >= 0 && (uint32_t)e->a < n && e->b >= 0 && (uint32_t)e->b < n && e->c >= 0 && (uint32_t)e->c < n &&
                       e->d >= -1 && e->d < (int)n);
         }
+        const ClothBackstop *rest_backstop = records(&b, section(&b, p, BACKSTOP, true));
+        for (uint32_t i = 0; i < n; ++i)
+            NT_ASSERT(isfinite(rest_backstop[i].d) && rest_backstop[i].d >= 0.0F && rest_backstop[i].R >= 0.0F);
         const GarmentCorrective *shape = records(&b, shapes);
         for (uint32_t i = 0; i < count_of(shapes); ++i)
             NT_ASSERT(isfinite(shape[i].backstop.d) && shape[i].backstop.d >= 0.0F && shape[i].backstop.R >= 0.0F);
@@ -181,7 +184,7 @@ const GarmentSet *garment_asset_view(const void *blob, uint32_t size) {
             .vertices = (int)n, .faces = (int)faces, .edges = (int)edges,
             .rest = records(&b, section(&b, p, REST, true)), .inv_area = records(&b, section(&b, p, INV_AREA, true)),
             .face = face, .edge = edge, .tether = tether, .max_distance = records(&b, section(&b, p, MAX_DISTANCE, true)),
-            .backstop = records(&b, section(&b, p, BACKSTOP, true)),
+            .backstop = rest_backstop,
         };
         view->pieces[p] = (GarmentAsset){
             .id = string(&b, piece->id), .mesh = &view->meshes[p], .skin = skin,

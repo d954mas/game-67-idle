@@ -33,7 +33,8 @@ nt_set_warning_flags(test_garment_asset)
 nt_set_sanitizer_flags(test_garment_asset)
 add_test(NAME test_garment_asset COMMAND test_garment_asset)
 # The view stops on each malformed blob test_asset.py writes beside the fixture (an exit of 0 is an accepted blob).
-foreach(case older-version unknown-tag shapes-without-names shape-count key-backstop)
+foreach(case older-version unknown-tag shapes-without-names shape-count key-backstop rest-backstop offset-in-table
+        misaligned outfit-marker)
     add_test(NAME test_garment_asset_rejects_${case} COMMAND test_garment_asset --reject ${case})
     set_tests_properties(test_garment_asset_rejects_${case} PROPERTIES WILL_FAIL TRUE)
 endforeach()
@@ -49,7 +50,7 @@ add_custom_command(OUTPUT "${host_fixture}"
 set_source_files_properties("${host_fixture}" PROPERTIES HEADER_FILE_ONLY TRUE)
 add_executable(test_garment_host test_host.c ../tools/host/garment_host.c "${host_fixture}")
 target_compile_definitions(test_garment_host PRIVATE "GARMENT_HOST_FIXTURE=\"${host_fixture}\"" _CRT_SECURE_NO_WARNINGS)
-target_link_libraries(test_garment_host PRIVATE garment_cloth nt_hash unity)
+target_link_libraries(test_garment_host PRIVATE garment_cloth garment_host_stamp nt_hash unity)
 nt_set_warning_flags(test_garment_host)
 nt_set_sanitizer_flags(test_garment_host)
 add_test(NAME test_garment_host COMMAND test_garment_host)

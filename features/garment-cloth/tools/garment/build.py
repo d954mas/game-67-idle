@@ -3,8 +3,10 @@
 A sidecar is current only while everything that made it is unchanged, so its record hashes by content: the script,
 every file the build read (model, fabrics, body, clip manifest and clips, the colliders and seats a bake used), every
 Python module the script imports under the game root or the feature (found from the import statements, so the set
-does not depend on what else the process loaded), the shared GLB reader, the numpy and scipy versions and, per baked
-corrective, the runtime sources. `differences` names each input that no longer matches."""
+does not depend on what else the process loaded), the shared GLB reader, the Python, numpy and scipy versions and, per
+baked corrective, the runtime sources. `differences` names each input that no longer matches. A built file's asset
+record lists every source that fed it (`derived_sources`), and the build refuses a file derived from an account-gated or
+purchased export that the project owner's grant (`GRANT`) does not list."""
 import ast
 import hashlib
 import importlib.util
@@ -33,7 +35,9 @@ def sha256(path):
 
 
 def versions():
-    return {"numpy": np.__version__, "scipy": scipy.__version__}
+    """The interpreter and the numeric packages every build and check computes with."""
+    import platform
+    return {"numpy": np.__version__, "scipy": scipy.__version__, "python": platform.python_version()}
 
 
 def _package(path):
@@ -114,10 +118,34 @@ def record_path(asset):
     return asset.with_name(stem + ".provenance.json")
 
 
+def _manifest_row(source):
+    """(manifest, row) of the folder manifest (`manifest.json`, `*.manifest.json`) whose row names the file by its
+    `file` or `resource` path, as clip and environment manifests record their assets; None when none does."""
+    for manifest in sorted(source.parent.glob("*manifest.json")):
+        try:
+            doc = json.loads(manifest.read_text(encoding="utf-8"))
+        except ValueError:
+            continue
+        for rows in (doc.values() if isinstance(doc, dict) else ()):
+            for row in (rows if isinstance(rows, list) else ()):
+                if not isinstance(row, dict):
+                    continue
+                named = [str(row.get(k, "")).replace("\\", "/") for k in ("file", "resource")]
+                if any(n and source.as_posix().endswith("/" + n.lstrip("./")) for n in named):
+                    return manifest, row
+    return None
+
+
 def source_record(source):
-    """(path, record) of a model's asset record: `<model stem>.provenance.json` beside it, or the folder's
-    `provenance.json` whose `model` or `file` names it. Refused when there is none or it lacks origin or license: a
-    file built from the model inherits them, and nothing else says what it may hold."""
+    """(path, record) of a source file's asset record: `<stem>.provenance.json` beside it, the folder's
+    `provenance.json` whose `model` or `file` names it, or the row of a folder manifest that names it (its record is
+    then that row). Refused when there is none or it lacks origin or license: a file built from it inherits them, and
+    nothing else says what it may hold."""
+    return _record_of(source)[:2]
+
+
+def _record_of(source):
+    """(path, record, manifest row name or None) of source_record."""
     source = Path(source).resolve()
     own = record_path(source)
     candidates = [own] if own.is_file() else []
@@ -127,24 +155,82 @@ def source_record(source):
         named = [str(doc.get(k, "")).replace("\\", "/") for k in ("model", "file")]
         if any(n and source.as_posix().endswith("/" + n.lstrip("./")) for n in named):
             candidates = [folder]
-    if not candidates:
-        raise ValueError(f"{source}: the model has no asset record ({own.name}, or a provenance.json naming it); a file "
-                         "built from it inherits its origin and license")
-    record = json.loads(candidates[0].read_text(encoding="utf-8"))
+    row_name = None
+    if candidates:
+        path, record = candidates[0], json.loads(candidates[0].read_text(encoding="utf-8"))
+    elif (row := _manifest_row(source)) is not None:
+        path, record = row
+        row_name = record.get("name")
+    else:
+        raise ValueError(f"{source}: the source has no asset record ({own.name}, a provenance.json or a manifest row "
+                         "naming it); a file built from it inherits its origin and license")
     missing = [k for k in ("origin", "license") if not record.get(k)]
     if missing:
-        raise ValueError(f"{candidates[0]}: the record has no {', '.join(missing)} for the files built from "
-                         f"{source.name} to inherit")
-    return candidates[0], record
+        raise ValueError(f"{path}: the record has no {', '.join(missing)} for the files built from {source.name} to "
+                         "inherit")
+    return path, record, row_name
 
 
-def write_record(asset, root, what, producer, rebuild, source, **extra):
+# The project owner's grant of account-gated and purchased exports a game repository tracks (AGENTS.md).
+GRANT = "assets/PURCHASED_EXPORTS.md"
+
+
+def granted(root, path):
+    """Whether the grant lists a file: its root-relative path in backticks, or its name in backticks in a section
+    (between `##` headings) that names its folder in backticks, as the grant's tables do."""
+    grant = Path(root) / GRANT
+    if not grant.is_file():
+        return False
+    import re
+    path, root = Path(path).resolve(), Path(root).resolve()
+    if not path.is_relative_to(root):
+        return False
+    relative = path.relative_to(root).as_posix()
+    folder, name = relative.rsplit("/", 1) if "/" in relative else ("", relative)
+    for section in re.split(r"^## ", grant.read_text(encoding="utf-8"), flags=re.M):
+        tokens = set(re.findall(r"`([^`\n]+)`", section))
+        if relative in tokens or (name in tokens and folder + "/" in tokens):
+            return True
+    return False
+
+
+def derived_sources(root, sources, derived):
+    """The `sources` entries of the record of `derived`, a file built from every file of `sources` (paths under root):
+    each one's file, hash, record and the origin and license that record gives, and whether the grant lists it as an
+    account-gated or purchased export. A derived file of such a source is such an export too: unless the grant lists
+    it as well, it is refused (ValueError naming the sources), and the project owner, not the build, adds it there."""
+    root = Path(root).resolve()
+
+    def relative(p):
+        p = Path(p).resolve()
+        return p.relative_to(root).as_posix() if p.is_relative_to(root) else p.as_posix()
+    out, purchased = [], []
+    for source in dict.fromkeys(Path(s).resolve() for s in sources):
+        record_file, record, row = _record_of(source)
+        entry = {"file": relative(source), "sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+                 "record": relative(record_file), "origin": record["origin"], "license": record["license"],
+                 "purchased": granted(root, source)}
+        if row is not None:
+            entry["row"] = row
+        out.append(entry)
+        if entry["purchased"]:
+            purchased.append(entry["file"])
+    if purchased and not granted(root, derived):
+        raise ValueError(f"{relative(derived)} is derived from account-gated or "
+                         f"purchased exports ({', '.join(purchased)}), so it is one too: it needs its own entry in "
+                         f"{GRANT}, the project owner's grant, before the build writes it")
+    return out
+
+
+def write_record(asset, root, what, producer, rebuild, source, sources=None, **extra):
     """Write the asset record of a file this library built from `source` (the model it is derived from), in the format
     of the game's asset records (license, origin, integrity, provenance), every hash taken from the files themselves.
     A derived file carries what its source carries: origin and license come from the source's record (source_record),
-    which the record names."""
+    which the record names; `sources` lists every file that fed it (derived_sources; default: the source alone)."""
     asset, root, source = Path(asset), Path(root), Path(source)
     parent_path, parent = source_record(source)
+    if sources is None:
+        sources = derived_sources(root, [source], asset)
     data = asset.read_bytes()
     digest = hashlib.sha256(data).hexdigest()
     def relative(p):
@@ -155,7 +241,7 @@ def write_record(asset, root, what, producer, rebuild, source, **extra):
               "sha256": digest, "bytes": len(data), "integrity": {"sha256": digest, "bytes": len(data)},
               "what": what, "producer": producer, "source": relative(source),
               "source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(), "source_record": relative(parent_path),
-              **extra, "rebuild": rebuild}
+              "sources": list(sources), **extra, "rebuild": rebuild}
     path = record_path(asset)
     text = json.dumps(record, indent=1, ensure_ascii=False) + "\n"
     if not path.is_file() or path.read_bytes() != text.encode("utf-8"):

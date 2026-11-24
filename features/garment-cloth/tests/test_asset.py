@@ -134,7 +134,7 @@ class TestBlob(unittest.TestCase):
             (lambda g, p: p["correctives"].__setitem__((0, 1, 1), 0.01), "panel: correctives[0][1] must not move a kinematic"),
             (lambda g, p: p["correctives"].__setitem__((1, 2, 3), 0.5), "panel: correctives[1].direction[2] must keep"),
             (lambda g, p: p["correctives"].__setitem__((1, 3, slice(3, 6)), [0, 2, 0]),
-             "panel: correctives[1].direction[3] must not reverse"),
+             "panel: correctives[1].direction[3] must not point directly away"),
             (lambda g, p: p.__setitem__("correctives", p["correctives"][:1]), "panel: correctives need shape"),
             (lambda g, p: p["correctives"].__setitem__((1, 2, 0), np.nan), "panel: correctives[1][2] must be finite"),
             (lambda g, p: p["correctives"].__setitem__((1, 3, 6), np.inf), "panel: correctives[1][3] must be finite"),
@@ -240,6 +240,20 @@ def rejected_blobs():
     bad = bytearray(data)
     struct.pack_into("<f", bad, entry[3] + 28, float("nan"))
     out["key-backstop"] = bytes(bad)
+    rest = bytearray(data)
+    _, entry = section_entry(data, b"BKST", 0)
+    struct.pack_into("<f", rest, entry[3] + 8 * 2 + 4, float("nan"))
+    out["rest-backstop"] = bytes(rest)
+    at, entry = section_entry(data, b"TETH", 0)
+    inside = bytearray(data)
+    garment_blob.SECTION.pack_into(inside, at, *entry[:3], garment_blob.HEADER.size, entry[4])
+    out["offset-in-table"] = bytes(inside)
+    shifted = bytearray(data)
+    garment_blob.SECTION.pack_into(shifted, at, *entry[:3], entry[3] + 4, entry[4])
+    out["misaligned"] = bytes(shifted)
+    marked = bytearray(data)
+    garment_blob.SECTION.pack_into(marked, at, entry[0], garment_blob.OUTFIT, *entry[2:])
+    out["outfit-marker"] = bytes(marked)
     return out
 
 

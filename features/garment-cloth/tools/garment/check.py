@@ -13,7 +13,8 @@ runtime holds on it). A clip name that is not one of the outfit's is refused.
 
 A complete check (every gate, every clip) writes the outfit's receipt (garment.receipt; default
 `content/garments/<outfit>.check.json` beside the script): the gates it ran, their findings and the hash of every input
-they read. The cook verifies that receipt instead of running the gates.
+they read, taken before the first gate. It writes none, and exits 1, when those hashes change before it would write
+or differ from the ones its own build recorded. The cook accepts that receipt instead of running the per-frame gates.
 
 The rebuild keeps a committed corrective whose recorded inputs all match (no host is needed for it) and names every
 input that differs when the committed sidecar is stale. A clip whose manifest entry names a corrective of the outfit
@@ -169,6 +170,11 @@ def main(argv=None):
         os.environ["GARMENT_STAGES"] = str(args.stages)
     outfit, data = build(args.script.resolve())
     committed = args.sidecar or outfit.sidecar_path()
+    wanted = set(args.gates.split(","))
+    complete = not args.no_receipt and wanted >= set(G.ALL_GATES) and not args.clips
+    if complete:
+        # What the gates are about to read, hashed before the first of them: the receipt certifies these bytes.
+        before = R.snapshot(outfit.root, args.script, committed, read(data))
     findings = [rebuild(data, committed, outfit.root, args.script.resolve())]
     try:
         findings += run_gates(outfit, data, set(args.gates.split(",")), args.clips and set(args.clips.split(",")),
@@ -190,11 +196,16 @@ def main(argv=None):
     print(f"{args.script.name}: {len(failed)} enforced failures, {len(reported)} reported", file=sys.stderr)
     if args.report:
         args.report.write_text(json.dumps(findings, indent=1) + "\n", encoding="utf-8")
-    wanted = set(args.gates.split(","))
-    if not args.no_receipt and wanted >= set(G.ALL_GATES) and not args.clips:
+    if complete:
+        changed = R.build_differences(read(data), before, outfit.root, args.script) + \
+            R.differences(before, R.snapshot(outfit.root, args.script, committed, read(data)))
+        if changed:
+            print(f"{args.script.name}: no receipt: what the gates read is not what the build read or changed during the "
+                  f"check ({'; '.join(changed)}); run the check again", file=sys.stderr)
+            return 1
         gates_run = wanted | {f["gate"] for f in findings}
-        path = R.write(args.receipt or R.path_for(args.script), outfit.root, args.script, committed, read(data), stage,
-                       gates_run, [{k: v for k, v in f.items() if k != "card"} for f in findings])
+        path = R.write(args.receipt or R.path_for(args.script), outfit.root, args.script, committed, stage, gates_run,
+                       [{k: v for k, v in f.items() if k != "card"} for f in findings], before)
         print(f"{args.script.name}: receipt {path}", file=sys.stderr)
     elif not args.no_receipt:
         print(f"{args.script.name}: a partial check (--gates or --clips) writes no receipt", file=sys.stderr)

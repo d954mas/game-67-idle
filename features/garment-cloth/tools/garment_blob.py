@@ -16,9 +16,10 @@ HEADER = struct.Struct("<IHHIIHH")
 SECTION = struct.Struct("<IHHII")
 VERTICES_MAX, EDGES_MAX, STRAIN_PASSES_MAX = 512, 1536, 32
 PIECES_MAX, BONES_MAX, SHAPES_MAX, CORRECTIVES_MAX = 8, 160, 64, 16
-# A corrective's direction may turn the rest one by up to about 168 degrees: every blend toward it then keeps a length
-# of at least this, a direction the runtime's normalize can trust.
-BLEND_DIRECTION_MIN = 0.1
+# The runtime blends body directions along the arcs from the rest direction (log maps). A key direction within
+# asin(0.1), about 5.7 degrees, of the opposite of the rest one has no defined arc: the side of the vector the turn
+# takes, shorter than this, says nothing about which way it goes.
+ARC_SIDE_MIN = 0.1
 MAX_DISTANCE_MAX = 1.0  # m: a larger r is no longer a garment's motion around its reference
 PI32 = np.float32(math.pi)
 INT32 = (-2 ** 31, 2 ** 31 - 1)
@@ -208,11 +209,16 @@ def _correctives(check, shapes, count, n, kinematic, direction, backstop):
         check.each(np.isfinite(shapes[k, :, :7]), field, "must be finite (R may be +inf, the plane form)")
         check.each(~kinematic | ((delta == 0).all(1) & (turn == 0).all(1)), field,
                    "must not move a kinematic vertex (max distance 0)")
-        corrected = direction.astype(np.float64) + turn
-        check.each(np.abs(np.linalg.norm(corrected, axis=1) - 1) <= 1e-3, f"{field}.direction",
-                   "must keep the corrected body direction a unit vector")
-        check.each(np.linalg.norm(direction + 0.5 * turn, axis=1) >= BLEND_DIRECTION_MIN, f"{field}.direction",
-                   "must not reverse the body direction")
+        rest = direction.astype(np.float64)
+        corrected = rest + turn
+        length = np.linalg.norm(corrected, axis=1)
+        check.each(np.abs(length - 1) <= 1e-3, f"{field}.direction", "must keep the corrected body direction a unit vector")
+        towards = corrected / np.maximum(length, 1e-12)[:, None]
+        axis = rest / np.linalg.norm(rest, axis=1)[:, None]
+        along = np.einsum("ij,ij->i", towards, axis)
+        side = np.linalg.norm(towards - along[:, None] * axis, axis=1)
+        check.each((along >= 0) | (side >= ARC_SIDE_MIN), f"{field}.direction",
+                   "must not point directly away from the rest body direction (no defined arc toward it)")
         check.each((key[:, 0] >= 0) & (key[:, 1] >= 0) & ~np.isnan(key[:, 1]), f"{field}.backstop",
                    "needs a finite non-negative d and R >= 0 (+inf is the plane form)")
     rest = np.stack([backstop["d"], backstop["R"]], axis=1)
@@ -334,34 +340,97 @@ def encode(outfit_id, pieces, bones=(), spheres=(), cones=(), correctives=()):
     return HEADER.pack(MAGIC, VERSION, HEADER.size, size, header_id, len(pieces), len(sections)) + table + body
 
 
-def decode(data):
-    """Read a blob back into numpy records: the inverse of encode, for tools and tests. It refuses what the C view
-    asserts on: another version, an unknown or repeated section, corrective shapes without corrective names or with
-    another count than names x vertices, and an invalid key backstop."""
-    data = bytes(data)
+def _sections(data):
+    """{(name, piece): records} of a blob, refusing every header and section-table defect the C view asserts on."""
+    if len(data) < HEADER.size:
+        raise ValueError(f"not a garment blob of version {VERSION}")
     magic, version, header_size, size, outfit_id, piece_count, count = HEADER.unpack_from(data)
     if magic != MAGIC or version != VERSION or header_size != HEADER.size or size != len(data):
         raise ValueError(f"not a garment blob of version {VERSION}")
+    if piece_count > PIECES_MAX or count > (size - header_size) // SECTION.size:
+        raise ValueError(f"garment blob of {piece_count} pieces and {count} sections exceeds the format")
+    payload = header_size + count * SECTION.size
     found = {}
     for i in range(count):
         tag, piece, stride, start, length = SECTION.unpack_from(data, header_size + i * SECTION.size)
         name = TAGS.get(tag)
-        if name is None or stride != SECTIONS[name][1].itemsize or start + stride * length > size:
+        if name is None or stride != SECTIONS[name][1].itemsize:
             raise ValueError(f"invalid garment blob section {tag:#x}")
+        if (piece == OUTFIT) != SECTIONS[name][2] or (piece != OUTFIT and piece >= piece_count):
+            raise ValueError(f"garment blob section {name} names piece {piece:#x}, not "
+                             f"{'the outfit' if SECTIONS[name][2] else f'one of {piece_count} pieces'}")
+        if start % ALIGN or start < payload or start > size or length > (size - start) // stride:
+            raise ValueError(f"garment blob section {name} of piece {piece} lies at {start} (+{length} records), not "
+                             f"{ALIGN}-aligned within the payload [{payload}, {size}]")
         if (name, piece) in found:
             raise ValueError(f"garment blob section {name} of piece {piece} appears twice")
         found[name, piece] = np.frombuffer(data, SECTIONS[name][1], length, start)
+    return found, outfit_id, piece_count
+
+
+def _validate(found, outfit_id, piece_count):
+    """Refuse the values and counts the C view asserts on (src/asset.c), so decode accepts what it accepts."""
+    def need(ok, problem):
+        if not ok:
+            raise ValueError(problem)
+
+    strings = found.get(("strings", OUTFIT))
+    need(strings is not None and len(strings) > 0 and strings[-1] == 0, "the blob's strings need a terminated section")
+    string_bytes = len(strings)
+    need(outfit_id < string_bytes, "the outfit id is not in the strings")
+    if piece_count == 0:
+        return
+    bones = found.get(("bones", OUTFIT))
+    need(bones is not None and 1 <= len(bones) <= BONES_MAX, f"an outfit with pieces needs 1 to {BONES_MAX} bones")
+    need((bones["name"] < string_bytes).all(), "a bone name is not in the strings")
+    spheres = found.get(("spheres", OUTFIT), np.zeros(0, SPHERE))
+    cones = found.get(("cones", OUTFIT), np.zeros(0, CONE))
+    need(len(spheres) <= SHAPES_MAX and len(cones) <= SHAPES_MAX, f"more than {SHAPES_MAX} spheres or cones")
+    need((spheres["bone"] < len(bones)).all(), "a sphere names no outfit bone")
+    need(((cones["a"] < len(spheres)) & (cones["b"] < len(spheres))).all(), "a cone names no sphere")
     names = found.get(("corrective_names", OUTFIT), np.zeros(0, "<u4"))
+    need(len(names) <= CORRECTIVES_MAX and (names < string_bytes).all(), "invalid corrective names")
+    text = strings.tobytes()
+    labels = [text[o:text.index(b"\0", o)] for o in names.tolist()]
+    need(len(set(labels)) == len(labels), "corrective names repeat")
     for p in range(piece_count):
-        shapes = found.get(("correctives", p))
-        if shapes is None:
-            continue
-        if not len(names) or len(shapes) != len(names) * len(found["rest", p]):
-            raise ValueError(f"piece {p}: corrective shapes need {len(names)} corrective names x "
-                             f"{len(found['rest', p])} vertices, got {len(shapes)} records")
-        key = shapes["backstop"]
-        if not (np.isfinite(key["d"]) & (key["d"] >= 0) & (key["R"] >= 0)).all():
-            raise ValueError(f"piece {p}: a corrective's key backstop needs a finite d >= 0 and R >= 0")
+        where = f"piece {p}"
+        for name in ("piece", "rest", "faces", "edges", "inv_area", "skin", "max_distance", "backstop", "direction"):
+            need((name, p) in found, f"{where}: no {name} section")
+        n, edges, faces = len(found["rest", p]), len(found["edges", p]), len(found["faces", p])
+        need(len(found["piece", p]) == 1, f"{where}: one piece record")
+        need(3 <= n <= VERTICES_MAX and 3 <= edges <= EDGES_MAX and 1 <= faces <= 2 * edges // 3,
+             f"{where}: {n} vertices, {edges} edges and {faces} faces exceed the format")
+        for name in ("inv_area", "skin", "max_distance", "backstop", "direction"):
+            need(len(found[name, p]) == n, f"{where}: {name} needs one record per vertex")
+        tethers, shapes = found.get(("tethers", p)), found.get(("correctives", p))
+        need(tethers is None or len(tethers) == n, f"{where}: tethers need one record per vertex")
+        need(shapes is None or (len(names) > 0 and len(shapes) == len(names) * n),
+             f"{where}: corrective shapes need {len(names)} corrective names x {n} vertices, got "
+             f"{0 if shapes is None else len(shapes)} records")
+        need((found["faces", p] < n).all(), f"{where}: a face names no vertex")
+        e = found["edges", p]
+        need(((e["a"] >= 0) & (e["a"] < n) & (e["b"] >= 0) & (e["b"] < n) & (e["c"] >= 0) & (e["c"] < n) &
+              (e["d"] >= -1) & (e["d"] < n)).all(), f"{where}: an edge names no vertex")
+        for label, backstop in (("rest", found["backstop", p]), ("key", None if shapes is None else shapes["backstop"])):
+            if backstop is not None:
+                need((np.isfinite(backstop["d"]) & (backstop["d"] >= 0) & (backstop["R"] >= 0)).all(),
+                     f"{where}: a {label} backstop needs a finite d >= 0 and R >= 0")
+        need(tethers is None or ((tethers["pin"] >= -1) & (tethers["pin"] < n)).all(), f"{where}: a tether names no pin")
+        need((found["skin", p]["bone"] < len(bones)).all(), f"{where}: a skin influence names no outfit bone")
+        head = found["piece", p][0]
+        need(head["render_vertices"] >= 0 and head["id"] < string_bytes, f"{where}: invalid piece record")
+
+
+def decode(data):
+    """Read a blob back into numpy records: the inverse of encode, for tools and tests. It refuses what the C view
+    asserts on (src/asset.c): another version, a section table entry that is unknown, repeated, marked for the wrong
+    owner or placed outside the aligned payload, a missing section, a count beyond the format or unlike its vertices',
+    an index naming nothing, and a rest or key backstop the solver cannot take."""
+    data = bytes(data)
+    found, outfit_id, piece_count = _sections(data)
+    _validate(found, outfit_id, piece_count)
+    names = found.get(("corrective_names", OUTFIT), np.zeros(0, "<u4"))
     strings = found["strings", OUTFIT].tobytes()
 
     def text(offset):

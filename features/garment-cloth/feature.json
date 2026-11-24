@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "garment-cloth",
-  "version": "5.0.0",
+  "version": "6.0.0",
   "title": "Garment cloth",
   "status": "opt-in",
   "kind": "gameplay-foundation",
@@ -36,7 +36,7 @@
     "garment_blob.encode",
     "garment_blob.decode",
     "garment_blob.single",
-    "garment_host (gh_load, gh_step, gh_positions, gh_reference, gh_backstop, gh_records, gh_metrics, gh_corrective_count, gh_corrective, gh_free)",
+    "garment_host (gh_load, gh_step, gh_positions, gh_reference, gh_backstop, gh_records, gh_metrics, gh_corrective_count, gh_corrective, gh_runtime_sha256, gh_free)",
     "garment.host.Host",
     "garment.host.Skeleton",
     "garment.host.ramp",
@@ -78,7 +78,16 @@
     "garment.corrective.best_pass",
     "garment.build.source_record",
     "garment.cook.cook_blob",
-    "garment.body.directions"
+    "garment.body.directions",
+    "garment_corrective_weights_valid",
+    "garment.receipt.accept",
+    "garment.receipt.snapshot",
+    "garment.gates.static_findings",
+    "garment.gates.blend",
+    "garment.gates.crossfade_specs",
+    "garment.build.derived_sources",
+    "garment.build.granted",
+    "garment.host.check_stamp"
   ],
   "flags": {"feature": "FEATURE_GARMENT_CLOTH=1 on consumers linked to garment_cloth"},
   "manuals": {"install": "features/garment-cloth/INSTALL.md"},
@@ -86,5 +95,5 @@
     "owner": "node ai_studio/feature_testing/run.mjs",
     "test_core": "ctest --test-dir ai_studio/feature_testing/consumer/build/feature-verify -R \"^test_garment_(actor|asset|asset_rejects_.+|blob|cloth|cook|authoring|colliders|render|host|host_py)$\" --output-on-failure"
   },
-  "registers": {"cmake_targets": ["garment_cloth", "garment_host"], "ctest_targets": ["test_garment_actor", "test_garment_asset", "test_garment_asset_rejects_older-version", "test_garment_asset_rejects_unknown-tag", "test_garment_asset_rejects_shapes-without-names", "test_garment_asset_rejects_shape-count", "test_garment_asset_rejects_key-backstop", "test_garment_blob", "test_garment_cloth", "test_garment_cook", "test_garment_authoring", "test_garment_colliders", "test_garment_render", "test_garment_host", "test_garment_host_py"]}
+  "registers": {"cmake_targets": ["garment_cloth", "garment_host", "garment_host_stamp", "garment_host_runtime_stamp"], "ctest_targets": ["test_garment_actor", "test_garment_asset", "test_garment_asset_rejects_older-version", "test_garment_asset_rejects_unknown-tag", "test_garment_asset_rejects_shapes-without-names", "test_garment_asset_rejects_shape-count", "test_garment_asset_rejects_key-backstop", "test_garment_asset_rejects_rest-backstop", "test_garment_asset_rejects_offset-in-table", "test_garment_asset_rejects_misaligned", "test_garment_asset_rejects_outfit-marker", "test_garment_blob", "test_garment_cloth", "test_garment_cook", "test_garment_authoring", "test_garment_colliders", "test_garment_render", "test_garment_host", "test_garment_host_py"]}
 }

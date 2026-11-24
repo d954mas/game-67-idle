@@ -252,50 +252,80 @@ static float length3(const float p[3]) {
     return sqrtf(p[0] * p[0] + p[1] * p[1] + p[2] * p[2]);
 }
 
-/* Below this length a blend of unit directions has cancelled (its parts lie more than about 168 degrees apart) and
-   says nothing about where the body is; the writer keeps each corrective's own blend with the rest above it. */
+/* Below this length, relative to the direction it blends, the bones' blend of a body direction has cancelled and
+   says less about where the body is than the vertex's heaviest bone does. */
 #define DIRECTION_MIN 0.1F
-/* A coefficient this close to 0 counts as none: 1 - sum of the weights in float. */
-#define COEFFICIENT_MIN 1e-6F
 
-/* Weight of the rest configuration in a blend: 1 - sum of the corrective weights, 0 when they carry it all. */
+/* Weight of the rest configuration in a blend: 1 - sum of the corrective weights, 0 when they carry it all (the
+   update refuses a sum above 1 by more than GARMENT_WEIGHT_SUM_TOLERANCE). */
 static float rest_coefficient(const Blend *blend) {
     float c = 1.0F;
     for (int k = 0; k < blend->count; ++k) c -= blend->weight[k];
-    return fabsf(c) < COEFFICIENT_MIN ? 0.0F : c;
+    return c < GARMENT_WEIGHT_SUM_TOLERANCE ? 0.0F : c;
 }
 
-/* The backstop of a blend. d and the curvature 1/R (0 for the plane form) blend linearly with the configurations'
-   coefficients, the rest's 1 - sum(w) and each corrective's w, a form defined for a flat body where R is not; a
-   non-positive curvature is the plane form. It is off where any configuration with a nonzero coefficient is off, as
-   the body behind it is unknown there, and a configuration that carries the whole weight gives its own values. */
+/* The backstop of a blend at a vertex whose runtime max distance is `reach`. d and the curvature 1/R (0 for the plane
+   form) blend linearly with the configurations' coefficients, the rest's 1 - sum(w) and each corrective's w, a form
+   defined for a flat body where R is not; a non-positive curvature is the plane form. A configuration with no body
+   behind the vertex (R = 0) takes part as a flat body at the vertex's reach, where a backstop never acts, so the
+   surface moves in and out of reach continuously. The backstop is off only where every configuration with a
+   nonzero coefficient is off, and a configuration that carries the whole weight gives its own values. */
 static ClothBackstop blend_backstop(ClothBackstop rest, float rest_c, const Blend *blend,
-                                    const GarmentCorrective *const *shape) {
-    int counted = 0;
+                                    const GarmentCorrective *const *shape, float reach) {
+    int counted = 0, on = 0;
     ClothBackstop only = rest;
     float d = 0.0F, curvature = 0.0F, sole = 0.0F;
     for (int c = -1; c < blend->count; ++c) {
         const float w = c < 0 ? rest_c : blend->weight[c];
         const ClothBackstop bs = c < 0 ? rest : shape[c]->backstop;
         if (w == 0.0F) continue;
-        if (bs.R <= 0.0F) return (ClothBackstop){bs.d, 0.0F};
         ++counted;
         only = bs;
         sole = w;
+        if (bs.R <= 0.0F) {
+            d += w * reach;
+            continue;
+        }
+        ++on;
         d += w * bs.d;
         curvature += w * (isinf(bs.R) ? 0.0F : 1.0F / bs.R);
     }
     if (counted == 1 && sole == 1.0F) return only;
+    if (on == 0) return (ClothBackstop){only.d, 0.0F};
     return (ClothBackstop){fmaxf(d, 0.0F), curvature > 0.0F ? 1.0F / curvature : INFINITY};
 }
 
-/* ref = sum_j w_j S_j (rest + sum_k a_k delta_k) and b = normalize(sum_j w_j R_j (b_rest + sum_k a_k delta_b_k)), at the
-   evaluated joints. The direction is defined everywhere, so the update never fails on it: where the correctives'
-   blend cancels (shorter than DIRECTION_MIN) the direction of the configuration with the largest coefficient stands
-   in, and where the bones' blend cancels, that direction turned by the vertex's heaviest bone alone. Where a
-   corrective weighs on the piece, backstop gets the blended backstop and *blended is set; else the mesh's holds. */
-static bool evaluate_reference(const GarmentAsset *g, const Blend *blend, ClothReference *out, ClothBackstop *backstop,
-                               bool *blended) {
+/* The tangent at the unit `rest` that the exponential map takes to the direction of `key` (log map): along the arc
+   from rest to key, as long as the angle between them. 0 for a zero key. */
+static void direction_log(const float rest[3], const float key[3], float out[3]) {
+    const float length = length3(key);
+    if (!(length > 0.0F)) {
+        memset(out, 0, 3 * sizeof(float));
+        return;
+    }
+    const float cosine = (rest[0] * key[0] + rest[1] * key[1] + rest[2] * key[2]) / length;
+    float t[3];
+    for (int k = 0; k < 3; ++k) t[k] = key[k] / length - cosine * rest[k];
+    const float sine = length3(t);
+    const float scale = sine > 0.0F ? atan2f(sine, cosine) / sine : 1.0F;
+    for (int k = 0; k < 3; ++k) out[k] = scale * t[k];
+}
+
+/* The direction a tangent at the unit `rest` points to (exponential map): rest turned along v by |v|. */
+static void direction_exp(const float rest[3], const float v[3], float out[3]) {
+    const float angle = length3(v), along = angle > 0.0F ? sinf(angle) / angle : 1.0F, c = cosf(angle);
+    for (int k = 0; k < 3; ++k) out[k] = c * rest[k] + along * v[k];
+}
+
+/* ref = sum_j w_j S_j (rest + sum_k a_k delta_k) at the evaluated joints. The body direction of a blend of
+   configurations is the exponential at the rest direction of the coefficient-weighted log maps of the key directions
+   (b_rest + delta_b_k): continuous in the weights wherever no key points directly away from the rest one, which the
+   writer refuses; a configuration that carries the whole weight gives its own direction. It is skinned by the bones'
+   blend, which where it gets shorter than DIRECTION_MIN of the direction moves continuously onto the heaviest bone's
+   turn of it, and normalized. Where a corrective weighs on the piece, backstop gets the blended backstop and
+   *blended is set; else the mesh's holds. reach: the runtime max distance per vertex. */
+static bool evaluate_reference(const GarmentAsset *g, const Blend *blend, const float *reach, ClothReference *out,
+                               ClothBackstop *backstop, bool *blended) {
     const int n = g->mesh->vertices;
     const int shapes = g->corrective ? blend->count : 0;
     const float rest_c = rest_coefficient(blend);
@@ -307,24 +337,28 @@ static bool evaluate_reference(const GarmentAsset *g, const Blend *blend, ClothR
         float corrected[3], turned[3];
         if (shapes > 0) {
             const GarmentCorrective *shape[GARMENT_CORRECTIVES_MAX];
+            float axis[3], tangent[3] = {0, 0, 0};
             memcpy(corrected, rest, sizeof corrected);
-            memcpy(turned, d, sizeof turned);
-            int heaviest = -1;
-            float largest = rest_c;
+            memcpy(axis, d, sizeof axis);
+            const bool unit = normalize(axis);
             for (int c = 0; c < shapes; ++c) {
                 shape[c] = &g->corrective[(size_t)blend->index[c] * (size_t)n + (size_t)i];
+                float key[3], arc[3];
                 for (int k = 0; k < 3; ++k) {
                     corrected[k] += blend->weight[c] * shape[c]->delta[k];
-                    turned[k] += blend->weight[c] * shape[c]->direction[k];
+                    key[k] = d[k] + shape[c]->direction[k];
                 }
-                if (blend->weight[c] > largest) {
-                    largest = blend->weight[c];
-                    heaviest = c;
-                }
+                direction_log(axis, key, arc);
+                for (int k = 0; k < 3; ++k) tangent[k] += blend->weight[c] * arc[k];
             }
-            if (length3(turned) < DIRECTION_MIN)
-                for (int k = 0; k < 3; ++k) turned[k] = d[k] + (heaviest < 0 ? 0.0F : shape[heaviest]->direction[k]);
-            backstop[i] = blend_backstop(g->mesh->backstop[i], rest_c, blend, shape);
+            if (shapes == 1 && rest_c == 0.0F && blend->weight[0] == 1.0F) {
+                for (int k = 0; k < 3; ++k) turned[k] = d[k] + shape[0]->direction[k];
+            } else if (unit) {
+                direction_exp(axis, tangent, turned);
+            } else {
+                memcpy(turned, d, sizeof turned);
+            }
+            backstop[i] = blend_backstop(g->mesh->backstop[i], rest_c, blend, shape, reach[i]);
             rest = corrected;
             d = turned;
         }
@@ -342,9 +376,18 @@ static bool evaluate_reference(const GarmentAsset *g, const Blend *blend, ClothR
                 b[k] += v->weight[j] * (m->r[k][0] * d[0] + m->r[k][1] * d[1] + m->r[k][2] * d[2]);
             }
         }
-        if (length3(b) < DIRECTION_MIN * length3(d)) {
+        const float scale = length3(d), blend_length = length3(b);
+        if (blend_length < DIRECTION_MIN * scale) {
+            /* Grows from 0 where the blend is DIRECTION_MIN long to all of the heaviest bone's turn where it vanishes. */
+            const float share = DIRECTION_MIN - blend_length / scale;
             const nt_skeletal_mat34_t *m = &scratch.skin[v->bone[heaviest]];
-            for (int k = 0; k < 3; ++k) b[k] = m->r[k][0] * d[0] + m->r[k][1] * d[1] + m->r[k][2] * d[2];
+            float own[3];
+            for (int k = 0; k < 3; ++k) {
+                own[k] = m->r[k][0] * d[0] + m->r[k][1] * d[1] + m->r[k][2] * d[2];
+                b[k] += share * own[k];
+            }
+            /* Only a blend exactly opposite the heaviest bone's turn, of exactly that length, cancels here. */
+            if (!(length3(b) > 0.0F)) memcpy(b, own, sizeof own);
         }
         if (!normalize(b)) return false;
     }
@@ -421,9 +464,17 @@ static bool inputs_valid(const GarmentSet *set, const GarmentInput *in) {
         in->convex_count > CLOTH_CONVEXES || (in->convex_count && !in->convexes) || !isfinite(in->max_distance_scale) ||
         in->max_distance_scale < 0 || !isfinite(in->max_distance_bias))
         return false;
-    for (int k = 0; in->corrective_weight && k < set->corrective_count; ++k)
-        if (!(in->corrective_weight[k] >= 0.0F && in->corrective_weight[k] <= 1.0F)) return false;
-    return true;
+    return !in->corrective_weight || garment_corrective_weights_valid(set, in->corrective_weight);
+}
+
+bool garment_corrective_weights_valid(const GarmentSet *set, const float *weight) {
+    if (!set || !weight) return false;
+    float sum = 0.0F;
+    for (int k = 0; k < set->corrective_count; ++k) {
+        if (!(weight[k] >= 0.0F && weight[k] <= 1.0F)) return false;
+        sum += weight[k];
+    }
+    return sum <= 1.0F + GARMENT_WEIGHT_SUM_TOLERANCE;
 }
 
 static bool simulate(GarmentActor *a, const GarmentSet *set, const nt_skeletal_skeleton_t *skel, const GarmentInput *in) {
@@ -494,8 +545,9 @@ static bool simulate(GarmentActor *a, const GarmentSet *set, const nt_skeletal_s
     const Blend at_frame = blend_at(a, weights, 1.0F);
     for (int p = 0; p < set->piece_count; ++p) {
         GarmentPiece *s = &a->pieces[p];
-        if (!evaluate_reference(&set->pieces[p], &at_frame, s->frame, s->frame_backstop, &s->frame_blended)) return false;
         runtime_max_distance(&set->pieces[p], in, s->r);
+        if (!evaluate_reference(&set->pieces[p], &at_frame, s->r, s->frame, s->frame_backstop, &s->frame_blended))
+            return false;
     }
     if (reset || kinematic) {
         pose_spheres(a, a->spheres);
@@ -538,7 +590,7 @@ static bool simulate(GarmentActor *a, const GarmentSet *set, const nt_skeletal_s
             const GarmentAsset *g = &set->pieces[p];
             GarmentPiece *s = &a->pieces[p];
             bool blended;
-            if (!evaluate_reference(g, &at_step, scratch.ref, scratch.backstop, &blended)) return false;
+            if (!evaluate_reference(g, &at_step, s->r, scratch.ref, scratch.backstop, &blended)) return false;
             const ClothBackstop *bs = blended ? scratch.backstop : NULL;
             frame.linear_inertia = g->linear_inertia;
             frame.angular_inertia = g->angular_inertia;

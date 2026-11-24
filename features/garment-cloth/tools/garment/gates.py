@@ -39,8 +39,13 @@ REST = "rest"
 LOOK_WEIGHT = 0.002
 # A clip spec ("corrective:<name>", clip path or None, record) is the corrected reference at the corrective's key.
 CORRECTIVE = "corrective:"
+# A clip spec ("crossfade:<a>><b>@<u>", path a, path b, u) is a cross-fade from every key frame of a into b's first at
+# layer weight u: the pose blended by local slerp and the configurations by the runtime's rule (`blend`).
+CROSSFADE = "crossfade:"
+CROSSFADE_U = (0.25, 0.5, 0.75)
 PER_FRAME = ("G4", "G5", "G6", "G7", "G8", "G10")
-ALL_GATES = ("G1", "G2", "G3", "bind") + PER_FRAME + ("G9",)
+# `crossfade` reports the per-frame gates asked for on the cross-fades between seated clips that share a seat.
+ALL_GATES = ("G1", "G2", "G3", "bind") + PER_FRAME + ("G9", "crossfade")
 # The first declared stage at which a finding fails the check and the cook; absent: a report.
 ENFORCED_FROM = {"rebuild": 1, "stale": 1, "G1": 1, "G3": 1, "G9": 1, "bake": 1,
                  "G2": 2, "bind": 2, "G4": 2, "G5": 2, "G6": 2, "G7": 2, "G8": 2, "G10": 2, "derive": 2}
@@ -116,6 +121,18 @@ class Pose:
         name, path = clip[:2]
         if name == REST:
             return np.zeros(1), M.skin_matrices(self.glb, self.joints, self.ibm, M.rest_worlds(self.glb))
+        if name.startswith(CROSSFADE):
+            from . import host as H
+            leaving, entering = M.load(path), M.load(clip[2])
+            times = leaving.key_times()
+            skeleton = H.Skeleton.from_glb(self.glb)
+            a = M.clip_worlds(self.glb, leaving, times)
+            b = M.clip_worlds(self.glb, entering, entering.key_times()[:1])
+            first = skeleton.pose({n: m[0] for n, m in b.items()})
+            frames = [H.ramp(skeleton.pose({n: m[f] for n, m in a.items()}), first, clip[3], skeleton)
+                      for f in range(len(times))]
+            worlds = {node: np.stack([pose[j] for pose in frames]) for j, node in enumerate(skeleton.nodes)}
+            return times, M.skin_matrices(self.glb, self.joints, self.ibm, worlds)
         if name.startswith(CORRECTIVE):
             record = clip[2]
             if "pose" in record:
@@ -175,10 +192,79 @@ def configuration(piece, corrective):
     return points + delta, b + turn, key[:, 0].astype(float), key[:, 1].astype(float)
 
 
+def _arc(axis, key):
+    """Log map at the unit directions `axis` of the directions of `key` (rows): tangents along the arcs, as long as
+    the angles."""
+    toward = key / np.maximum(np.linalg.norm(key, axis=1, keepdims=True), 1e-300)
+    cosine = np.einsum("ij,ij->i", toward, axis)
+    t = toward - cosine[:, None] * axis
+    sine = np.linalg.norm(t, axis=1)
+    scale = np.where(sine > 0, np.arctan2(sine, cosine) / np.where(sine > 0, sine, 1.0), 1.0)
+    return scale[:, None] * t
+
+
+def blend(piece, weights):
+    """(rest points, rest body direction, d, R) of a piece's reference at corrective weights {name: w} (sum at most 1),
+    float64, by the runtime's rule (README, "Correctives"): positions add, the direction turns along the arcs toward the
+    keys' by the coefficient-weighted log maps, d and the curvature blend with an off configuration (R = 0) taken as a
+    flat body at the vertex's reach r, off only where every configuration that weighs is off, and a configuration that
+    carries the whole weight gives its own values."""
+    names = [k for k, w in weights.items() if w != 0]
+    if not names:
+        return configuration(piece, None)
+    if len(names) == 1 and weights[names[0]] == 1:
+        return configuration(piece, names[0])
+    w = np.array([weights[k] for k in names], float)
+    rest_c = max(1.0 - float(w.sum()), 0.0)
+    points, b = piece.points.astype(float), piece.b.astype(float)
+    shapes = [[np.asarray(a, float) for a in piece.correctives[k]] for k in names]
+    points = points + sum(wk * s[0] for wk, s in zip(w, shapes))
+    axis = b / np.linalg.norm(b, axis=1, keepdims=True)
+    tangent = sum(wk * _arc(axis, b + s[1]) for wk, s in zip(w, shapes))
+    angle = np.linalg.norm(tangent, axis=1, keepdims=True)
+    along = np.where(angle > 0, np.sin(angle) / np.where(angle > 0, angle, 1.0), 1.0)
+    direction = np.cos(angle) * axis + along * tangent
+    reach = piece.r.astype(float)
+    d, curvature, on, only = np.zeros(len(points)), np.zeros(len(points)), np.zeros(len(points), bool), None
+    for c, (cd, cR) in zip([rest_c, *w], [(piece.d.astype(float), piece.R.astype(float))] +
+                          [(s[2][:, 0], s[2][:, 1]) for s in shapes]):
+        if c == 0:
+            continue
+        off = ~(cR > 0)
+        d += c * np.where(off, reach, cd)
+        curvature += c * np.where(off | np.isinf(cR), 0.0, 1.0 / np.where(off, 1.0, cR))
+        on |= ~off
+        only = cd
+    R = np.where(on, np.where(curvature > 0, 1.0 / np.where(curvature > 0, curvature, 1.0), np.inf), 0.0)
+    return points, direction, np.where(on, np.maximum(d, 0.0), only), R
+
+
 def corrective_specs(sc, clips):
     """A clip spec per corrective of a sidecar, for clip_gates: its key and the record of its bake."""
     paths = dict(clips)
     return [(CORRECTIVE + c["name"], paths.get(c.get("clip")), c) for c in sc.correctives]
+
+
+def crossfade_specs(data, clip_names=None):
+    """Clip specs of the cross-fades a game shows between two seated clips that share a seat (the same seat planes in
+    the outfit's data) of which one at least plays a corrective of the outfit: from every key frame of the one into
+    the other's first frame, at each layer weight of CROSSFADE_U (report only)."""
+    paths = dict(c[:2] for c in data.clips)
+    seated = sorted(c for c in data.seats if c in paths and (clip_names is None or c in clip_names))
+    out = []
+    for a in seated:
+        for b in seated:
+            if a == b or not np.array_equal(np.asarray(data.seats[a], float), np.asarray(data.seats[b], float)):
+                continue
+            if a in data.clip_correctives or b in data.clip_correctives:
+                out += [(f"{CROSSFADE}{a}>{b}@{u}", paths[a], paths[b], u) for u in CROSSFADE_U]
+    return out
+
+
+def static_findings(sc, model, looks, fabrics, stage):
+    """The gates that need no clip (STATIC: G1, G2, G3, bind, G9) on a sidecar, decided for `stage`: what the cook
+    re-runs on what it ships, so a shipped outfit's structural validity never rests on a recorded finding."""
+    return decide(g1_maps(sc, fabrics) + g2_g3(model, sc) + g9_looks(model, looks), stage, True)
 
 
 def clip_gates(data, clip, gates=PER_FRAME):
@@ -190,11 +276,24 @@ def clip_gates(data, clip, gates=PER_FRAME):
     times, matrices = pose.matrices(clip)
     name = clip_name = clip[0]
     at_key = name.startswith(CORRECTIVE)
-    corrective = name[len(CORRECTIVE):] if at_key else data.clip_correctives.get(name)
+    fading = name.startswith(CROSSFADE)
+    corrective = name[len(CORRECTIVE):] if at_key else None if fading else data.clip_correctives.get(name)
+    weights = {corrective: 1.0} if corrective is not None else {}
     if at_key:
         # The bake's own check of its drape at the key. A seat is the clip's gate, run where the clip itself is.
         gates = tuple(g for g in gates if g != "G10")
         name = f"{clip[2].get('clip', 'pose')} with {corrective} at its key"
+    elif fading:
+        pair, u = name[len(CROSSFADE):].rsplit("@", 1)
+        leaving, entering = pair.split(">")
+        u = float(u)
+        weights = {}
+        for held, share in ((data.clip_correctives.get(leaving), 1.0 - u), (data.clip_correctives.get(entering), u)):
+            if held is not None:
+                weights[held] = weights.get(held, 0.0) + share
+        # Both clips sit on one seat, so the seat gate reads the leaving clip's.
+        clip_name = leaving
+        name = f"{leaving} into {entering} at {u}"
     elif corrective is not None:
         name = f"{name} with {corrective}"
     body_points, body_faces, body_weights, complete = data.body[:4]
@@ -212,7 +311,7 @@ def clip_gates(data, clip, gates=PER_FRAME):
     refs, dirs, rests, backstops = {}, {}, {}, {}
     for p in pose.sc.pieces:
         w = pose.dense[p.id]
-        points, b, d, R = configuration(p, corrective)
+        points, b, d, R = blend(p, weights)
         rests[p.id], backstops[p.id] = points, (d, R)
         refs[p.id] = M.skin_points(points, w, matrices)
         dirs[p.id] = M.skin_directions(b, w, matrices)
@@ -312,6 +411,10 @@ def clip_gates(data, clip, gates=PER_FRAME):
                 _frame(rec, name, t, need - gap, vertices=hit)
     if at_key:
         out = {(*key, corrective): dict(rec, corrective=corrective) for key, rec in out.items()}
+    elif fading:
+        # Reported, not enforced: the measures of the cross-fade under their own gate.
+        out = {("crossfade", key[0], key[1], pair): dict(rec, gate="crossfade", measure=key[0], pair=pair, enforced=False)
+               for key, rec in out.items()}
     elif corrective is not None:
         # The worst frame names what it was measured on, so a card can draw the corrected reference in that clip.
         for rec in out.values():
@@ -685,11 +788,16 @@ def run(gd, model, body, sc, wanted, clip_names=None, workers=None):
             clips += [c] if c[0] == REST else [(*c, s, s + CHUNK) for s in range(0, frames, CHUNK)]
         clips += [c for c in corrective_specs(sc, gd.clips)
                   if clip_names is None or c[2].get("clip") in clip_names or "pose" in c[2]]
+        fades = crossfade_specs(gd, clip_names) if "crossfade" in wanted else []
+        clips += fades
         with ProcessPoolExecutor(max_workers=workers or min(4, os.cpu_count() or 1)) as pool:
             parts = list(pool.map(clip_gates, [gd] * len(clips), clips, [per_frame] * len(clips)))
         merged = merge(parts)
         if "G10" in per_frame and ("G10", "body") not in merged:
             merged[("G10", "body")] = dict(_record("G10", "body"), not_run="no seated clip with a declared seat was run")
+        if "crossfade" in wanted and not fades:
+            merged[("crossfade",)] = dict(_record("crossfade", None), not_run="no two seated clips sharing a seat play "
+                                                                         "a corrective of the outfit")
         findings += list(merged.values())
     if "G9" in wanted:
         findings += g9_looks(model, gd.looks)

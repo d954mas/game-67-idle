@@ -71,6 +71,13 @@ typedef struct {
 /* Index of the named corrective in the set, for GarmentInput.corrective_weight; -1 when the set has none of that name. */
 int garment_set_corrective(const GarmentSet *set, const char *name);
 
+/* The corrective weights of one update share one reference with the rest: each in [0, 1] and their sum at most 1,
+   past which the rest's coefficient would go negative. The sum may exceed 1 by this much float rounding. */
+#define GARMENT_WEIGHT_SUM_TOLERANCE 1e-6F
+
+/* Whether the set's corrective_count weights are an update's weights: each in [0, 1], their sum at most 1. */
+bool garment_corrective_weights_valid(const GarmentSet *set, const float *weight);
+
 typedef struct {
     const nt_skeletal_mat34_t *pose; /* Model-space joint matrices of the frame. */
     const float *world;              /* Actor root, column-major 4x4; its axes are normalized. */
@@ -83,10 +90,11 @@ typedef struct {
     /* r' = max(0, r * scale + bias) where the cooked r > 0, else 0: 1 and 0 simulate as cooked; scale 0 and bias 0 is
        kinematic and skips the solve. */
     float max_distance_scale, max_distance_bias;
-    /* The set's corrective_count weights in [0, 1] (index from garment_set_corrective), or NULL for all 0. The
-       reference is skin(rest + sum_k weight_k delta_k), the body direction turns the same way and the backstop blends
-       toward each key's (README, "Correctives"); a weight change between frames is blended across the substeps as the
-       joints are, so a ramp over a transition moves the reference smoothly. */
+    /* The set's corrective_count weights in [0, 1] summing to at most 1 (garment_corrective_weights_valid; index from
+       garment_set_corrective), or NULL for all 0; other weights fail the update. The reference is
+       skin(rest + sum_k weight_k delta_k), the body direction turns along the arcs toward each key's and the backstop
+       blends toward each key's (README, "Correctives"); a weight change between frames is blended across the substeps
+       as the joints are, so a ramp over a transition moves the reference smoothly. */
     const float *corrective_weight;
     /* Fill the stats' strain, max-distance, backstop and held measures (lab, probes, tests); costs a pass per frame. */
     bool measure;

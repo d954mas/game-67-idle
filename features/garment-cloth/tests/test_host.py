@@ -298,6 +298,40 @@ class TestHost(unittest.TestCase):
             Host(self.blob, Skeleton(["other"], [-1]), LIBRARY)
 
 
+class _Stamp:
+    def __init__(self, value):
+        self.value = value
+
+    def __call__(self):
+        return self.value
+
+
+class _Library:
+    def __init__(self, stamp=None):
+        if stamp is not None:
+            self.gh_runtime_sha256 = _Stamp(stamp)
+
+
+class TestStamp(unittest.TestCase):
+    """A library proves by content which runtime sources it was built from; a file time proves nothing, and a library
+    named by GARMENT_HOST is held to the same proof."""
+
+    def test_only_a_library_stamped_with_the_current_runtime_is_accepted(self):
+        from garment import host as H
+        H.check_stamp(_Library(H.runtime_sha256().encode()), "current.dll")
+        with self.assertRaisesRegex(ValueError, "built from other runtime sources"):
+            H.check_stamp(_Library(b"0" * 64), "older.dll")
+        with self.assertRaisesRegex(ValueError, "carries no runtime stamp"):
+            H.check_stamp(_Library(), "unstamped.dll")
+
+    def test_the_build_stamps_the_library_by_the_rule_host_py_checks(self):
+        import ctypes
+        from garment import host as H
+        if not LIBRARY:
+            self.skipTest("needs the built garment_host library as the argument")
+        H.check_stamp(ctypes.CDLL(str(LIBRARY)), LIBRARY)
+
+
 if __name__ == "__main__":
     if sys.argv[1:2] == ["--emit"]:
         Path(sys.argv[2]).write_bytes(sheet_over_cylinder())

@@ -483,7 +483,8 @@ class Piece:
 
 
 def _overrides(piece, d, R):
-    """The script's paint and smooth of d and R, in the order it wrote them (build order step 5)."""
+    """The script's paint and smooth of d and R, in the order it wrote them (README, "Build order": the script's
+    overrides of derived maps)."""
     for o in piece.overrides:
         target = {"d": d, "R": R}[o["name"]]
         if o["kind"] == "paint":
@@ -577,9 +578,14 @@ class Outfit:
     reported, not enforced); fabrics: the fabrics file ({"fabrics": {name: ClothMaterial fields}}) or a dict;
     colliders, clips, looks: the body shapes file, the clip manifest and the look models that share this sidecar
     (the checks read them; a build reads the clips for the layer rule and a bake reads all but the looks); seats:
-    {seated clip: the game's seat convex as (n, d) plane rows in actor space}, the input of the game's gate G10 and of
-    a seated bake; or a function that returns them from a reader of game files (`read(relative path) -> path`), so
-    every file the seats come from is a build input."""
+    {seated clip: the game's seat convex as (n, d) plane rows in actor space, or {"planes": rows, "source": the model
+    the seat is measured on}}, the input of the game's gate G10 and of a seated bake; or a function that returns them
+    from a reader of game files (`read(relative path) -> path`), so every file the seats come from is a build input.
+
+    The outfit's declaration (`<script>.json` beside the script, the stage the game ships) is the one source of its
+    colliders: a build input, so a changed declaration makes the sidecar stale. Its `colliders` are the body shapes
+    the build, the bakes and the gates read (a `colliders` argument must name the same file), and its `script` and
+    `sidecar`, where it names them, must be this script and the sidecar this build writes beside the model."""
 
     instances = []
 
@@ -587,7 +593,17 @@ class Outfit:
         self.root = Path(root).resolve()
         self.script = None if script is None else Path(script).resolve()
         self.inputs = {}
+        declared = self._declaration()
+        if declared is not None:
+            if colliders is not None and declared.get("colliders") != Path(colliders).as_posix():
+                raise ValueError(f"{self.declaration.name} declares colliders {declared.get('colliders')}, the script passes "
+                                 f"{colliders}: the declaration is the one source of the outfit's body shapes")
+            colliders = declared.get("colliders")
         self.model_path = self._input(model)
+        if declared is not None and declared.get("sidecar") not in (None, self._committed_path().relative_to(
+                self.root).as_posix()):
+            raise ValueError(f"{self.declaration.name} ships the sidecar {declared['sidecar']}; this script builds "
+                             f"{self._committed_path().relative_to(self.root).as_posix()}")
         self.model = RenderModel(self.model_path)
         if isinstance(fabrics, dict):
             self.fabrics = fabrics
@@ -598,7 +614,9 @@ class Outfit:
         self.colliders = None if colliders is None else self.root / colliders
         self.clips = None if clips is None else self.root / clips
         self.looks = [self.root / look for look in looks]
-        self.seats = dict((seats(self._input) if callable(seats) else seats) or {})
+        given = dict((seats(self._input) if callable(seats) else seats) or {})
+        self.seats = {clip: (s["planes"] if isinstance(s, dict) else s) for clip, s in given.items()}
+        self.seat_sources = {clip: s.get("source") for clip, s in given.items() if isinstance(s, dict)}
         self.pieces = []
         self.layers = []
         self.separations = []
@@ -610,6 +628,22 @@ class Outfit:
         # content fix with what came before it.
         self.stages = stages(script)
         Outfit.instances.append(self)
+
+    def _declaration(self):
+        """The outfit's declaration, read as a build input, or None when the script has none."""
+        self.declaration = None if self.script is None else self.script.with_suffix(".json")
+        if self.declaration is None or not self.declaration.is_file():
+            return None
+        declared = json.loads(self._input(self.declaration).read_text(encoding="utf-8"))
+        named = declared.get("script")
+        if named is not None and self.script.is_relative_to(self.root) and \
+                named != self.script.relative_to(self.root).as_posix():
+            raise ValueError(f"{self.declaration.name} declares the script {named}, not "
+                             f"{self.script.relative_to(self.root).as_posix()}")
+        return declared
+
+    def _committed_path(self):
+        return self.model_path.with_name(self.model_path.name.removesuffix(".glb") + ".cloth.glb")
 
     def _input(self, relative):
         path = Path(relative)
@@ -636,7 +670,7 @@ class Outfit:
             return {}
         return {c["name"]: c for c in json.loads(self.clips.read_text(encoding="utf-8"))["animations"]}
 
-    def corrective(self, name, clip=None, t=None, pose=None, convexes=None, max_passes=None):
+    def corrective(self, name, clip=None, t=None, pose=None, convexes=None, max_passes=None, convex_source=None):
         """Declare the named corrective of every piece (spec B.5, E.1); the build bakes it through the feature's own
         runtime once every map is final, and stores it: the drape the runtime settles to in the key pose, as rest-space
         deltas of the reference and the body direction. The game weights it by name while a clip holds that pose (the
@@ -644,7 +678,9 @@ class Outfit:
 
         The key is a clip of the outfit's manifest and a time t (s), or a pose ((joints, 4, 4) model space, the skin's
         joints in skeleton order). convexes are what the cloth rests on besides the floor, as (n, d) plane rows in
-        actor space; by default the outfit's declared seat for that clip. A clip the manifest marks as seated with no
+        actor space; by default the outfit's declared seat for that clip. Convexes feed the drape, so the model they are
+        measured on (the seat's `source`, or convex_source) is a source the sidecar's record lists; convexes without it
+        are refused. A clip the manifest marks as seated with no
         declared seat is refused: a bake without a chair says so with `convexes=[]`. A bake that does not converge
         stops the build. The bake needs the garment_host library built from the current runtime
         (`node ai_studio/feature_testing/run.mjs`) and the outfit's colliders; a corrective whose recorded inputs
@@ -666,10 +702,17 @@ class Outfit:
                     raise ValueError(f"corrective {name!r}: {clip!r} is a seated clip and the outfit declares no seat "
                                      "for it; declare the seat, or bake without one by convexes=[]")
                 convexes = [self.seats[clip]] if clip in self.seats else []
+                convex_source = self.seat_sources.get(clip)
         elif convexes is None:
             convexes = []
         request = dict(name=name, convexes=[np.asarray(c, float).reshape(-1, 4).tolist() for c in convexes],
                        max_passes=int(max_passes or C.MAX_PASSES))
+        if convexes:
+            if convex_source is None:
+                raise ValueError(f"corrective {name!r} rests on convexes whose model the outfit does not name: give the "
+                                 "seat as {'planes': rows, 'source': model}, or convex_source=, so the sidecar's record "
+                                 "lists it")
+            request["convex_source"] = Path(convex_source).as_posix()
         if clip is not None:
             request.update(clip=clip, t=float(t))
         else:
@@ -800,8 +843,9 @@ class Outfit:
 
     def backstop_at(self, p, points, body):
         """(b, d, R) of a resolved piece in another configuration of its reference (a corrective's settled drape)
-        against the body posed there, by the rule the build applies at rest: the body measure (step 3), the outer d
-        the layer rule set (its gap is already the narrowest over every clip frame), then the script's overrides."""
+        against the body posed there, by the rule the build applies at rest (README, "Build order"): the backstop from
+        the body, the outer d the layer rule set (its gap is already the narrowest over every clip frame), then the
+        script's overrides."""
         b, d, R, _, _ = body_maps.backstop(points, p.faces, p.pins, body, p.thickness)
         if p.layer_d is not None:
             hit, values = p.layer_d
@@ -814,7 +858,7 @@ class Outfit:
 
     def _committed(self):
         """The sidecar beside the model (the committed one), whose correctives a build may keep, or None."""
-        path = self.model_path.with_name(self.model_path.name.removesuffix(".glb") + ".cloth.glb")
+        path = self._committed_path()
         if os.environ.get("GARMENT_REBAKE") == "1" or not path.is_file():
             return None
         try:
@@ -969,11 +1013,28 @@ class Outfit:
         pieces, findings, records = self.resolve()
         return self.sidecar(pieces, records, findings)
 
+    def sources(self):
+        """Every file whose content feeds the sidecar's cloth and so its record lists: the model, the declared body
+        file, each clip a corrective was baked on and the model of each convex a bake rested on."""
+        from . import model as Mo
+        out = [self.model_path]
+        if isinstance(self.body_spec, str):
+            out.append(self.root / self.body_spec)
+        baked_on_clips = any(r.get("clip") is not None for r in self.corrective_requests)
+        clips = dict(Mo.clips(self.clips)) if baked_on_clips else {}
+        for request in self.corrective_requests:
+            if request.get("clip") is not None:
+                out.append(Path(clips[request["clip"]]))
+            if request.get("convex_source"):
+                out.append(self.root / request["convex_source"])
+        return out
+
     def write(self):
         """Write the sidecar and its asset record and return the sidecar's path; a file with the same bytes is left
-        untouched."""
+        untouched. A sidecar derived from an account-gated or purchased export is refused, and nothing is written,
+        unless the project owner's grant lists it (garment.build.derived_sources)."""
         data = sc.write(self.built())
-        Bd.source_record(self.model_path)
+        sources = Bd.derived_sources(self.root, self.sources(), self._committed_path())
         path = self.sidecar_path()
         path.parent.mkdir(parents=True, exist_ok=True)
         if not path.is_file() or path.read_bytes() != data:
@@ -983,5 +1044,6 @@ class Outfit:
         Bd.write_record(path, self.root if path.resolve().is_relative_to(self.root) else path.parent,
                         what="The outfit's sim meshes, pins, skin weights and maps (garment-cloth sidecar, spec B.1): a "
                              "built artifact of its script; the cook refuses it once an input in extras.build changes.",
-                        producer=script, rebuild=f"python {script}" if script else None, source=self.model_path)
+                        producer=script, rebuild=f"python {script}" if script else None, source=self.model_path,
+                        sources=sources)
         return path
