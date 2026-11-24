@@ -64,8 +64,9 @@ extern "C" {
    may instead start on an event, `<player> <verb> <args> on <event> [+<time>] [as <label>]`,
    that long after it (0 without), cutting off what runs as a timed one does; the word `on`
    ends the arguments:
-     on <pN> contact <body>       the first tick pN's own world records a hit between a body pN
-                                  simulates and the body (pN's thrown rock meeting glass)
+     on <pN> <agent> contact <body>  the first tick pN's own world records a hit between the
+                                  scene body `agent`, while pN simulates it, and the body (pN's
+                                  thrown rock meeting glass); her character is never the agent
      on <label>                   the tick the earlier action with that label starts
    Its event can fire until the run ends; one that never fired leaves the action pending. An
    action after it with neither waits for it to end. A schedule
@@ -158,7 +159,7 @@ const char *body_sync_outcome_name(body_sync_outcome_t outcome);
 
 typedef enum body_sync_trigger {
     BODY_SYNC_TRIGGER_NONE,
-    BODY_SYNC_TRIGGER_CONTACT, /* on <pN> contact <body> */
+    BODY_SYNC_TRIGGER_CONTACT, /* on <pN> <agent> contact <body> */
     BODY_SYNC_TRIGGER_ACTION,  /* on <label> */
 } body_sync_trigger_t;
 
@@ -183,8 +184,9 @@ typedef struct body_sync_action {
     float home[3];
     /* `on`: the action starts trigger_ticks after an event instead of at a time */
     body_sync_trigger_t trigger;
-    uint8_t trigger_player;                /* CONTACT: whose own world sees it */
-    char trigger_body[BODY_SYNC_NAME_MAX]; /* CONTACT: the body touched */
+    uint8_t trigger_player;                 /* CONTACT: whose own world sees it */
+    char trigger_agent[BODY_SYNC_NAME_MAX]; /* CONTACT: the body pN simulates that makes it */
+    char trigger_body[BODY_SYNC_NAME_MAX];  /* CONTACT: the body touched */
     uint32_t trigger_action;               /* ACTION: the earlier action, by index */
     uint32_t trigger_ticks;
 } body_sync_action_t;

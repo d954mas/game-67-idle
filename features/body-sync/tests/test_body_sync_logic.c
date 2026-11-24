@@ -87,8 +87,8 @@ static void test_host_rules_parse(void) {
 
 static void test_triggers_parse(void) {
     body_sync_error_t error;
-    TEST_ASSERT_TRUE_MESSAGE(parse("scenario a\nscene b\nguests 1\np0 recall crate to 1 0.5 -2 on p1 contact glass +2t as back\n"
-                                   "p1 grab crate on back +750ms as regrab\np0 remove crate on regrab\np1 drop on p1 contact crate\n",
+    TEST_ASSERT_TRUE_MESSAGE(parse("scenario a\nscene b\nguests 1\np0 recall crate to 1 0.5 -2 on p1 crate contact glass +2t as back\n"
+                                   "p1 grab crate on back +750ms as regrab\np0 remove crate on regrab\np1 drop on p1 rock contact crate\n",
                                    &error),
                              error.text);
     TEST_ASSERT_EQUAL_UINT32(4, scenario.action_count);
@@ -96,6 +96,7 @@ static void test_triggers_parse(void) {
     TEST_ASSERT_EQUAL(BODY_SYNC_TRIGGER_CONTACT, a->trigger);
     TEST_ASSERT_FALSE(a->timed);
     TEST_ASSERT_EQUAL_UINT8(1, a->trigger_player);
+    TEST_ASSERT_EQUAL_STRING("crate", a->trigger_agent);
     TEST_ASSERT_EQUAL_STRING("glass", a->trigger_body);
     TEST_ASSERT_EQUAL_UINT32(2, a->trigger_ticks);
     TEST_ASSERT_TRUE(a->has_home && fabsf(a->home[2] + 2.0f) < 1e-6f);
@@ -108,14 +109,31 @@ static void test_triggers_parse(void) {
     TEST_ASSERT_EQUAL_UINT32(0, scenario.actions[2].trigger_ticks);
     TEST_ASSERT_EQUAL(BODY_SYNC_VERB_DROP, scenario.actions[3].verb);
     TEST_ASSERT_EQUAL(BODY_SYNC_TRIGGER_CONTACT, scenario.actions[3].trigger);
+    TEST_ASSERT_EQUAL_STRING("rock", scenario.actions[3].trigger_agent);
+}
+
+/* Only the named agent's hit fires, on its player's own world while that world simulates it: not
+   her character's (no scene name), another body of hers, a copy, or another player's world. */
+static void test_contact_trigger_needs_its_agent(void) {
+    body_sync_error_t error;
+    TEST_ASSERT_TRUE_MESSAGE(parse("scenario a\nscene b\nguests 2\np0 recall rock on p1 rock contact glass\n", &error), error.text);
+    const body_sync_action_t *a = &scenario.actions[0];
+    TEST_ASSERT_TRUE(stand_trigger_contact(a, 1, false, "rock", true, "glass"));
+    TEST_ASSERT_FALSE(stand_trigger_contact(a, 1, false, "", true, "glass"));      /* her character */
+    TEST_ASSERT_FALSE(stand_trigger_contact(a, 1, false, "rock2", true, "glass")); /* another of hers */
+    TEST_ASSERT_FALSE(stand_trigger_contact(a, 1, false, "rock", false, "glass")); /* a copy on her world */
+    TEST_ASSERT_FALSE(stand_trigger_contact(a, 2, false, "rock", true, "glass"));  /* another player's world */
+    TEST_ASSERT_FALSE(stand_trigger_contact(a, 1, false, "rock", true, "door"));
+    TEST_ASSERT_TRUE(stand_trigger_contact(a, 0, true, "rock", true, "glass"));    /* the reference run's one world */
+    TEST_ASSERT_FALSE(stand_trigger_contact(&scenario.actions[0], 1, false, "glass", true, "rock")); /* the pair is ordered */
 }
 
 /* An `on` action waits for its event, then starts as a timed one at the event plus its delay; an
    untimed action behind it waits too, and a schedule left with only unfired ones is done. */
 static void test_schedule_starts_on_events(void) {
     body_sync_error_t error;
-    TEST_ASSERT_TRUE_MESSAGE(parse("scenario a\nscene b\nguests 1\np0 walk 1 1\np0 recall crate on p1 contact glass +2t\np0 wait 10t\n"
-                                   "p1 grab crate on p1 contact glass\n",
+    TEST_ASSERT_TRUE_MESSAGE(parse("scenario a\nscene b\nguests 1\np0 walk 1 1\np0 recall crate on p1 crate contact glass +2t\np0 wait 10t\n"
+                                   "p1 grab crate on p1 crate contact glass\n",
                                    &error),
                              error.text);
     stand_schedule_t *s = malloc(sizeof(*s));
@@ -210,18 +228,21 @@ static void test_refusals_name_their_line(void) {
         {"scenario a\nscene b\nguests 1\np0 recall crate on\n", 4},
         {"scenario a\nscene b\nguests 1\np0 recall crate on p1 contact\n", 4},
         {"scenario a\nscene b\nguests 1\np0 recall crate on p1 touch glass\n", 4},
-        {"scenario a\nscene b\nguests 1\np0 recall crate on p1 contact glass 2t\n", 4},
-        {"scenario a\nscene b\nguests 1\np0 recall crate on p1 contact glass +\n", 4},
-        {"scenario a\nscene b\nguests 1\np0 recall crate on p1 contact glass +2\n", 4},
-        {"scenario a\nscene b\nguests 1\np0 recall crate on p1 contact glass +-2t\n", 4},
-        {"scenario a\nscene b\nguests 1\np0 recall crate on p1 contact glass +700s\n", 4},
-        {"scenario a\nscene b\nguests 1\np0 recall crate on p1 contact NAME\n", 4},
-        {"scenario a\nscene b\nguests 1\np0 recall crate on p1 contact glass +2t +2t\n", 4},
-        {"scenario a\nscene b\nguests 1\np0 recall crate on p2 contact glass\n", 4},
+        {"scenario a\nscene b\nguests 1\np0 recall crate on p1 rock contact glass 2t\n", 4},
+        {"scenario a\nscene b\nguests 1\np0 recall crate on p1 rock contact glass +\n", 4},
+        {"scenario a\nscene b\nguests 1\np0 recall crate on p1 rock contact glass +2\n", 4},
+        {"scenario a\nscene b\nguests 1\np0 recall crate on p1 rock contact glass +-2t\n", 4},
+        {"scenario a\nscene b\nguests 1\np0 recall crate on p1 rock contact glass +700s\n", 4},
+        {"scenario a\nscene b\nguests 1\np0 recall crate on p1 rock contact NAME\n", 4},
+        {"scenario a\nscene b\nguests 1\np0 recall crate on p1 NAME contact glass\n", 4},
+        {"scenario a\nscene b\nguests 1\np0 recall crate on p1 contact glass\n", 4},
+        {"scenario a\nscene b\nguests 1\np0 recall crate on p1 rock touch glass\n", 4},
+        {"scenario a\nscene b\nguests 1\np0 recall crate on p1 rock contact glass +2t +2t\n", 4},
+        {"scenario a\nscene b\nguests 1\np0 recall crate on p2 rock contact glass\n", 4},
         {"scenario a\nscene b\nguests 1\np0 recall crate on later\n", 4},
         {"scenario a\nscene b\nguests 1\np0 recall crate on later as later\n", 4},
         {"scenario a\nscene b\nguests 1\np0 recall crate on p1\n", 4},
-        {"scenario a\nscene b\nguests 1\nat 1s p0 recall crate on p1 contact glass\n", 4},
+        {"scenario a\nscene b\nguests 1\nat 1s p0 recall crate on p1 rock contact glass\n", 4},
         {"scenario a\nscene b\nguests 1\np1 drop as d\np0 recall crate on d +1s +1s\n", 5},
     };
     for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
@@ -869,6 +890,7 @@ int main(void) {
     RUN_TEST(test_parse_reads_the_grammar);
     RUN_TEST(test_host_rules_parse);
     RUN_TEST(test_triggers_parse);
+    RUN_TEST(test_contact_trigger_needs_its_agent);
     RUN_TEST(test_net_items_sorted_by_tick);
     RUN_TEST(test_refusals_name_their_line);
     RUN_TEST(test_parser_fuzz);

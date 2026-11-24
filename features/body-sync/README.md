@@ -157,7 +157,10 @@ closes that gap with a quarantine: `body_sync_bind` refuses (TAKEN) a
 generation equal modulo 16 to one it unbound from the slot less than
 `SYNC_POLICY_EVIDENCE_AGE_MAX_S` and the longest playback delay ago (75 ticks
 at 60 Hz), on both implementations; another generation binds at once, and
-guests bind as the host tells them. A record the old owner sent before she
+guests bind as the host tells them. On TAKEN a game binds the slot's next
+generation (a projectile or debris pool that raises the generation on every
+reuse never meets the quarantine, however fast it recycles) or takes another
+free slot. A record the old owner sent before she
 heard of the unbind arrives within that on a path whose round trip is inside
 the evidence cap; one later still can read as the new body's. The number does
 not rise across a rebind instead: every endpoint binds the number it is given,
@@ -801,7 +804,7 @@ rate <host|gN> <x>hz                 # that endpoint steps x times a second of v
 [at <time>] <p0..p3> walk <x> <z> [speed <v>] | walk <body> [as <label>]
 [at <time>] <player> grab <body> | throw <x> <y> <z> [speed <v>] | throw <body> | drop | punch [<body>] | wait <time>
 [at <time>] p0 recall <body> [to <x> <y> <z>] | remove <body>   # the host's rule over a body whoever owns it
-<player> <verb> <args> on <pN> contact <body> [+<time>] [as <label>]   # starts that long after pN's world sees the hit
+<player> <verb> <args> on <pN> <agent> contact <body> [+<time>] [as <label>]   # starts that long after pN's world sees the hit
 <player> <verb> <args> on <label> [+<time>] [as <label>]               # starts that long after the earlier action starts
 [at <time>] net <g1..g3> [to_host|to_guest] rtt|delay|jitter|reorder_delay <time> loss|dup|reorder <share> rate <B/s>|off
 at <time> cut <guest> for <time>     # nothing passes; 10 s or more disconnects
@@ -823,8 +826,10 @@ to zero ticks is refused. An action with `at` starts then and cuts off what the
 player was doing; one without it starts when the player's previous action
 ends. One with `on` starts that long after its event instead (0 without a
 delay), as a timed one does, and an untimed action behind it waits for it: the
-first tick pN's own world records a hit between a body pN simulates and the
-named body, or the start of the earlier labelled action. `on` ends the
+first tick pN's own world records a hit between the named agent, while pN
+simulates it, and the named body (a player owns her character, a body in hand
+and one in flight at once, so the scenario names whose contact it means), or
+the start of the earlier labelled action. `on` ends the
 arguments; it and `at` are refused together. An event can fire until the run
 ends; one that never fired leaves its action pending. `recall` and `remove`
 are the host's rule, p0's alone: a recall is
@@ -1181,7 +1186,7 @@ while her path to the host loses everything around the recall, so no late
 packet arrives, and must fail on `late_drops.count >= 1`. (Without the loss the
 stub has late packets of a still rock: it sends every body it simulates each
 tick.) `recall_flight` and `remove_owned` recall or remove the rock two ticks
-after it meets the glass on the thrower's world (`on p1 contact glass +2t`), and
+after it meets the glass on the thrower's world (`on p1 rock_a contact glass +2t`), and
 the later steps follow the recall: each way takes at least three ticks, so her
 claim and release reach the host after the move at any throw speed (6 to 9 m/s
 over seeds pass on every seam), and the host's last taken state of the flight

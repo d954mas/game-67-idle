@@ -83,6 +83,11 @@ void stand_schedule_end(stand_schedule_t *schedule, uint8_t player);
 /* The event of action `index` (its `on`) happened at `tick`: from then it starts as a timed action
    at tick plus its delay. Only the first counts; nothing for an action without one. */
 void stand_schedule_fire(stand_schedule_t *schedule, uint32_t index, uint32_t tick);
+/* Whether a hit on `endpoint`'s world fires action `a`'s `on <pN> <agent> contact <body>`: pN's
+   own world (any world for a reference run that holds every player), between its named agent,
+   which that world simulates, and the named body. A character has no scene name: "" never fires. */
+bool stand_trigger_contact(const body_sync_action_t *a, uint8_t endpoint, bool every_player, const char *agent, bool agent_local,
+                           const char *touched);
 int32_t stand_schedule_active(const stand_schedule_t *schedule, uint8_t player);
 /* Every player idle with nothing left to start but actions whose event has not happened (and
    the untimed ones behind them), and every network item fired. */

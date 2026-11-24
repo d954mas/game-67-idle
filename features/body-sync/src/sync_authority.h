@@ -176,11 +176,11 @@ typedef struct sync_authority {
        (body_sync_old_owner_drops). */
     uint16_t old_owner_generation[BODY_SYNC_BODIES_MAX];
     uint32_t old_owner_drops[BODY_SYNC_BODIES_MAX][BODY_SYNC_SEATS_MAX];
-    /* Host: per slot, `now` at its last unbind and a bit per generation modulo 16 unbound since
-       the quarantine before it ended; bind refuses those for rebind_ticks
-       (sync_policy_rebind_ticks), set by the shell. */
-    uint32_t unbound_tick[BODY_SYNC_BODIES_MAX];
-    uint16_t unbound_low[BODY_SYNC_BODIES_MAX];
+    /* Host: per slot and generation modulo 16, `now` at its last unbind (a bit in unbound_ever
+       once there was one); bind refuses that generation modulo 16 for rebind_ticks after it
+       (sync_policy_rebind_ticks), set by the shell, and no other. */
+    uint32_t unbound_tick[BODY_SYNC_BODIES_MAX][16];
+    uint16_t unbound_ever[BODY_SYNC_BODIES_MAX];
     uint32_t rebind_ticks;
     /* A planted defect for tests that require a check to catch it: a revocation is recorded as
        an arbitrated end. Never set outside tests. */

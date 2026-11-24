@@ -177,6 +177,12 @@ void stand_schedule_fire(stand_schedule_t *schedule, uint32_t index, uint32_t ti
     }
 }
 
+bool stand_trigger_contact(const body_sync_action_t *a, uint8_t endpoint, bool every_player, const char *agent, bool agent_local,
+                           const char *touched) {
+    return a->trigger == BODY_SYNC_TRIGGER_CONTACT && (a->trigger_player == endpoint || every_player) && agent_local && agent[0] &&
+           strcmp(agent, a->trigger_agent) == 0 && strcmp(touched, a->trigger_body) == 0;
+}
+
 int32_t stand_schedule_next(stand_schedule_t *schedule, uint8_t player, uint32_t tick) {
     if (player >= BODY_SYNC_PLAYERS_MAX) {
         return -1;

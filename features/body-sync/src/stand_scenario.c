@@ -263,7 +263,9 @@ static bool speed_tail(parser_t *p, const line_words_t *w, uint32_t at, uint32_t
     return true;
 }
 
-/* `on <pN> contact <body> [+<time>]` or `on <label> [+<time>]`, words at..end after the `on`. */
+/* `on <pN> <agent> contact <body> [+<time>]` or `on <label> [+<time>]`, words at..end after the
+   `on`. The agent is named: a player owns several bodies (her character, one in hand, one in
+   flight), and only the named one's contact is the scenario's event. */
 static bool trigger(parser_t *p, const line_words_t *w, uint32_t at, uint32_t end, body_sync_action_t *a) {
     const body_sync_scenario_t *s = p->out;
     if (end > at && w->word[end - 1][0] == '+') {
@@ -273,13 +275,14 @@ static bool trigger(parser_t *p, const line_words_t *w, uint32_t at, uint32_t en
         end--;
     }
     uint8_t player;
-    if (end - at == 3 && player_word(w->word[at], &player) && strcmp(w->word[at + 1], "contact") == 0) {
-        body_sync_target_t touched;
-        if (!body_word(p, w->word[at + 2], &touched)) {
+    if (end - at == 4 && player_word(w->word[at], &player) && strcmp(w->word[at + 2], "contact") == 0) {
+        body_sync_target_t agent, touched;
+        if (!body_word(p, w->word[at + 1], &agent) || !body_word(p, w->word[at + 3], &touched)) {
             return false;
         }
         a->trigger = BODY_SYNC_TRIGGER_CONTACT;
         a->trigger_player = player;
+        copy_text(a->trigger_agent, sizeof(a->trigger_agent), agent.body);
         copy_text(a->trigger_body, sizeof(a->trigger_body), touched.body);
         return true;
     }
@@ -296,7 +299,7 @@ static bool trigger(parser_t *p, const line_words_t *w, uint32_t at, uint32_t en
         }
         return refuse(p, "no earlier action is labelled '%s'", w->word[at]);
     }
-    return refuse(p, "on takes '<player> contact <body> [+<time>]' or '<label> [+<time>]'%s", "");
+    return refuse(p, "on takes '<player> <agent> contact <body> [+<time>]' or '<label> [+<time>]'%s", "");
 }
 
 static bool action(parser_t *p, const line_words_t *w, uint32_t first, bool timed, uint32_t tick) {

@@ -689,12 +689,15 @@ static void fire_trigger(body_sync_stand_t *st, uint32_t index, uint32_t tick) {
     st->items_done = false;
 }
 
-/* `on pN contact <body>`: a hit on pN's own world between a body it simulates and that body (the
-   reference run, one world for every player, sees every player's there). */
+static const char *scene_name(const body_sync_stand_t *st, uint32_t slot) {
+    return slot < st->scene.body_count ? st->scene.bodies[slot].name : "";
+}
+
+/* `on pN <agent> contact <body>`, judged by stand_trigger_contact for each hit on this world. */
 static void fire_contacts(body_sync_stand_t *st, endpoint_t *ep) {
     for (uint32_t i = 0; i < st->scenario.action_count; i++) {
         const body_sync_action_t *a = &st->scenario.actions[i];
-        if (a->trigger != BODY_SYNC_TRIGGER_CONTACT || st->schedule.fired[i] != 0 || (a->trigger_player != ep->index && !st->local)) {
+        if (a->trigger != BODY_SYNC_TRIGGER_CONTACT || st->schedule.fired[i] != 0) {
             continue;
         }
         for (uint32_t k = 0; k < ep->world->hit_count && st->schedule.fired[i] == 0; k++) {
@@ -702,8 +705,8 @@ static void fire_contacts(body_sync_stand_t *st, endpoint_t *ep) {
             for (int side = 0; side < 2; side++) {
                 uint32_t mine = side ? h->slot_b : h->slot_a, touched = side ? h->slot_a : h->slot_b;
                 body_sync_id_t mid = stand_world_id(ep->world, mine);
-                if (mid && body_sync_is_local(ep->sync, mid) && touched < st->scene.body_count &&
-                    strcmp(st->scene.bodies[touched].name, a->trigger_body) == 0) {
+                if (stand_trigger_contact(a, ep->index, st->local, scene_name(st, mine), mid && body_sync_is_local(ep->sync, mid),
+                                          scene_name(st, touched))) {
                     fire_trigger(st, i, ep->ticks_run);
                     break;
                 }
@@ -3345,11 +3348,14 @@ static bool check_scenario(const body_sync_stand_t *st, body_sync_error_t *error
             error_text(error, a->line, text);
             return false;
         }
-        if (a->trigger == BODY_SYNC_TRIGGER_CONTACT && body_sync_scene_find_body(&st->scene, a->trigger_body) == UINT32_MAX) {
-            char text[BODY_SYNC_ERROR_TEXT_MAX];
-            snprintf(text, sizeof(text), "the scene has no body '%s'", a->trigger_body);
-            error_text(error, a->line, text);
-            return false;
+        for (int k = 0; a->trigger == BODY_SYNC_TRIGGER_CONTACT && k < 2; k++) {
+            const char *name = k ? a->trigger_body : a->trigger_agent;
+            if (body_sync_scene_find_body(&st->scene, name) == UINT32_MAX) {
+                char text[BODY_SYNC_ERROR_TEXT_MAX];
+                snprintf(text, sizeof(text), "the scene has no body '%s'", name);
+                error_text(error, a->line, text);
+                return false;
+            }
         }
         bool by_host = a->verb == BODY_SYNC_VERB_RECALL || a->verb == BODY_SYNC_VERB_REMOVE;
         if (by_host && st->scene.bodies[body_sync_scene_find_body(&st->scene, a->target.body)].motion == BODY_SYNC_MOTION_STATIC) {

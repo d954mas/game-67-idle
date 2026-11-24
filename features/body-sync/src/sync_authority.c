@@ -247,7 +247,8 @@ body_sync_result_t sync_authority_bind(sync_authority_t *a, body_sync_id_t id, u
     if (b->bound) {
         return BODY_SYNC_TAKEN;
     }
-    if (sync_authority_is_host(a) && a->now - a->unbound_tick[slot] < a->rebind_ticks && (a->unbound_low[slot] & (1u << (generation & 15u)))) {
+    uint32_t low = generation & 15u;
+    if (sync_authority_is_host(a) && (a->unbound_ever[slot] & (1u << low)) && a->now - a->unbound_tick[slot][low] < a->rebind_ticks) {
         return BODY_SYNC_TAKEN;
     }
     memset(b, 0, sizeof(*b));
@@ -273,11 +274,8 @@ body_sync_result_t sync_authority_unbind(sync_authority_t *a, body_sync_id_t id)
         a->owned_by[b->seat]--;
     }
     b->bound = false;
-    if (a->now - a->unbound_tick[slot] >= a->rebind_ticks) {
-        a->unbound_low[slot] = 0;
-    }
-    a->unbound_low[slot] |= (uint16_t)(1u << (b->generation & 15u));
-    a->unbound_tick[slot] = a->now;
+    a->unbound_ever[slot] |= (uint16_t)(1u << (b->generation & 15u));
+    a->unbound_tick[slot][b->generation & 15u] = a->now;
     for (uint8_t seat = 0; seat < BODY_SYNC_SEATS_MAX; seat++) {
         a->owed[seat][slot / 64] &= ~(1ull << (slot % 64));
         a->refused[seat][slot / 64] &= ~(1ull << (slot % 64));

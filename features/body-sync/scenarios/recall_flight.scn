@@ -18,7 +18,7 @@ at 1s p1 throw glass speed 7 as throw
 # of it reach the host after the recall, at any throw speed. The host's last taken state of the
 # flight then lies within the gate's 4 ticks of the contact, so the claim would fit a gate that kept
 # the old number (test_body_sync_claims_mf_recall_keeps_number).
-p0 recall rock_a on p1 contact glass +2t as recall
+p0 recall rock_a on p1 rock_a contact glass +2t as recall
 # Her copy is home a one-way trip and a playback delay (at most 15 ticks) after the recall, within
 # her reach; a lost record's resend fits too.
 p1 grab rock_a on recall +45t as regrab

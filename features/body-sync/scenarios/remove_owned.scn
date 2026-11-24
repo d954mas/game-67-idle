@@ -13,7 +13,7 @@ p1 grab rock_a as lift
 at 1s p1 throw glass speed 7 as throw
 # A removal two ticks after the rock meets the glass on the thrower's world reaches her after her
 # contact, and her claim and release of it reach the host after the removal (recall_flight).
-p0 remove rock_a on p1 contact glass +2t as remove
+p0 remove rock_a on p1 rock_a contact glass +2t as remove
 
 expect result lift granted
 expect result throw done

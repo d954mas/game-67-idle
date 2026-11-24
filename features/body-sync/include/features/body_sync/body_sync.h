@@ -148,7 +148,9 @@ typedef struct body_sync_bind {
    zero or a static body; TAKEN when the slot holds a body. On the host TAKEN too for a generation
    equal modulo 16 to one it unbound from that slot less than the evidence cap and the longest
    playback delay ago (75 ticks at 60 Hz): the real seam's wire names a generation modulo 16, and
-   the old one's late packets would read as the new body's. Another generation binds at once. */
+   the old one's late packets would read as the new body's. Another generation binds at once, so
+   on TAKEN a game binds the slot's next generation (a pool with rising generations always can) or
+   takes another free slot. */
 body_sync_result_t body_sync_bind(body_sync_t *sync, body_sync_id_t id, const body_sync_bind_t *bind);
 
 /* Forgets the body; the caller destroys it afterwards. Later bytes naming this id are stale:

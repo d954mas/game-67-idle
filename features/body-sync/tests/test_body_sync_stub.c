@@ -1728,6 +1728,29 @@ static void test_a_recall_in_the_tick_of_a_grant_keeps_the_hosts_body(void) {
     TEST_ASSERT_FALSE(body_sync_is_local(guest.sync, ID0));
 }
 
+/* A pool that recycles one slot every 10 ticks over 40 rising generations: each next generation
+   binds at once, since the one equal to it modulo 16 went 160 ticks ago, while the generation equal
+   modulo 16 to the one just unbound is refused. Only an aliasing generation waits. */
+static void test_a_fast_pool_binds_every_next_generation(void) {
+    tick_all();
+    side_t *sides[] = {&host, &guest, &other};
+    for (int k = 0; k < 3; k++) {
+        TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_unbind(sides[k]->sync, body_sync_id_make(4, 1)));
+    }
+    body_sync_bind_t bind = {.body = host.bodies[4], .body_class = BODY_SYNC_CLASS_LIGHT, .authority = BODY_SYNC_SEAT_HOST};
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_bind(host.sync, body_sync_id_make(4, 2), &bind));
+    for (uint32_t g = 2; g < 42; g++) {
+        for (int i = 0; i < 10; i++) {
+            tick_all();
+        }
+        TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_unbind(host.sync, body_sync_id_make(4, g)));
+        TEST_ASSERT_EQUAL_MESSAGE(BODY_SYNC_TAKEN, body_sync_bind(host.sync, body_sync_id_make(4, g + 16u), &bind),
+                                  "an aliasing generation bound at once");
+        TEST_ASSERT_EQUAL_MESSAGE(BODY_SYNC_OK, body_sync_bind(host.sync, body_sync_id_make(4, g + 1u), &bind),
+                                  "the pool's next generation was refused");
+    }
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_every_body_reaches_the_guest_within_the_packet_limit);
@@ -1783,6 +1806,7 @@ int main(void) {
     RUN_TEST(test_a_guests_old_generation_is_stale_after_the_host_rebinds);
     RUN_TEST(test_old_owner_drops_count_an_ended_ownership_per_id);
     RUN_TEST(test_the_host_quarantines_an_aliasing_generation);
+    RUN_TEST(test_a_fast_pool_binds_every_next_generation);
     RUN_TEST(test_a_recall_in_the_tick_of_a_grant_keeps_the_hosts_body);
     return UNITY_END();
 }
