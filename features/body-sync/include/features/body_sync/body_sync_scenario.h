@@ -98,10 +98,12 @@ extern "C" {
      expect moved <body> <=|>= <length> [layer <length>]
                                                 the scene body's travel on the host from the
                                                 first tick to the last
-     expect moved <body> <=|>= solo <length>    that travel against the same body's in a solo
+     expect moved <body> <=|>= solo <length> [interaction <length>]
+                                                that travel against the same body's in a solo
                                                 run (`pace`'s reference with everyone on time):
                                                 at most the solo's plus the margin, or at
-                                                least the solo's less it
+                                                least the solo's less it; `interaction` the
+                                                margin under that authority mode
      expect effect <body>                      an effect (a knockdown, a break) took the scene
                                                 body on the host, and every guest that stayed
                                                 shows it once: knocked down, or gone
@@ -263,6 +265,7 @@ typedef struct body_sync_expect {
     char body[BODY_SYNC_NAME_MAX]; /* MOVED, EFFECT, HELD: the scene body */
     bool at_least;                 /* MOVED: >= rather than <= */
     bool solo;                     /* MOVED: against the solo run's travel, `limit` the margin */
+    double interaction_limit;      /* MOVED solo: the margin under authority INTERACTION; negative: `limit` */
     uint8_t players;               /* HELD: a bit per player whose hand passes */
 } body_sync_expect_t;
 

@@ -650,16 +650,18 @@ static bool expect(parser_t *p, const line_words_t *w) {
         }
     } else if (strcmp(what, "moved") == 0) {
         e.kind = BODY_SYNC_EXPECT_MOVED;
-        e.solo = w->count == 6 && strcmp(w->word[4], "solo") == 0;
+        e.solo = (w->count == 6 || (w->count == 8 && strcmp(w->word[6], "interaction") == 0)) && strcmp(w->word[4], "solo") == 0;
         if ((w->count != 5 && !e.solo && (w->count != 7 || strcmp(w->word[5], "layer") != 0)) || !name_word(w->word[2], BODY_SYNC_NAME_MAX - 1) ||
             (strcmp(w->word[3], "<=") != 0 && strcmp(w->word[3], ">=") != 0)) {
-            return refuse(p, "moved reads: expect moved <body> <=|>= <length> [layer <length>] | <=|>= solo <length>%s", "");
+            return refuse(p, "moved reads: expect moved <body> <=|>= <length> [layer <length>] | <=|>= solo <length> [interaction <length>]%s", "");
         }
-        float m, lm = -1.0f;
-        if (!length_word(p, w->word[e.solo ? 5 : 4], &m) || (w->count == 7 && !length_word(p, w->word[6], &lm))) {
+        float m, lm = -1.0f, im = -1.0f;
+        if (!length_word(p, w->word[e.solo ? 5 : 4], &m) || (w->count == 7 && !length_word(p, w->word[6], &lm)) ||
+            (e.solo && w->count == 8 && !length_word(p, w->word[7], &im))) {
             return false;
         }
         e.layer_limit = (double)lm;
+        e.interaction_limit = (double)im;
         copy_text(e.body, sizeof(e.body), w->word[2]);
         e.at_least = w->word[3][0] == '>';
         e.limit = (double)m;

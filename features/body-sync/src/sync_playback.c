@@ -478,9 +478,9 @@ void sync_playback_sample(const sync_playback_t *p, uint16_t slot, sync_play_t *
         out->frozen = b->ended || now - at(t, s0->tick) > (double)SYNC_FREEZE_TICKS;
         if (!out->frozen) {
             /* Waiting for the next snapshot the pose holds; the owner's last motion is kept for a
-               dynamic hold, which would otherwise brake every time playback catches up. Past it,
-               the timeline has gone on without this body: its next state may never come. */
-            out->waiting = now > at(t, s0->tick);
+               dynamic hold, which would otherwise brake every time playback catches up. */
+            out->waiting = true;
+            out->past = now > at(t, s0->tick);
             memcpy(out->velocity, s0->velocity, sizeof(out->velocity));
             memcpy(out->angular, s0->angular, sizeof(out->angular));
             const sync_snapshot_t *prev = last > 0 ? &b->snapshots[last - 1] : NULL;

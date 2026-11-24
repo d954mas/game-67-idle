@@ -281,7 +281,7 @@ list(APPEND slow_tests test_body_sync_stub_contrast_char_push)
 # The stub drives a guest's flight kinematic on the host, a mug of no give: under loss it pushes a table past solo.
 add_test(NAME test_body_sync_stub_contrast_mug_table
     COMMAND "${CMAKE_COMMAND}" -DCLI=$<TARGET_FILE:body_sync_stand_cli_stub> -DSCENARIO=${BODY_SYNC_SCENARIOS}/mug_table_100.scn
-            -DOUT=${CMAKE_CURRENT_BINARY_DIR} -DTAG=stub_ -DRC=1 "-DEXPECT=FAIL line 4[123] moved~m solo" "-DARGS=--seed;54"
+            -DOUT=${CMAKE_CURRENT_BINARY_DIR} -DTAG=stub_ -DRC=1 "-DEXPECT=FAIL line 4[234] moved~m solo" "-DARGS=--seed;54"
             -P "${CMAKE_CURRENT_LIST_DIR}/expect_fail.cmake")
 list(APPEND slow_tests test_body_sync_stub_contrast_mug_table test_body_sync_checks_mug_table)
 set_tests_properties(${core_tests} PROPERTIES LABELS "core")

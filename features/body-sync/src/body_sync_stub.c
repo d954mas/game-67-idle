@@ -481,7 +481,9 @@ static b3MotionLocks locks_of(uint8_t bits) {
 
 /* A body that became local continues from the newest state received: its motion, masks and
    velocities. One released after that state goes on as its copy here moves: a flight its contact
-   ended, whose newest state is from before the contact, would fly on into what it struck. */
+   ended, whose newest state is from before the contact, would fly on into what it struck. The
+   real seam's rule without its clause "once the copy has played past that state": a stub copy
+   is driven to its newest state as it comes, so it has met what that state met. */
 static void take_over(body_sync_t *s, uint32_t slot) {
     sync_authority_body_t *a = auth_of(s, slot);
     entry_t *e = &s->entries[slot];

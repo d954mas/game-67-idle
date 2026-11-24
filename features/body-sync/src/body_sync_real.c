@@ -50,6 +50,9 @@ typedef struct entry {
     bool soft_hit;
     bool soft_paused; /* its pull waited at the last apply (sync_soft_out_t.paused) */
     bool owner_flying;
+    float played_speed; /* its owner's speed as last played, kept while playback is frozen */
+    bool waited;        /* playback waited at its newest snapshot last tick... */
+    uint32_t waited_at; /* ...this one, by its tick */
     bool owner_rests; /* its owner rests at playback time (sync_soft_owner_rests), as of the last apply */
     sync_soft_still_t owner_still;
     bool rest_held;       /* driven in the rest hold this tick */
@@ -109,6 +112,7 @@ struct body_sync {
     bool plant_waiting_drive;   /* body_sync_plant_waiting_drive */
     bool plant_resume_newest;   /* body_sync_plant_resume_newest */
     bool plant_flight_catch_up; /* body_sync_plant_flight_catch_up */
+    bool plant_frozen_drive;    /* body_sync_plant_frozen_drive */
     marking_t marking;
     float dt;
     uint32_t now; /* the last apply's or collect's tick */
@@ -225,6 +229,7 @@ void body_sync_plant_copy_catch_up(body_sync_t *s) { s->plant_copy_catch_up = tr
 void body_sync_plant_waiting_drive(body_sync_t *s) { s->plant_waiting_drive = true; }
 void body_sync_plant_resume_newest(body_sync_t *s) { s->plant_resume_newest = true; }
 void body_sync_plant_flight_catch_up(body_sync_t *s) { s->plant_flight_catch_up = true; }
+void body_sync_plant_frozen_drive(body_sync_t *s) { s->plant_frozen_drive = true; }
 void body_sync_plant_recall_keeps_number(body_sync_t *s) { s->authority.plant_recall_keeps_number = true; }
 void body_sync_plant_move_keeps_received(body_sync_t *s) { s->authority.plant_move_keeps_received = true; }
 void body_sync_plant_agent_ring_off(body_sync_t *s) { s->authority.plant_agent_ring_off = true; }
@@ -982,12 +987,13 @@ static void resume(body_sync_t *s, uint32_t slot, bool was_copy) {
     /* Released after the newest state the host took of it, a moving body's last motion never came:
        a flight its contact ended (the release goes out from that tick's collect, after the step)
        has its newest state from before the contact. Still ahead of the copy, that state replays
-       the owner's flight into the contact; once the copy has played past it, it has met here what
-       it met, and the state would fly it into that again: it goes on as it moves. */
+       the owner's flight into the contact; once the copy has played past it, it has gone on its
+       own motion and met here what it meets, and the state would fly it into that again: it goes
+       on as it moves. */
     sync_play_t play;
     sync_playback_sample(&s->playback, (uint16_t)slot, &play);
     bool unheard_end = a->released && in->has && !in->newest.at_rest && (int32_t)(a->released_tick - in->tick) > 0 && play.known &&
-                       (play.waiting || play.frozen) && !s->plant_resume_newest;
+                       (play.past || play.frozen) && !s->plant_resume_newest;
     a->released = false;
     if (!in->has && !was_copy && !a->take_motion) {
         return;
@@ -1130,6 +1136,20 @@ static bool meets_own_body(const body_sync_t *s, b3BodyId copy, float reach) {
     own_near_t n = {.s = s, .self = copy};
     b3World_OverlapAABB(s->config.world, box, b3DefaultQueryFilter(), find_own, &n);
     return n.found;
+}
+
+/* Near a body this side simulates, a guest's flight never moves faster than its owner as played,
+   driven or coasting: the correction only steers it onto the owner's path, and speed past the
+   owner's (playback catching up its clock, the path rejoined after lost states) would strike
+   harder than the owner did. A speed, not a direction: the copy brings no more energy than the
+   owner's body, whatever the contact's normal. Away from those bodies it catches up freely. */
+static void cap_flight(const body_sync_t *s, b3BodyId copy, float owner, float v[3]) {
+    float speed = sqrtf(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+    if (speed > owner && !s->plant_flight_catch_up && !s->plant_copy_catch_up && meets_own_body(s, copy, speed * s->dt)) {
+        for (int i = 0; i < 3; i++) {
+            v[i] *= owner / speed;
+        }
+    }
 }
 
 /* A copy this tick: its hold, then a move to its playback pose within the seam's speeds. */
@@ -1287,6 +1307,33 @@ static void drive_copy(body_sync_t *s, uint32_t slot) {
         drive_soft(s, slot, p, q, &play);
         return;
     }
+    float played = sqrtf(play.velocity[0] * play.velocity[0] + play.velocity[1] * play.velocity[1] + play.velocity[2] * play.velocity[2]);
+    if (!play.frozen) {
+        e->played_speed = played;
+    }
+    uint32_t newest = 0;
+    bool at_newest = play.waiting && sync_playback_newest(&s->playback, (uint16_t)slot, &newest);
+    bool stalled = at_newest && e->waited && e->waited_at == newest;
+    e->waited = at_newest;
+    e->waited_at = newest;
+    /* A flight is sent at the full rate, so playback with no later snapshot of it to play toward
+       for a second tick (a delay of one meets each state as it comes), past it, or frozen, means
+       its owner's next states are late or not coming (lost, a cut, the contact that ended it with
+       its release not yet here): it goes on its own motion, meeting what is in its way once, as
+       the owner's body did. Driven, the newest snapshot's velocity set again every tick would push
+       on through whatever it met, and frozen, the pull back to the pose before the contact would.
+       A slower body's states come less often, and between them it is fed forward; a handover holds
+       its copy by its own rule. */
+    if (dynamic && settling && (stalled || play.past || (play.frozen && !s->plant_frozen_drive)) && e->placed && !e->handover &&
+        !s->plant_waiting_drive) {
+        b3Vec3 now_v = b3Body_GetLinearVelocity(e->body);
+        float v[3] = {now_v.x, now_v.y, now_v.z};
+        cap_flight(s, e->body, e->played_speed, v);
+        if (v[0] != now_v.x || v[1] != now_v.y || v[2] != now_v.z) {
+            b3Body_SetLinearVelocity(e->body, (b3Vec3){v[0], v[1], v[2]});
+        }
+        return;
+    }
     /* A copy that would need more than the seam's speeds to reach its pose in one step is placed
        there, the render offset taking the jump; a dynamic one also when its error passes the
        offset's reach, since its correction is bounded far below max_speed. */
@@ -1323,27 +1370,10 @@ static void drive_copy(body_sync_t *s, uint32_t slot) {
             sqrtf(home_r[0] * home_r[0] + home_r[1] * home_r[1] + home_r[2] * home_r[2]) <= SYNC_SOFT_HOLD_RAD) {
             return;
         }
-        /* A flight is sent at the full rate, so playback past its newest snapshot means its owner's
-           next states are not coming (the contact that ended it, its release not yet here): it
-           goes on its own motion, meeting what is in its way once, as the owner's body did. The
-           snapshot's velocity, set again every tick, would drive it on through whatever it met,
-           a motor the owner's body never was. A slower body's states come less often, and between
-           them it is fed forward; a handover holds its copy by its own rule. */
-        if (play.waiting && settling && !e->handover && !s->plant_waiting_drive) {
-            return;
-        }
         float v[3], w[3];
         sync_drive_dynamic(p, q, &play, s->dt, v, w);
-        /* A flight strikes this side's bodies no faster than its owner's body moves: the
-           correction only steers it onto the owner's path, and its speed past the owner's
-           (playback catching up its clock, the path rejoined after lost states) would hit harder
-           than the owner did. Away from them it catches up freely. */
-        float owner = sqrtf(play.velocity[0] * play.velocity[0] + play.velocity[1] * play.velocity[1] + play.velocity[2] * play.velocity[2]);
-        float drive = sqrtf(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
-        if (settling && drive > owner && !s->plant_flight_catch_up && !s->plant_copy_catch_up && meets_own_body(s, e->body, drive * s->dt)) {
-            for (int i = 0; i < 3; i++) {
-                v[i] *= owner / drive;
-            }
+        if (settling) {
+            cap_flight(s, e->body, played, v);
         }
         b3Body_SetLinearVelocity(e->body, (b3Vec3){v[0], v[1], v[2]});
         b3Body_SetAngularVelocity(e->body, (b3Vec3){w[0], w[1], w[2]});

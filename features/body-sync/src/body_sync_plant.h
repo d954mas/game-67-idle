@@ -51,5 +51,8 @@ void body_sync_plant_resume_newest(body_sync_t *sync);
 /* This host drives a guest's flight it holds dynamic as fast as its correction asks: catching up
    its playback, the copy strikes faster than the owner's body did. */
 void body_sync_plant_flight_catch_up(body_sync_t *sync);
+/* This host drives a frozen flight back to its newest state's pose: a flight whose release is
+   late is pulled back to where it was before its contact, and hovers there near the host's bodies. */
+void body_sync_plant_frozen_drive(body_sync_t *sync);
 
 #endif

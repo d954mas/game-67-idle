@@ -229,6 +229,9 @@ static void test_refusals_name_their_line(void) {
         {"scenario a\nscene b\nexpect moved table <= solo 1cm layer 2cm\n", 3},
         {"scenario a\nscene b\nexpect moved table <= alone 1cm\n", 3},
         {"scenario a\nscene b\nexpect moved table solo <= 1cm\n", 3},
+        {"scenario a\nscene b\nexpect moved table <= solo 1cm interaction\n", 3},
+        {"scenario a\nscene b\nexpect moved table <= solo 1cm interaction 2deg\n", 3},
+        {"scenario a\nscene b\nexpect moved table <= 1cm interaction 2cm\n", 3},
         {"scenario a\nscene b\nguests 1\nexpect late_drops.count <= 3 stub 9\n", 4},
         {"scenario a\nscene b\nguests 1\nexpect local_correction.max <= 1cm stub 2m\n", 4},
         {"scenario a\nscene b\nat 600s p0 walk 1 1\n", 3},
@@ -641,11 +644,14 @@ static void test_new_forms_are_read(void) {
     TEST_ASSERT_EQUAL_STRING("box", scenario.expects[0].body);
     TEST_ASSERT_TRUE(scenario.expects[1].limit > 0.29 && scenario.expects[1].stub_limit > 1.99);
     TEST_ASSERT_TRUE(scenario.expects[2].stub_limit < 0.0); /* no stub bound written: the bound itself */
-    TEST_ASSERT_TRUE_MESSAGE(parse("scenario a\nscene b\nexpect moved table >= solo 0.36cm\nexpect moved table <= 2cm\n", &error), error.text);
+    TEST_ASSERT_TRUE_MESSAGE(parse("scenario a\nscene b\nexpect moved table >= solo 0.36cm\nexpect moved table <= 2cm\nexpect moved table <= solo 0.02cm interaction 0.34cm\n", &error),
+                             error.text);
     TEST_ASSERT_EQUAL(BODY_SYNC_EXPECT_MOVED, scenario.expects[0].kind);
     TEST_ASSERT_TRUE(scenario.expects[0].solo && scenario.expects[0].at_least);
     TEST_ASSERT_TRUE(fabs(scenario.expects[0].limit - 0.0036) < 1e-6);
+    TEST_ASSERT_TRUE(scenario.expects[0].interaction_limit < 0.0); /* none written: the margin itself */
     TEST_ASSERT_FALSE(scenario.expects[1].solo);
+    TEST_ASSERT_TRUE(fabs(scenario.expects[2].limit - 0.0002) < 1e-6 && fabs(scenario.expects[2].interaction_limit - 0.0034) < 1e-6);
     TEST_ASSERT_TRUE_MESSAGE(parse("scenario a\nscene b\nguests 0\np0 walk 1 1\nexpect host_ticks.max <= 3t\nexpect no_stuck\n", &error), error.text);
     /* a timed action cuts off the long wait before it, so this schedule fits */
     TEST_ASSERT_TRUE_MESSAGE(parse("scenario a\nscene b\np0 wait 600s\nat 1s p0 wait 1s\n", &error), error.text);

@@ -3479,7 +3479,8 @@ static void evaluate(body_sync_stand_t *st) {
                     solo_reference(st);
                 }
                 double solo = st->solo_travel[body_sync_scene_find_body(&st->scene, x->body)];
-                c->limit = x->at_least ? solo - x->limit : solo + x->limit;
+                double margin = st->authority == BODY_SYNC_AUTHORITY_INTERACTION && x->interaction_limit >= 0.0 ? x->interaction_limit : x->limit;
+                c->limit = x->at_least ? solo - margin : solo + margin;
                 c->passed = d >= 0.0 && solo >= 0.0 && (x->at_least ? d >= c->limit : d <= c->limit);
                 snprintf(c->detail, sizeof(c->detail), "%s moved %.3g m on the host, %.3g m solo, expected %s %.3g m", x->body, d, solo,
                          x->at_least ? ">=" : "<=", c->limit);

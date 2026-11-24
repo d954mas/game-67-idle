@@ -359,21 +359,46 @@ starved body shows as a catch-up the render offset or a dynamic hold smooths
   lost take's 5 m, so the host's picture glides to her hand instead of jumping
   (`catch_guest_throw_250`: 2.5-3 m at 250 ms).
 - **A flight the host plays.** On the host, a guest's throw held dynamic until it
-  settles is driven, within its step's reach of a body the host simulates, no
-  faster than its owner's body moves as played: the correction steers it onto
-  the owner's path, and its speed past the owner's (playback catching up its
-  clock at a pace up to 1.25, a path rejoined after lost states) would strike
-  harder than the thrower's did; elsewhere it catches up freely. A flight is sent
-  at the full rate, so once playback has passed its newest snapshot while its
-  timeline goes on, the owner's next states are not coming: it goes on its own
-  motion and meets what is in its way once, as the owner's body did, since that
-  snapshot's velocity, set again every tick, would push on through it. A flight its contact ended has its newest state from before the
-  contact (the release goes out from that tick's collect, after the step): at the
-  release the host takes the body back from that state while the copy has not
-  played it yet, and from the copy itself once it has, so the contact is never
-  struck twice. The stub takes a body back by the same rule. `mug_table_100` and
-  `_250` hold this with `expect moved ... solo`; `test_body_sync_checks` plants
-  each rule's undoing (`src/body_sync_plant.h`) and requires the check to fail.
+  settles keeps to its owner's motion as played:
+  - *Near the host's bodies, never faster than its owner.* Within its step's reach
+    of a body the host simulates, the copy's speed, driven or coasting, is at most
+    its owner's speed as played (as last played while frozen). The correction
+    steers it onto the owner's path, and speed past the owner's (playback catching
+    up its clock at a pace up to 1.25, a path rejoined after lost states) would
+    strike harder than the thrower's did. It bounds the speed, not the velocity
+    along the contact's normal: the copy brings no more energy than the owner's
+    body, though it may come in at another angle where its correction steers it.
+    Away from those bodies it catches up freely. An owner that slows or rests near
+    them holds its copy as slow: one left behind its owner's pose there stays
+    behind until the owner's speed lets it close, or until the hold ends and the
+    host's take-back places it.
+  - *With no later state, on its own motion.* A flight is sent at the full rate,
+    so playback held at its newest snapshot for a second tick with none after it
+    (a delay of one tick meets each state as it comes), past it, or frozen, means
+    its owner's next states are late or not coming (lost, a cut, the contact that
+    ended it with its release not yet here): it goes on as it moves
+    and meets what is in its way once, as the owner's body did. Driven, that
+    snapshot's velocity set again every tick would push on through what it met;
+    frozen, the pull back to the pose before the contact would. A slower body's
+    states come less often, and between them it is fed forward as before; a
+    handover's copy keeps the handover's rule.
+  - *Taken back without its contact twice.* A flight its contact ended has its
+    newest state from before the contact (the release goes out from that tick's
+    collect, after the step): at the release the host takes the body back from
+    that state while the copy has not played past it, and from the copy itself
+    once it has. The stub's copy is always at its newest state, so its take-back
+    goes on from the copy whenever the release is newer than that state; no
+    scene tests the stub's rule, since its kinematic copy fails `mug_table`
+    first (its stub contrast).
+
+  `mug_table_100` and `_250` hold the host to this with `expect moved ... solo`.
+  `test_body_sync_checks --mug-table` plants each rule's undoing
+  (`src/body_sync_plant.h`: `waiting_drive`, `resume_newest`, `flight_catch_up`)
+  and, as an alternative design that fails the same way, a host that plays every
+  flight at its newest state (`copy_catch_up`); with the link cut over the first
+  mug's contact each fails (over seeds 1-12 at both round trips, all but
+  `flight_catch_up` at one pair). `test_body_sync_real` drives a
+  frozen flight back (`frozen_drive`) and requires the copy to fly on.
 - **Data and characters.** `body_sync_set_data` gives a local body up to 8
   opaque bytes (the stand's character activity), sent as the fifth rare group
   until acknowledged; `body_sync_data` reads them, on a copy as of its playback
@@ -886,7 +911,7 @@ expect one_of <outcome> <label> <label> ...
 expect moved <body> <=|>= <length>  # the body's travel on the host, first tick to last
 expect effect <body>                # a knockdown or break took the body on the host, shown once on every guest
 expect held <body> <player> ...     # at one tick every endpoint shows the body in one named player's hand, and no endpoint but her own ever shows another named one holding it
-expect moved <body> <=|>= solo <length>  # the body's travel on the host against the solo run's, plus or less the margin
+expect moved <body> <=|>= solo <length> [interaction <length>]  # the body's travel on the host against the solo run's, plus or less the margin
 expect pace <label>                 # a walk to a point keeps up with a local reference run
 expect <metric> <=|>= <value> [stub <value>]   # stub: the bound on the stub, which blends no handover; only jump.max, snap.count, step.count and offset_step.count
 ```
@@ -940,10 +965,12 @@ absolute `expect result <walk> done` stays where it is derived, a free walk.
 alone does with the same scenario: the stand runs `expect pace`'s reference
 once, every player acting on time, and the body's travel on the host from the
 first tick to the last may pass its travel there by the margin at most (`>=`:
-fall short of it by the margin at most). A margin is derived from what the sync
-may change of the body's motion, never measured (`mug_table_100`: a guest's
-mug may push a table no farther than the same throw solo, 3.6 mm for the
-copy's velocity grid and the host's rest hold). The whole of `scenarios/edge_throw_cut.scn`:
+fall short of it by the margin at most); `interaction <length>` is the margin
+under that authority mode, whose host shows the thrower's simulation instead of
+its own. A margin is derived from what the sync may change of the body's
+motion, never measured (`mug_table_100`: a guest's mug may push a table no
+farther than the same throw solo, 0.2 mm under HOST for the copy's velocity
+grid and where it strikes, 3.4 mm under INTERACTION for the host's rest hold). The whole of `scenarios/edge_throw_cut.scn`:
 
 ```text
 # A guest throws, and its link is cut while the body flies.
@@ -1316,7 +1343,7 @@ scenario word `authority`, `>=` in metric checks, the CLI and viewer flag
 `--authority`, `body_sync_is_pull_paused`, `aligned_gap`, `local_correction`, `local_turn` and the take counts in the
 metrics, `body_sync_old_owner_drops`, `body_sync_teleported`, the host's rebind quarantine, the scenario
 verbs `recall` and `remove`, the `on` trigger and `late_drops`, the scenario
-check `expect moved ... solo` and the scene `mug_tables`, a guest's flight on
+check `expect moved ... solo [interaction ...]` and the scene `mug_tables`, a guest's flight on
 the host driven no faster than its owner and taken back without its unheard
 contact, and the catch:
 `body_sync_answer_as` (a grant under another hold than the claimed one),

@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "features/body_sync/body_sync.h"
+#include "body_sync_plant.h"
 #include "stub_wire.h"
 #include "sync_codec.h"
 #include "box3d/constants.h"
@@ -260,6 +261,48 @@ static void test_a_guests_body_comes_back_moving(void) {
     step(&host);
     TEST_ASSERT_TRUE(body_sync_is_local(host.sync, ID0));
     TEST_ASSERT_TRUE_MESSAGE(speed_of(host.bodies[0]) > 4.0f, "the body lost its velocity at the handover");
+}
+
+/* A guest lets its flight go in mid-air and the host does not hear of it for 20 ticks, while her
+   character's states go on: playback passes the flight's newest state, waits, and freezes at
+   SYNC_FREEZE_TICKS. The host's copy flies on its own motion throughout, as the body did; driven
+   back to the frozen pose it would turn round toward where it was. The host's velocity along the
+   throw at the end, `planted` with the frozen flight driven. */
+static float flight_unheard_for_20_ticks(bool planted) {
+    if (planted) {
+        body_sync_plant_frozen_drive(host.sync);
+    }
+    const body_sync_id_t flyer = body_sync_id_make(9, 1);
+    tick_all();
+    grant(&guest, body_sync_id_make(BODIES - 1, 1), BODY_SYNC_HOLD_UNTIL_RELEASE);
+    tick_all();
+    b3Body_SetTransform(guest.bodies[9], (b3Vec3){1.0f, 2.0f, 1.0f}, b3Quat_identity);
+    b3Body_SetLinearVelocity(guest.bodies[9], (b3Vec3){6.0f, 4.0f, 0.0f});
+    grant(&guest, flyer, BODY_SYNC_HOLD_UNTIL_SETTLED); /* thrown up and along, over the others */
+    for (int k = 0; k < 4; k++) {
+        tick_all();
+    }
+    TEST_ASSERT_TRUE_MESSAGE(apart(host.bodies[9], guest.bodies[9]) < 0.5f, "the host did not play the flight");
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_release(guest.sync, flyer));
+    for (int k = 0; k < 20; k++) {
+        tick_no++;
+        step(&host);
+        step(&guest);
+        state(&host, &guest);
+        state(&guest, &host);
+        records(&host, &guest);
+    }
+    TEST_ASSERT_FALSE_MESSAGE(body_sync_is_local(host.sync, flyer), "the release reached the host: the case is not met");
+    return b3Body_GetLinearVelocity(host.bodies[9]).x;
+}
+
+static void test_a_frozen_flight_goes_on_its_own_motion(void) {
+    float on = flight_unheard_for_20_ticks(false);
+    TEST_ASSERT_TRUE_MESSAGE(on > 5.0f, "the host's copy of a frozen flight lost its motion");
+    tearDown();
+    setUp();
+    float back = flight_unheard_for_20_ticks(true);
+    TEST_ASSERT_TRUE_MESSAGE(back < 0.0f, "the planted pull to the frozen pose did not turn the copy round");
 }
 
 /* A pose written under an old grant is rejected after a revoke and a re-grant. */
@@ -3051,6 +3094,7 @@ int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_worlds_at_rest_agree_and_go_quiet);
     RUN_TEST(test_a_guests_body_comes_back_moving);
+    RUN_TEST(test_a_frozen_flight_goes_on_its_own_motion);
     RUN_TEST(test_a_pose_of_an_old_grant_is_rejected);
     RUN_TEST(test_flags_type_and_holder_move_with_authority);
     RUN_TEST(test_locks_follow_the_last_owner);

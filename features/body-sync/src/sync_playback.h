@@ -191,7 +191,8 @@ typedef struct sync_play {
     float angular[3];
     bool at_rest;
     bool frozen;
-    bool waiting; /* playback passed its newest snapshot, not frozen: its timeline went on without it */
+    bool waiting; /* at or past its newest snapshot, not frozen: no later one to play toward yet */
+    bool past;    /* waiting with playback past that snapshot: its timeline went on without it */
     bool jumped;  /* its timeline jumped this tick */
 } sync_play_t;
 
