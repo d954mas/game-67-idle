@@ -89,7 +89,8 @@ class TestBlob(unittest.TestCase):
             (lambda g, p: p["mesh"]["tethers"].__setitem__(3, (2, 0.1)), "panel: mesh.tethers.pin[3] must name a kinematic"),
             (lambda g, p: p["mesh"]["max_distance"].__setitem__(2, -0.01), "panel: mesh.max_distance[2]"),
             (lambda g, p: p["mesh"]["max_distance"].__setitem__(3, 1.5), "panel: mesh.max_distance[3]"),
-            (lambda g, p: p["mesh"]["backstop"].__setitem__(2, [0, np.inf]), "panel: mesh.backstop[2]"),
+            (lambda g, p: p["mesh"]["backstop"].__setitem__(2, [np.inf, 0.1]), "panel: mesh.backstop[2]"),
+            (lambda g, p: p["mesh"]["backstop"].__setitem__(3, [0, np.nan]), "panel: mesh.backstop[3]"),
             (lambda g, p: p["skin"]["bone"].__setitem__(1, [3, 0, 0, 0]), "panel: skin.bone[1]"),
             (lambda g, p: p["skin"]["weight"].__setitem__(1, [1.25, -0.25, 0, 0]), "panel: skin.weight[1] must be finite"),
             (lambda g, p: p["skin"]["weight"].__setitem__(1, [0.5, 0.4, 0, 0]), "panel: skin.weight[1] must sum to 1"),
@@ -184,7 +185,7 @@ def emit_expected(out, garment, blob_path, empty_path):
     out.write("static const GarmentAsset expected_pieces[] = {" + ",".join(rows) + "};\n")
     out.write(f'static const GarmentSet expected_set = {{"{garment["outfit_id"]}",expected_bones,{len(back["bones"])},'
               f'expected_spheres,{len(back["spheres"])},expected_cones,{len(back["cones"])},expected_pieces,{len(rows)}}};\n')
-    limits = (("CLOTH_VERTICES", "VERTICES_MAX"), ("CLOTH_EDGES", "EDGES_MAX"), ("CLOTH_MAX_STRAIN_PASSES", "STRAIN_PASSES_MAX"),
+    limits = (("CLOTH_VERTICES", "VERTICES_MAX"), ("CLOTH_EDGES", "EDGES_MAX"),
               ("GARMENT_PIECES_MAX", "PIECES_MAX"), ("GARMENT_BONES_MAX", "BONES_MAX"), ("CLOTH_SHAPES", "SHAPES_MAX"),
               ("GARMENT_BLOB_ALIGN", "ALIGN"), ("GARMENT_BLOB_VERSION", "VERSION"))
     for c_name, py_name in limits:

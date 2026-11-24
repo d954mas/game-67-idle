@@ -349,13 +349,12 @@ static void resolve_contact(float x[3], const float x_prev[3], const float n[3],
 }
 
 static void project_shapes(ClothState *s, const ClothMesh *mesh, const float *w, const float x_prev[][3],
-                           const ClothReference *ref, const ShapeBroadphase *bp, float thickness, float mu,
-                           bool faces, float (*normals)[3]) {
+                           const ShapeBroadphase *bp, float thickness, float mu, bool faces, float (*normals)[3]) {
     if (bp->count <= 0) return;
+    /* Discrete projection to the nearest exit: the reference constraints, not a remembered side, say where the
+       cloth belongs. */
     for (int i = 0; i < mesh->vertices; ++i) {
         if (w[i] == 0.0F || !point_in_box(s->x[i], bp->all_min, bp->all_max)) continue;
-        vec3 outward;
-        glm_vec3_negate_to((float *)ref[i].b, outward);
         for (int bi = 0; bi < bp->count; ++bi) {
             const ShapeBox *bx = &bp->boxes[bi];
             if (!point_in_box(s->x[i], bx->min, bx->max)) continue;
@@ -363,7 +362,6 @@ static void project_shapes(ClothState *s, const ClothMesh *mesh, const float *w,
             float t = 0.0F;
             float depth = box_point_contact(s->x[i], bx, normal, &t);
             if (depth <= 0.0F) continue;
-            depth = cloth_cone_exit_side(s->x[i], x_prev[i], bx->a, bx->b, thickness, outward, t, depth, normal);
             shape_motion(bx, t, motion);
             resolve_contact(s->x[i], x_prev[i], normal, depth, motion, mu);
             if (normals) glm_vec3_add(normals[i], normal, normals[i]);
@@ -474,23 +472,31 @@ static void project_max_distance(ClothState *s, const ClothMesh *mesh, const flo
     }
 }
 
+/* How deep x lies inside its backstop, and the push back to its surface. An infinite radius is the half-space
+   behind the plane d along b, which is what a flat or concave body gives. */
+static float backstop_depth(const float x[3], const ClothReference *ref, ClothBackstop bs, float push[3]) {
+    if (bs.R <= 0.0F) return 0.0F;
+    vec3 offset;
+    glm_vec3_sub((float *)x, (float *)ref->x, offset);
+    if (isinf(bs.R)) {
+        float depth = glm_vec3_dot(offset, (float *)ref->b) - bs.d;
+        glm_vec3_scale((float *)ref->b, -depth, push);
+        return depth;
+    }
+    glm_vec3_muladds((float *)ref->b, -(bs.d + bs.R), offset); /* now from the centre */
+    float distance = glm_vec3_norm(offset);
+    float depth = bs.R - distance;
+    if (depth <= 0.0F) return depth;
+    if (distance > 1e-7F) glm_vec3_scale(offset, depth / distance, push);
+    else glm_vec3_scale((float *)ref->b, -depth, push);
+    return depth;
+}
+
 static void project_backstop(ClothState *s, const ClothMesh *mesh, const float *w, const ClothReference *ref) {
     for (int i = 0; i < mesh->vertices; ++i) {
-        const ClothBackstop bs = mesh->backstop[i];
-        if (w[i] == 0.0F || bs.R <= 0.0F) continue;
-        vec3 center, offset;
-        glm_vec3_copy((float *)ref[i].x, center);
-        glm_vec3_muladds((float *)ref[i].b, bs.d + bs.R, center);
-        glm_vec3_sub(s->x[i], center, offset);
-        float distance2 = glm_vec3_norm2(offset);
-        if (distance2 >= bs.R * bs.R) continue;
-        float distance = sqrtf(distance2);
-        if (distance > 1e-7F) {
-            glm_vec3_scale(offset, bs.R / distance, offset);
-        } else {
-            glm_vec3_scale((float *)ref[i].b, -bs.R, offset);
-        }
-        glm_vec3_add(center, offset, s->x[i]);
+        vec3 push;
+        if (w[i] != 0.0F && backstop_depth(s->x[i], &ref[i], mesh->backstop[i], push) > 0.0F)
+            glm_vec3_add(s->x[i], push, s->x[i]);
     }
 }
 
@@ -654,7 +660,7 @@ void cloth_step(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, fl
         }
         project_backstop(s, mesh, w, ref);
         bool last = pass == m->iterations - 1;
-        project_shapes(s, mesh, w, (const float (*)[3])x_prev, ref, &wk->bp, m->thickness, mu, last, wk->normal);
+        project_shapes(s, mesh, w, (const float (*)[3])x_prev, &wk->bp, m->thickness, mu, last, wk->normal);
         project_convexes(s, mesh, w, (const float (*)[3])x_prev, wk, move, m->thickness, mu, wk->normal);
     }
 
@@ -663,8 +669,9 @@ void cloth_step(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, fl
         if (limit_strain_pass(s, mesh, m, w, (const float (*)[3])wk->normal, pass % 2 != 0)) moved = true;
         else break;
     if (moved) {
+        project_max_distance(s, mesh, w, ref, r);
         project_backstop(s, mesh, w, ref);
-        project_shapes(s, mesh, w, (const float (*)[3])x_prev, ref, &wk->bp, m->thickness, mu, true, NULL);
+        project_shapes(s, mesh, w, (const float (*)[3])x_prev, &wk->bp, m->thickness, mu, true, NULL);
         project_convexes(s, mesh, w, (const float (*)[3])x_prev, wk, move, m->thickness, mu, NULL);
     }
 
@@ -691,8 +698,9 @@ static void exit_shape_along(float p[3], const float dir[3], const ShapeBox *bx)
     }
 }
 
-static void exit_convex_along(float p[3], const float dir[3], const ConvexPlanes *cv, float thickness) {
-    float leave = FLT_MAX, nearest_d = -FLT_MAX;
+/* b names the side of the body, not of a seat or a floor, so a convex is left through its nearest face. */
+static void exit_convex_nearest(float p[3], const ConvexPlanes *cv, float thickness) {
+    float nearest_d = -FLT_MAX;
     int nearest = 0;
     for (int f = 0; f < cv->plane_count; ++f) {
         float d = glm_vec3_dot((float *)cv->planes[f], p) + cv->planes[f][3];
@@ -701,11 +709,8 @@ static void exit_convex_along(float p[3], const float dir[3], const ConvexPlanes
             nearest_d = d;
             nearest = f;
         }
-        float rate = glm_vec3_dot((float *)cv->planes[f], (float *)dir);
-        if (rate > 1e-6F) leave = fminf(leave, (thickness - d) / rate);
     }
-    if (leave < FLT_MAX) glm_vec3_muladds((float *)dir, leave, p);
-    else glm_vec3_muladds((float *)cv->planes[nearest], thickness - nearest_d, p);
+    glm_vec3_muladds((float *)cv->planes[nearest], thickness - nearest_d, p);
 }
 
 bool cloth_reset(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, const ClothReference *ref,
@@ -726,7 +731,7 @@ bool cloth_reset(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, c
         glm_vec3_negate_to((float *)ref[i].b, outward);
         for (int pass = 0; pass < 2; ++pass) {
             for (int bi = 0; bi < wk->bp.count; ++bi) exit_shape_along(s->x[i], outward, &wk->bp.boxes[bi]);
-            for (int c = 0; c < wk->convex_count; ++c) exit_convex_along(s->x[i], outward, &wk->convex[c], m->thickness);
+            for (int c = 0; c < wk->convex_count; ++c) exit_convex_nearest(s->x[i], &wk->convex[c], m->thickness);
         }
     }
     memset(s->stretch_lambda, 0, sizeof s->stretch_lambda);
@@ -750,13 +755,9 @@ ClothMetrics cloth_measure(const ClothState *s, const ClothMesh *mesh, const Clo
         out.speed = fmaxf(out.speed, glm_vec3_norm((float *)s->velocity[i]));
         out.max_distance_excess_m = fmaxf(out.max_distance_excess_m,
                                           glm_vec3_distance((float *)s->x[i], (float *)ref[i].x) - r[i]);
-        const ClothBackstop bs = mesh->backstop[i];
-        if (bs.R > 0.0F && r[i] > 0.0F) {
-            vec3 center;
-            glm_vec3_copy((float *)ref[i].x, center);
-            glm_vec3_muladds((float *)ref[i].b, bs.d + bs.R, center);
-            out.backstop_depth_m = fmaxf(out.backstop_depth_m, bs.R - glm_vec3_distance((float *)s->x[i], center));
-        }
+        vec3 push;
+        if (r[i] > 0.0F)
+            out.backstop_depth_m = fmaxf(out.backstop_depth_m, backstop_depth(s->x[i], &ref[i], mesh->backstop[i], push));
         float held = 0.0F;
         for (int bi = 0; bi < wk->bp.count; ++bi) {
             vec3 normal;

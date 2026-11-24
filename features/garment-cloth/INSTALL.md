@@ -56,9 +56,12 @@ The maps follow from meaning, not from tuning against old frames:
 - `r = min(rate x geodesic distance to the pins, cap_m)`: 0 on the pins, growing along the fabric to the hem value
   the garment allows (a pencil skirt a few centimetres, a loose hem more).
 - the body direction `b` points from each proxy vertex to the closest point of the `body_primitives` surface at rest,
-  smoothed over the proxy; `d` is that distance less the thickness; `R` is the sphere that best fits the body around
-  the closest point over a disc of radius `r`, 0 where `d >= r`. `backstop=False` on a piece, or no body primitives,
-  turns the backstop off.
+  smoothed over the proxy; `d` is that distance less the thickness; `R` is the body radius behind the vertex, 1 over
+  the largest principal curvature of the body over the geodesic disc of radius `r` around the closest point (fitted to
+  area samples, so the tessellation does not set it). A flat or concave body, or one that curves away by less than
+  the thickness over the disc, gives the plane form `R = +inf`; a disc with too little surface to fit, or `d >= r`,
+  turns the backstop off. `backstop=False` on a piece, or no body primitives, turns it off too.
+- tethers allow the path length to the nearest pin times `1 + max_edge_strain` of the fabric.
 
 Colliders are the outfit's one set of round cones in rest model space; the cook stores them as spheres on their
 joints and the cones that join them, shared by every piece. The report lists, per piece, the proxy vertices that lie
@@ -115,15 +118,19 @@ const GarmentInput in = {.pose = pose, .world = world, .dt = dt, .reset = placed
 if (garment_actor_update(&actor, outfit, rig, &in)) draw_garment_surface(actor.palette, actor.palette_count);
 ```
 
-Set `reset` on the first frame and whenever the wearer is placed anew: staged, seated, cut or teleported. The cloth
+Set `measure` where the stats' strain and constraint measures are read (a lab, a probe, a test); it costs a pass
+per frame. Set `reset` on the first frame and whenever the wearer is placed anew: staged, seated, cut or teleported. The cloth
 then starts on its reference with no velocity; there is no warm-up and no teleport guess, and an actor without a
 previous update resets regardless. Between pose samples the actor slerps the joints' local rotations and runs forward
 kinematics at every substep, so a fast turn sweeps the arc. `max_distance_scale` and `max_distance_bias` blend the
-cloth toward the animation: scale 0 with bias 0 is fully skinned and skips the solve.
+cloth toward the animation: scale 0 with bias 0 is fully skinned and skips the solve; a pin (cooked `r = 0`) stays
+kinematic for any scale and bias.
 
 A convex is a world-space plane set (`n . x + d <= 0` inside, up to `CLOTH_CONVEX_PLANES` planes): one plane for a
 floor, a box plus its hull planes for a seat. The actor moves them into its own simulation space at every substep. A
-vertex inside leaves through the face it entered by; friction is the fabric's Coulomb `friction`.
+vertex inside leaves through the face it entered by (at a reset, through the nearest face); friction is the fabric's
+Coulomb `friction`. Contact with body shapes is discrete, to the nearest exit: a limb that moves more than its own
+thickness in one substep can pass through cloth without pushing it, and the reference constraints then place it.
 
 ## Simulate a surface directly
 

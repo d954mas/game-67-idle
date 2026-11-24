@@ -157,6 +157,54 @@ static void test_a_cone_sweeping_a_pinned_panel_at_15_mps_leaves_no_vertex_insid
     TEST_ASSERT_TRUE(contacts > 0);
 }
 
+/* A thin limb (r + thickness = 14 mm) crosses a pinned panel at 15 m/s, 83 mm per substep. Contact is discrete, so a
+   shape that moves more than its thickness in a substep may pass the cloth without pushing it; what the scheme
+   guarantees is that after every substep no vertex is inside a shape and every vertex is within its max distance. */
+static void test_a_thin_cone_at_15_mps_leaves_the_panel_outside_and_within_max_distance(void) {
+    const ClothMaterial fabric = {.density = 0.2F, .stretch = 1e-5F, .bend = 200.0F, .thickness = 0.004F, .iterations = 2,
+                                  .max_edge_strain = 0.12F, .strain_passes = 4};
+    const float b[3] = {0, 0, 1};
+    reference(&panel, panel.rest, b);
+    for (int i = 0; i < panel.vertices; ++i) r[i] = panel.max_distance[i] > 0.0F ? 0.1F : 0.0F;
+    ClothSphere limb[2] = {{.c = {-0.3F, 0.2F, -0.3F}, .r = 0.01F}, {.c = {0.3F, 0.2F, -0.3F}, .r = 0.01F}};
+    const ClothCone cone = {0, 1};
+    for (int i = 0; i < 2; ++i) memcpy(limb[i].prev, limb[i].c, sizeof limb[i].prev);
+    ClothShapes shapes = {.spheres = limb, .sphere_count = 2, .cones = &cone, .cone_count = 1};
+    TEST_ASSERT_TRUE(cloth_reset(&cloth, &panel, &fabric, ref, r, &shapes));
+    for (int step = 0; step < 10; ++step) {
+        for (int i = 0; i < 2; ++i) {
+            memcpy(limb[i].prev, limb[i].c, sizeof limb[i].prev);
+            limb[i].c[2] += 15.0F * dt;
+        }
+        cloth_step(&cloth, &panel, &fabric, dt, NULL, ref, r, &shapes);
+        TEST_ASSERT_TRUE(cloth.frame_valid);
+        for (int v = 0; v < panel.vertices; ++v) {
+            float n[3], t;
+            TEST_ASSERT_TRUE(cloth_point_cone_contact(cloth.x[v], &limb[0], &limb[1], 0.0F, n, &t) <= 1e-4F);
+            TEST_ASSERT_TRUE(distance(cloth.x[v], ref[v].x) <= r[v] + fabric.thickness + 1e-4F);
+        }
+    }
+}
+
+static void test_reset_leaves_a_seat_through_its_nearest_face_not_along_b(void) {
+    /* The seat top is at y = 0.05; the reference lies 3 mm inside it and its body direction points up at the thigh. */
+    ClothConvex seat = {.plane_count = 6, .planes = {{0, 1, 0, -0.05F}, {0, -1, 0, -0.05F}, {1, 0, 0, -0.2F},
+                                                      {-1, 0, 0, -0.2F}, {0, 0, 1, -0.2F}, {0, 0, -1, -0.2F}}};
+    ClothShapes shapes = {.convexes = &seat, .convex_count = 1};
+    ClothMaterial m = stiff;
+    m.thickness = 0.004F;
+    float placed[4][3];
+    memcpy(placed, fold.rest, sizeof placed);
+    for (int i = 0; i < 3; ++i) placed[i][1] += 1.0F;
+    placed[3][0] = 0.0F;
+    placed[3][1] = 0.047F;
+    placed[3][2] = 0.0F;
+    const float up[3] = {0, 1, 0};
+    reference(&fold, (const float (*)[3])placed, up);
+    TEST_ASSERT_TRUE(cloth_reset(&cloth, &fold, &m, ref, r, &shapes));
+    NEAR(1e-5F, 0.05F + m.thickness, cloth.x[3][1]);
+}
+
 static void test_reset_gives_the_reference_and_exits_along_minus_b(void) {
     const float b[3] = {0.0F, 0.6F, -0.8F};
     reference(&fold, fold.rest, b);
@@ -269,18 +317,6 @@ static void test_round_cone_geometry_and_degeneracy(void) {
     TEST_ASSERT_TRUE(fabsf(cloth_point_cone_contact((float[]){0.1F, 0.0F, 0.0F}, &a, &a, 0.0F, n, &t) - 0.1F) < 1e-5F);
 }
 
-static void test_side_recovery_exits_on_the_previous_side(void) {
-    /* A leg sweeps in +Z past a vertex that started in front of it and ended just behind its axis. */
-    ClothSphere a = {.c = {0, 0, 0.05F}, .prev = {0, 0, -0.05F}, .r = 0.08F};
-    ClothSphere b = {.c = {0, 1, 0.05F}, .prev = {0, 1, -0.05F}, .r = 0.06F};
-    float prev_p[3] = {0, 0.5F, 0.04F}, curr_p[3] = {0, 0.5F, 0.03F};
-    float n[3], t = 0.0F;
-    float depth = cloth_point_cone_contact_swept(curr_p, prev_p, &a, &b, 0.0F, NULL, n, &t);
-    TEST_ASSERT_TRUE(n[2] > 0.99F);
-    float exited_z = curr_p[2] + depth * n[2];
-    TEST_ASSERT_TRUE(exited_z > a.c[2] + 0.065F && exited_z < a.c[2] + 0.075F);
-}
-
 static void test_strain_limit_respects_pins_and_slack(void) {
     ClothMesh mesh = seam;
     mesh.tether = NULL;
@@ -330,13 +366,14 @@ int main(void) {
     RUN_TEST(test_a_shape_holding_the_reference_deeper_than_r_is_reported);
     RUN_TEST(test_tethers_hold);
     RUN_TEST(test_a_cone_sweeping_a_pinned_panel_at_15_mps_leaves_no_vertex_inside);
+    RUN_TEST(test_a_thin_cone_at_15_mps_leaves_the_panel_outside_and_within_max_distance);
+    RUN_TEST(test_reset_leaves_a_seat_through_its_nearest_face_not_along_b);
     RUN_TEST(test_reset_gives_the_reference_and_exits_along_minus_b);
     RUN_TEST(test_friction_holds_below_mu_and_slides_above);
     RUN_TEST(test_a_vertex_entering_a_convex_through_its_top_leaves_through_the_top);
     RUN_TEST(test_material_restores_signed_fold);
     RUN_TEST(test_cone_axis_crosses_face_interior);
     RUN_TEST(test_round_cone_geometry_and_degeneracy);
-    RUN_TEST(test_side_recovery_exits_on_the_previous_side);
     RUN_TEST(test_strain_limit_respects_pins_and_slack);
     RUN_TEST(test_invalid_inputs_are_rejected);
     return UNITY_END();

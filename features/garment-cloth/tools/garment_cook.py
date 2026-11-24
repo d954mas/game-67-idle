@@ -11,6 +11,8 @@ from numbers import Integral
 from pathlib import Path
 
 import numpy as np
+from scipy.sparse import csr_matrix
+from scipy.sparse.csgraph import dijkstra
 from scipy.spatial import cKDTree
 
 from garment_binding import bind_render
@@ -21,9 +23,6 @@ from garment_proxy import (classify_edges, closest_surface_points, corner_owners
 
 LABEL, FREEDOM = "_CLOTH_PIECE", "_CLOTH"
 PALETTE_MAX = 2047  # 11-bit vertex ids of the render binding
-BACKSTOP_DISC_MIN = 0.03  # m: the body fit needs a disc wide enough to see the limb's curvature
-BACKSTOP_RADIUS_MIN = 0.01  # m
-R_FLAT = 1.0  # m: the backstop radius of a flat or concave body, where no limb stands behind the cloth
 
 
 def top_influences(weights, count=4):
@@ -124,8 +123,9 @@ def cook_mesh(name, points, faces, pins, *, wearable=False, tether_slack=None,
             np.any(max_distance[pins] != 0)):
         raise ValueError(f"{name}: max_distance must be finite, non-negative and zero on the pins")
     backstop = np.zeros((len(points), 2)) if backstop is None else np.asarray(backstop, dtype=np.float64)
-    if backstop.shape != (len(points), 2) or not np.isfinite(backstop).all() or np.any(backstop < 0):
-        raise ValueError(f"{name}: backstop must be a finite non-negative (d, R) per vertex")
+    if (backstop.shape != (len(points), 2) or not np.isfinite(backstop[:, 0]).all() or np.isnan(backstop).any() or
+            np.any(backstop < 0)):
+        raise ValueError(f"{name}: backstop must be (d, R) per vertex, d finite, both non-negative (R = inf is a plane)")
     edges = []
     for key, sides in adjacent.items():
         a, b, c = sides[0]
@@ -164,18 +164,67 @@ def _labels(model, primitive, where):
     return label.astype(np.int64), freedom, faces
 
 
-def _sphere_fit(points):
-    """Centre and radius of the least-squares sphere |p - c|^2 = R^2 through the points, or None if degenerate."""
-    if len(points) < 4:
-        return None
-    a = np.column_stack([2 * points, np.ones(len(points))])
-    rhs = (points ** 2).sum(1)
-    solution, _, rank, _ = np.linalg.lstsq(a, rhs, rcond=None)
-    if rank < 4:
-        return None
-    center = solution[:3]
-    radius2 = solution[3] + center @ center
-    return (center, math.sqrt(radius2)) if radius2 > 0 else None
+class BodySurface:
+    """The body behind the cloth at rest: triangles welded across attribute seams, so geodesic patches cross them."""
+
+    def __init__(self, vertices, faces, normals):
+        self.vertices, self.faces, self.normals = (np.asarray(vertices, float), np.asarray(faces), np.asarray(normals, float))
+        _, first, weld = np.unique(np.round(self.vertices, 6), axis=0, return_index=True, return_inverse=True)
+        weld = weld.ravel()
+        self.points = self.vertices[first]
+        self.welded = weld[self.faces]
+        edges = np.unique(np.sort(np.concatenate([self.welded[:, [0, 1]], self.welded[:, [1, 2]],
+                                                  self.welded[:, [2, 0]]]), axis=1), axis=0)
+        edges = edges[edges[:, 0] != edges[:, 1]]
+        length = np.linalg.norm(self.points[edges[:, 0]] - self.points[edges[:, 1]], axis=1)
+        n = len(self.points)
+        self.graph = csr_matrix((np.r_[length, length], (np.r_[edges[:, 0], edges[:, 1]], np.r_[edges[:, 1], edges[:, 0]])),
+                                shape=(n, n))
+        corners = self.points[self.welded]
+        self.area = 0.5 * np.linalg.norm(np.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0]), axis=1)
+        # Area samples: the centroids of each triangle's 3 x 3 subdivision, a ninth of its area each, so a disc that
+        # meets only a few large triangles still has the surface to fit.
+        bary = np.array([((i + 1 / 3) / 3, (j + 1 / 3) / 3) for i in range(3) for j in range(3 - i)] +
+                        [((i + 2 / 3) / 3, (j + 2 / 3) / 3) for i in range(2) for j in range(2 - i)])
+        weights = np.column_stack([1 - bary.sum(1), bary])
+        self.samples = np.einsum("sk,fkj->fsj", weights, corners)
+        self.share = 1 / len(bary)
+
+    def radius(self, face, point, normal, radius):
+        """The body radius behind point: 1 / the largest principal curvature of the body over the geodesic disc of
+        the given radius around point (a quadric height field over the tangent plane, fitted to area samples).
+        Returns +inf where the disc is flat or concave and None where it holds too little surface to fit."""
+        seeds = self.welded[face]
+        offset = np.linalg.norm(self.points[seeds] - point, axis=1)
+        reach = dijkstra(self.graph, indices=seeds, limit=radius + offset.max())
+        geodesic = (reach + offset[:, None]).min(0)
+        near = np.flatnonzero(np.isfinite(geodesic[self.welded]).any(1))
+        corners = self.points[self.welded[near]]
+        samples = self.samples[near]
+        # A sample's geodesic distance: through the nearer corner of its triangle, or straight across the seed face.
+        estimate = (geodesic[self.welded[near]][:, None, :] +
+                    np.linalg.norm(samples[:, :, None, :] - corners[:, None, :, :], axis=3)).min(2)
+        on_seed = near == face
+        estimate[on_seed] = np.minimum(estimate[on_seed], np.linalg.norm(samples[on_seed] - point, axis=2))
+        keep = estimate <= radius
+        points = samples[keep]
+        weight = np.repeat(self.area[near][:, None] * self.share, samples.shape[1], axis=1)[keep]
+        if len(points) < 6:
+            return None
+        u = np.cross(normal, [1.0, 0.0, 0.0] if abs(normal[0]) < 0.9 else [0.0, 1.0, 0.0])
+        u /= np.linalg.norm(u)
+        v = np.cross(normal, u)
+        rel = points - point
+        x, y, h = rel @ u, rel @ v, rel @ normal
+        # h = a x^2/2 + b xy + c y^2/2 + d x + e y + f
+        design = np.column_stack([x * x / 2, x * y, y * y / 2, x, y, np.ones(len(x))]) * np.sqrt(weight)[:, None]
+        solution, _, rank, _ = np.linalg.lstsq(design, h * np.sqrt(weight), rcond=None)
+        if rank < 6:
+            return None
+        a, b, c = solution[:3]
+        # A limb curves away from its outward normal: curvature is minus the height field's Hessian.
+        curvature = -np.linalg.eigvalsh([[a, b], [b, c]]).min()
+        return 1.0 / curvature if curvature > 0 else math.inf
 
 
 def _smooth_directions(directions, faces, iterations=4):
@@ -196,10 +245,12 @@ def _smooth_directions(directions, faces, iterations=4):
 def body_maps(p, f, r, body, thickness, enabled=True):
     """Body direction b, backstop distance d and radius R per sim vertex from the body surface at rest (B.4).
 
-    body: (vertices, faces, vertex normals) of the declared body primitives, or None. b points from the cloth to
-    the closest body point (along -n where the cloth lies inside the body); d is that distance less the thickness;
-    R is the sphere that best fits the body over a disc of radius r around the closest point, 0 where d >= r since
-    such a backstop can never act, and R_FLAT where the body is concave there."""
+    body: a BodySurface of the declared body primitives, or None. b points from the cloth to the closest body point
+    (along -n where the cloth lies inside the body), smoothed over the sim mesh; d is that distance less the
+    thickness. R is the body radius behind the vertex (BodySurface.radius over the geodesic disc of radius r around
+    the closest point): +inf, the plane form, where the body is flat or concave there or curves away by less than the
+    thickness over the disc; 0 where the disc holds too little surface to fit or where d >= r, since such a backstop
+    can never act."""
     if body is None:
         a, b_, c = p[f].transpose(1, 0, 2)
         normals = np.zeros_like(p)
@@ -207,32 +258,29 @@ def body_maps(p, f, r, body, thickness, enabled=True):
             np.add.at(normals, col, np.cross(b_ - a, c - a))
         directions = -normals / np.maximum(np.linalg.norm(normals, axis=1, keepdims=True), 1e-12)
         return directions, np.zeros((len(p), 2))
-    vertices, faces, vertex_normals = body
-    face, bary, distance = closest_surface_points(p, vertices, faces)
-    closest = np.einsum("nk,nkj->nj", bary, vertices[faces[face]])
-    normal = np.einsum("nk,nkj->nj", bary, vertex_normals[faces[face]])
+    face, bary, distance = closest_surface_points(p, body.vertices, body.faces)
+    closest = np.einsum("nk,nkj->nj", bary, body.vertices[body.faces[face]])
+    normal = np.einsum("nk,nkj->nj", bary, body.normals[body.faces[face]])
     normal /= np.maximum(np.linalg.norm(normal, axis=1, keepdims=True), 1e-12)
     signed = np.einsum("nj,nj->n", p - closest, normal)
     toward = (closest - p) / np.maximum(distance, 1e-12)[:, None]
     directions = np.where(((signed > 1e-4) & (distance > 1e-4))[:, None], toward, -normal)
     directions = _smooth_directions(directions, f)
     backstop = np.zeros((len(p), 2))
-    backstop[:, 0] = np.maximum(signed, 0) - thickness
-    backstop[:, 0] = np.maximum(backstop[:, 0], 0)
+    backstop[:, 0] = np.maximum(np.maximum(signed, 0) - thickness, 0)
     if not enabled:
         return directions, backstop
-    tree = cKDTree(vertices)
     for i in np.flatnonzero((r > 0) & (backstop[:, 0] < r)):
-        near = vertices[tree.query_ball_point(closest[i], max(float(r[i]), BACKSTOP_DISC_MIN))]
-        fit = _sphere_fit(near)
-        if fit is None or (fit[0] - closest[i]) @ directions[i] <= 0:
-            backstop[i, 1] = R_FLAT
-        else:
-            backstop[i, 1] = min(max(fit[1], BACKSTOP_RADIUS_MIN), R_FLAT)
+        radius = body.radius(face[i], closest[i], normal[i], float(r[i]))
+        if radius is None:
+            continue
+        # Over the disc the vertex can reach, a sphere departs from its tangent plane by r^2 / 2R; below the fabric
+        # thickness, the contact resolution, the two are the same constraint and the plane form is the exact one.
+        backstop[i, 1] = math.inf if r[i] ** 2 / (2 * radius) < thickness else radius
     return directions, backstop
 
 
-def cook_piece(outfit_id, model, piece, rows, joints, inverse_binds, body, shapes_rest, tether_slack):
+def cook_piece(outfit_id, model, piece, rows, joints, inverse_binds, body, shapes_rest):
     """One piece's blob record, its proxy sheet for the render binding and its report row."""
     name = f"{outfit_id}/{piece['id']}"
     value = piece["piece"]
@@ -264,6 +312,8 @@ def cook_piece(outfit_id, model, piece, rows, joints, inverse_binds, body, shape
     r[pins] = 0
     thickness = piece["material"]["thickness"]
     directions, backstop = body_maps(p, f, r, body, thickness, piece.get("backstop", True))
+    # The tether lets the fabric reach its own strain limit along the path to the pin, no further.
+    tether_slack = 1 + piece["material"].get("max_edge_strain", 0.0)
     mesh = cook_mesh(name, p, f, pins, wearable=True, tether_slack=tether_slack,
                      edge_kinds=classify_edges(p, f, pins), max_distance=r, backstop=backstop)
     used = {joints[j] for j in np.unique(order[influence > 0])}
@@ -307,7 +357,7 @@ def _body_surface(model, primitives):
         offset += len(points)
     if not vertices:
         return None
-    return np.concatenate(vertices), np.concatenate(faces), np.concatenate(normals)
+    return BodySurface(np.concatenate(vertices), np.concatenate(faces), np.concatenate(normals))
 
 
 def _shapes(colliders, inverse_binds):
@@ -354,7 +404,7 @@ def _rows(model, body_joints):
     return joints, rows
 
 
-def cook_outfit(outfit_id, model, pieces, body_joints, *, colliders=(), body_primitives=(), tether_slack=1.05):
+def cook_outfit(outfit_id, model, pieces, body_joints, *, colliders=(), body_primitives=()):
     """Blob bytes, the proxy sheets the render binding needs and a report row per piece.
 
     model: a garment_glb.Glb. pieces: dicts with id, piece (its `_CLOTH_PIECE` value), source_material (the primitive
@@ -387,7 +437,7 @@ def cook_outfit(outfit_id, model, pieces, body_joints, *, colliders=(), body_pri
     records, sheets, report, used = [], [], [], {s[0] for s in spheres}
     for piece in pieces:
         record, sheet, info, joints_used = cook_piece(outfit_id, model, piece, rows, joints, inverse_binds, body,
-                                                      shapes_rest, tether_slack)
+                                                      shapes_rest)
         records.append(record)
         sheets.append(sheet[:5] + (piece["source_material"],))
         report.append(info)

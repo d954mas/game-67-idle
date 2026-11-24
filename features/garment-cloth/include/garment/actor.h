@@ -12,8 +12,8 @@ typedef struct {
     int pieces, vertices, render_vertices, missing_bindings, surface_faces;
     unsigned steps;
     float max_displacement_m, max_strain;
-    /* After the last substep: the cloth beyond its max distance and inside its backstop, and the reference vertices a
-       shape holds deeper than their max distance (cloth_measure). */
+    /* With GarmentInput.measure, after the last substep: strain, the cloth beyond its max distance and inside its
+       backstop, and the reference vertices a shape holds deeper than their max distance (cloth_measure). */
     float max_distance_excess_m, backstop_depth_m, held_depth_m;
     int held_vertices;
 } GarmentStats;
@@ -67,8 +67,11 @@ typedef struct {
     bool render;
     const ClothConvex *convexes; /* World space: floor, seats, props. */
     int convex_count;
-    /* r' = max(0, r * scale + bias): 1 and 0 simulate as cooked; scale 0 and bias 0 is kinematic and skips the solve. */
+    /* r' = max(0, r * scale + bias) where the cooked r > 0, else 0: 1 and 0 simulate as cooked; scale 0 and bias 0 is
+       kinematic and skips the solve. */
     float max_distance_scale, max_distance_bias;
+    /* Fill the stats' strain, max-distance, backstop and held measures (lab, probes, tests); costs a pass per frame. */
+    bool measure;
 } GarmentInput;
 
 typedef struct {
@@ -88,6 +91,7 @@ typedef struct {
     ClothSphere spheres[CLOTH_SHAPES];  /* Actor space at the last substep. */
     float remainder, origin[3], prev_vel[3];
     float yaw, prev_yaw_vel;
+    bool velocity_known; /* prev_vel and prev_yaw_vel come from a timed frame since the last reset */
     bool primed;
     GarmentStats stats;
 } GarmentActor;

@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
-from garment_cook import cook_mesh, top_influences, _tethers
+from garment_cook import BodySurface, body_maps, cook_mesh, top_influences, _tethers
 
 
 POINTS = [[-0.5, 0, 0], [0.5, 0, 0], [0, 1, 0], [0, 0, 1]]
@@ -42,6 +42,35 @@ class TestCook(unittest.TestCase):
         self.assertTrue(np.all(mesh["inv_area"] > 0))
         with self.assertRaisesRegex(ValueError, "zero on the pins"):
             cook_mesh("fold", POINTS, FACES, [0, 1], max_distance=[0, 0.1, 0.1, 0.1])
+
+    def test_backstop_radius_follows_the_body_not_its_tessellation(self):
+        def cylinder(around, rows, radius=0.1, sign=1):
+            angle = np.linspace(0, 2 * np.pi, around, endpoint=False)
+            y = np.linspace(-0.3, 0.3, rows)
+            v = np.array([(radius * np.cos(a), h, radius * np.sin(a)) for h in y for a in angle])
+            f = []
+            for j in range(rows - 1):
+                for i in range(around):
+                    a, b, c, d = j * around + i, j * around + (i + 1) % around, (j + 1) * around + i, (j + 1) * around + (i + 1) % around
+                    f += [(a, c, b), (b, c, d)] if sign > 0 else [(a, b, c), (b, d, c)]
+            n = sign * v * [1, 0, 1] / radius
+            return BodySurface(v, np.array(f), n)
+
+        # A small sim patch 2 cm off the surface, facing the cylinder.
+        grid = np.array([(0.12, y, z) for y in (-0.02, 0.0, 0.02) for z in (-0.02, 0.0, 0.02)])
+        faces = np.array([(0, 3, 1), (1, 3, 4), (1, 4, 2), (2, 4, 5), (3, 6, 4), (4, 6, 7), (4, 7, 5), (5, 7, 8)])
+        r = np.full(9, 0.05)
+        radii = [body_maps(grid, faces, r, cylinder(*shape), 0.002)[1][:, 1] for shape in ((24, 13), (64, 41))]
+        self.assertTrue(np.all(np.abs(radii[1] - 0.1) < 0.01) and np.all(np.isfinite(radii[0])))
+        np.testing.assert_allclose(radii[0], radii[1], rtol=0.1)
+        b, backstop = body_maps(grid, faces, r, cylinder(64, 41), 0.002)
+        self.assertTrue(np.all(b[:, 0] < -0.9))  # toward the body
+        np.testing.assert_allclose(backstop[:, 0], 0.018, atol=0.003)
+        # Inside a tube the body is concave: the backstop takes its plane form.
+        inner = np.array([(0.18, y, z) for y in (-0.02, 0.0, 0.02) for z in (-0.02, 0.0, 0.02)])
+        self.assertTrue(np.all(np.isinf(body_maps(inner, faces, r, cylinder(64, 41, 0.2, -1), 0.002)[1][:, 1])))
+        # Where the cloth is farther from the body than r, the backstop can never act: off.
+        self.assertTrue(np.all(body_maps(grid, faces, np.full(9, 0.01), cylinder(64, 41), 0.002)[1][:, 1] == 0))
 
     def test_tether_path_follows_edges_and_leaves_free_islands(self):
         points = np.asarray([(0,0,0), (0,1,0), (1,1,0), (1,0,0), (0,0,2)])

@@ -91,66 +91,6 @@ float cloth_point_cone_contact(const float p[3], const ClothSphere *sa, const Cl
     return -signed_dist;
 }
 
-float cloth_point_cone_contact_swept(const float p[3], const float prev_p[3], const ClothSphere *sa,
-                                     const ClothSphere *sb, float margin, const float fallback_normal[3],
-                                     float normal[3], float *t_out) {
-    float t = 0.0F;
-    float depth = cloth_point_cone_contact(p, sa, sb, margin, normal, &t);
-    if (t_out) *t_out = t;
-    if (depth <= 0.0F) return depth;
-    return cloth_cone_exit_side(p, prev_p, sa, sb, margin, fallback_normal, t, depth, normal);
-}
-
-float cloth_cone_exit_side(const float p[3], const float prev_p[3], const ClothSphere *sa, const ClothSphere *sb,
-                           float margin, const float fallback_normal[3], float t, float depth, float normal[3]) {
-    vec3 q_curr, delta_curr;
-    glm_vec3_lerp((float *)sa->c, (float *)sb->c, t, q_curr);
-    glm_vec3_sub((float *)p, q_curr, delta_curr);
-    float curr_d2 = glm_vec3_norm2(delta_curr);
-    float ra = sa->r + margin;
-    float rb = sb->r + margin;
-    float r_local = ra + t * (rb - ra);
-
-    vec3 recover = {0, 0, 0};
-    bool use_recover = false;
-
-    if (prev_p) {
-        vec3 prev_ba, prev_pa;
-        glm_vec3_sub((float *)sb->prev, (float *)sa->prev, prev_ba);
-        glm_vec3_sub((float *)prev_p, (float *)sa->prev, prev_pa);
-        float prev_len2 = glm_vec3_norm2(prev_ba);
-        float t_prev = prev_len2 > 1e-12F ? glm_clamp(glm_vec3_dot(prev_pa, prev_ba) / prev_len2, 0.0F, 1.0F) : 0.0F;
-        vec3 q_prev, delta_prev;
-        glm_vec3_lerp((float *)sa->prev, (float *)sb->prev, t_prev, q_prev);
-        glm_vec3_sub((float *)prev_p, q_prev, delta_prev);
-        float prev_d2 = glm_vec3_norm2(delta_prev);
-        if (prev_d2 > 1e-8F && glm_vec3_dot(delta_curr, delta_prev) < 0.0F) {
-            glm_vec3_scale(delta_prev, 1.0F / sqrtf(prev_d2), recover);
-            use_recover = true;
-        }
-    }
-
-    if (!use_recover && curr_d2 < 1e-8F && fallback_normal) {
-        float flen = glm_vec3_norm((float *)fallback_normal);
-        if (flen > 1e-6F) {
-            glm_vec3_scale((float *)fallback_normal, 1.0F / flen, recover);
-            use_recover = true;
-        }
-    }
-
-    if (!use_recover) return depth;
-
-    /* Exact ray exit from delta_curr along recover onto sphere of radius r_local. */
-    float b_dot = glm_vec3_dot(delta_curr, recover);
-    float c_term = curr_d2 - r_local * r_local;
-    float disc = b_dot * b_dot - c_term;
-    if (disc < 0.0F) return depth;
-    float exit_depth = -b_dot + sqrtf(disc);
-    if (exit_depth <= 0.0F) return depth;
-    glm_vec3_copy(recover, normal);
-    return exit_depth;
-}
-
 static void candidate(Witness *w, vec3 delta, float u, float v, float t, float t_axis) {
     float d2 = glm_vec3_norm2(delta);
     if (d2 >= w->distance2) return;

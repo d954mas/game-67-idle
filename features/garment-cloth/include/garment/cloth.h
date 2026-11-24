@@ -9,8 +9,7 @@ enum {
     CLOTH_EDGES = 1536,
     CLOTH_SHAPES = 64, /* spheres, and separately cones */
     CLOTH_CONVEXES = 8,
-    CLOTH_CONVEX_PLANES = 48,
-    CLOTH_MAX_STRAIN_PASSES = 32
+    CLOTH_CONVEX_PLANES = 48
 };
 
 enum {
@@ -28,7 +27,8 @@ typedef struct {
 } ClothEdge;
 /* pin is a vertex with max distance 0, or -1 on an island without one. */
 typedef struct { int pin; float max_length; } ClothTether;
-/* A sphere of radius R whose centre stands d + R behind the reference along the body direction (m); R = 0 is off. */
+/* A sphere of radius R whose centre stands d + R behind the reference along the body direction (m). R = 0 is off;
+   R = +INFINITY is the half-space behind the plane at d, the form a flat or concave body takes. */
 typedef struct { float d, R; } ClothBackstop;
 typedef struct {
     int vertices, faces, edges;
@@ -107,8 +107,8 @@ typedef struct {
    vertex (NULL uses the mesh's); a vertex with r = 0 is kinematic this substep and sits on its reference. */
 bool cloth_frame_valid(const ClothMesh *mesh, const ClothMaterial *m, float dt, const ClothReference *ref,
                        const float *max_distance, const ClothShapes *shapes);
-/* x = reference and v = 0; a free vertex inside a shape or a convex leaves along -b, the side its body direction
-   names, since there is no previous position to judge the side by. */
+/* x = reference and v = 0. A free vertex inside a shape leaves along -b, the side of the body its direction names,
+   since there is no previous position to judge the side by; inside a convex it leaves through the nearest face. */
 bool cloth_reset(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, const ClothReference *ref,
                  const float *max_distance, const ClothShapes *shapes);
 /* NULL frame: an inertial frame without fictitious forces; NULL shapes: nothing to collide with. */

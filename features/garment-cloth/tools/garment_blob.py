@@ -167,7 +167,8 @@ def _mesh(check, mesh, records):
                f"must be finite in [0, {MAX_DISTANCE_MAX}] m")
     values = single(mesh["backstop"])
     check(values.shape == (n, 2), "mesh.backstop", "needs (d, R) per vertex")
-    check.each(np.isfinite(values) & (values >= 0), "mesh.backstop", "must be finite and non-negative")
+    check.each(np.isfinite(values[:, 0]) & (values[:, 0] >= 0) & ((values[:, 1] >= 0) & ~np.isnan(values[:, 1])),
+               "mesh.backstop", "needs a finite non-negative d and R >= 0 (+inf is the plane form)")
     backstop = np.zeros(n, BACKSTOP)
     backstop["d"], backstop["R"] = values[:, 0], values[:, 1]
     records.update(rest=rest, inv_area=inv, faces=faces.astype("<u2"), edges=edges, max_distance=r, backstop=backstop)

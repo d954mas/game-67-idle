@@ -55,7 +55,7 @@ static void arm(float angle, nt_skeletal_mat34_t pose[2]) {
 
 static bool update(GarmentActor *actor, const nt_skeletal_mat34_t *pose, const float world[16], float dt, bool reset) {
     const GarmentInput in = {.pose = pose, .world = world, .dt = dt, .reset = reset, .render = true,
-                             .max_distance_scale = 1.0F};
+                             .max_distance_scale = 1.0F, .measure = true};
     return garment_actor_update(actor, &set, &rig, &in);
 }
 
@@ -72,6 +72,52 @@ static void test_a_two_joint_arm_turning_90_degrees_puts_its_tip_on_the_arc(void
     const float *tip = actor->spheres[0].c;
     NEAR(1e-4F, 2.0F, hypotf(tip[0], tip[1]));
     NEAR(1e-3F, 1.5707963F * 12.0F / 13.0F, atan2f(tip[1], tip[0]));
+}
+
+/* Near +-120 degrees glm_mat3_quat switches branch, so two nearly equal rotations come back as q and about -q. */
+static void test_nearly_equal_rotations_of_opposite_quaternion_sign_interpolate_between_them(void) {
+    GarmentActor *actor = &actors[0];
+    nt_skeletal_mat34_t pose[2];
+    const float before = -2.0941F, after = -2.0947F;
+    arm(before, pose);
+    TEST_ASSERT_TRUE(update(actor, pose, identity_world, 0.0F, true));
+    arm(after, pose);
+    TEST_ASSERT_TRUE(update(actor, pose, identity_world, 13.0F / 360.0F, false));
+    const float *tip = actor->spheres[0].c;
+    NEAR(1e-4F, 2.0F, hypotf(tip[0], tip[1]));
+    NEAR(1e-3F, before + (after - before) * 12.0F / 13.0F, atan2f(tip[1], tip[0]));
+}
+
+/* Static friction against a floor holds a resting vertex in world space while the root walks and turns. */
+static void test_static_friction_on_a_floor_holds_the_cloth_in_world_space(void) {
+    static const GarmentAsset grippy = {.id = "panel", .mesh = &mesh, .skin = skin, .direction = direction,
+                                        .material = {.density = 0.2F, .stretch = 0.03F, .iterations = 1, .friction = 20.0F}};
+    static const GarmentSet outfit = {.id = "arm", .bones = bones, .bone_count = 2, .pieces = &grippy, .piece_count = 1};
+    GarmentActor *actor = &actors[0];
+    nt_skeletal_mat34_t pose[2];
+    arm(0.0F, pose);
+    /* The corner hangs 1 m below the shoulder; the floor 0.9 m below it holds it with slack in its tether. */
+    float world[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 2, 0, 1};
+    ClothConvex floor = {.plane_count = 1, .planes = {{0, 1, 0, -1.1F}}};
+    GarmentInput in = {.pose = pose, .world = world, .reset = true, .render = true, .convexes = &floor, .convex_count = 1,
+                       .max_distance_scale = 1.0F};
+    TEST_ASSERT_TRUE(garment_actor_update(actor, &outfit, &rig, &in));
+    in.reset = false;
+    in.dt = 1.0F / 30.0F;
+    for (int i = 0; i < 10; ++i) TEST_ASSERT_TRUE(garment_actor_update(actor, &outfit, &rig, &in));
+    float start[3];
+    memcpy(start, actor->palette[2].r[0], sizeof start);
+    start[1] += 2.0F;
+    for (int i = 1; i <= 10; ++i) {
+        const float yaw = 0.01F * (float)i, c = cosf(yaw), s = sinf(yaw);
+        const float moved[16] = {c, 0, -s, 0, 0, 1, 0, 0, s, 0, c, 0, 0.004F * (float)i, 2, 0, 1};
+        memcpy(world, moved, sizeof world);
+        TEST_ASSERT_TRUE(garment_actor_update(actor, &outfit, &rig, &in));
+    }
+    const float *x = actor->palette[2].r[0];
+    float at[3];
+    for (int k = 0; k < 3; ++k) at[k] = world[k] * x[0] + world[4 + k] * x[1] + world[8 + k] * x[2] + world[12 + k];
+    for (int k = 0; k < 3; ++k) NEAR(2e-3F, start[k], at[k]);
 }
 
 static void test_palette_follows_the_reference_before_the_first_substep(void) {
@@ -184,6 +230,8 @@ static void test_missing_joint_or_bad_input_is_refused(void) {
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_a_two_joint_arm_turning_90_degrees_puts_its_tip_on_the_arc);
+    RUN_TEST(test_nearly_equal_rotations_of_opposite_quaternion_sign_interpolate_between_them);
+    RUN_TEST(test_static_friction_on_a_floor_holds_the_cloth_in_world_space);
     RUN_TEST(test_palette_follows_the_reference_before_the_first_substep);
     RUN_TEST(test_reset_puts_the_cloth_on_the_reference_after_a_teleport);
     RUN_TEST(test_a_world_convex_holds_the_cloth_in_world_space);
