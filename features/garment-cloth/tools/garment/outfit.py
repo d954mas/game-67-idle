@@ -28,7 +28,7 @@ from garment_proxy import geodesic_depth, simplify
 from . import body as body_maps
 from . import sidecar as sc
 from . import sim
-from .model import RenderModel
+from .model import RenderModel, Surface
 
 PACKAGE = Path(__file__).resolve().parent
 FEATURE = PACKAGE.parents[1]
@@ -364,6 +364,34 @@ class Piece:
             self.w[mask] = (0.5 * self.w + 0.5 * (adjacency @ self.w) / count)[mask]
         self._mark("w", mask)
 
+    def weights_average(self, mask, radius):
+        """Replace each masked vertex's weights by the mean of the weights of every vertex within `radius` of it along
+        the sim mesh (itself included): a number in metres, or a per-vertex array such as `r`. Unlike
+        `weights_smooth`, whose one-ring passes blur by the same amount everywhere, this bounds how fast the weights
+        may change across the cloth by each vertex's own radius."""
+        mask = self._mask(mask)
+        radius = np.broadcast_to(np.asarray(radius, float), (len(self.x),))
+        reach = sim.dijkstra_all(self.x, self.faces, limit=float(radius[mask].max(initial=0)))
+        source = self.w.copy()
+        for i in np.flatnonzero(mask):
+            self.w[i] = source[reach[i] <= radius[i]].mean(0)
+        self._mark("w", mask)
+
+    def weights_follow_body(self):
+        """The default weights of a piece with a body behind it: every vertex takes the skin weights of the closest
+        point of the outfit's body surface, each free vertex then averages them within its own max distance r (the
+        reference then changes across the cloth no faster than the cloth may move, so two limbs cannot pull an edge
+        apart beyond what its two spheres allow), and the pins keep the weights they had (the seam with the skinned
+        garment). Needs the pins and r. A piece with no body behind it (a ribbon) keeps its own weights: do not call
+        this for it."""
+        if np.isnan(self.r).any():
+            raise ValueError(f"{self.id}: author r on every vertex before weights_follow_body")
+        own, pins = self.w.copy(), self.pins
+        body = self.outfit.body
+        self.weights_transfer(Surface(body.points, body.faces, body.weights, body.joints))
+        self.weights_average(~pins, self.r)
+        self.weights_blend(pins, own, own, 0.0)
+
     # Built form ----------------------------------------------------------------------------------------------
     def built(self):
         """The sidecar record, after the checks every value must pass."""
@@ -431,6 +459,9 @@ class Outfit:
         self.looks = [self.root / look for look in looks]
         self.pieces = []
         self.layers = []
+        # GARMENT_STAGES=n builds the script's content up to its stage n (`if o.stages >= 2:` blocks), to compare a
+        # content fix with what came before it.
+        self.stages = int(os.environ.get("GARMENT_STAGES", "1000000"))
         Outfit.instances.append(self)
 
     def _input(self, relative):
@@ -450,6 +481,13 @@ class Outfit:
 
     def get(self, piece_id):
         return next(p for p in self.pieces if p.id == piece_id)
+
+    def over(self, outer, inner):
+        """Declare that the outer piece lies over the inner one, so gate G8 checks their order in every clip frame.
+        `layer` declares it too and also applies the rule that keeps the order."""
+        self.get(outer), self.get(inner)
+        if (outer, inner) not in self.layers:
+            self.layers.append((outer, inner))
 
     def layer(self, outer, inner):
         """The layer rule of spec B.6 for an outer piece over an inner one, without cloth-to-cloth contact: where the
@@ -473,8 +511,7 @@ class Outfit:
         i.r[hit_i] = np.minimum(i.r[hit_i], share_i[hit_i])
         i.R[i.d >= i.r] = 0
         i._mark("r", hit_i)
-        if (outer, inner) not in self.layers:
-            self.layers.append((outer, inner))
+        self.over(outer, inner)
         return dict(outer=int(hit_o.sum()), inner=int(hit_i.sum()),
                     too_thin=int(((g_out < t) & hit_o).sum() + ((g_in < t) & hit_i).sum()))
 
@@ -488,6 +525,8 @@ class Outfit:
         nodes, joints, ibm = sc.skeleton(self.model.glb)
         build = {"script_sha256": sha256(self.script) if self.script and self.script.is_file() else None,
                  "inputs": dict(sorted(self.inputs.items())), "library": LIBRARY_VERSION}
+        if "GARMENT_STAGES" in os.environ:
+            build["stages"] = self.stages
         return sc.Sidecar(nodes=nodes, joints=joints, inverse_binds=ibm, pieces=[p.built() for p in self.pieces],
                           build=build, layers=list(self.layers))
 

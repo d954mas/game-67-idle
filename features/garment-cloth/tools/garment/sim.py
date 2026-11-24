@@ -33,6 +33,11 @@ def geodesic(points, faces, sources, limit=np.inf):
     return dijkstra(edge_graph(points, faces), indices=sources, min_only=True, limit=limit)
 
 
+def dijkstra_all(points, faces, limit=np.inf):
+    """(V, V) shortest edge-path lengths between all vertices, inf beyond limit."""
+    return dijkstra(edge_graph(points, faces), directed=False, limit=limit)
+
+
 def neighbours(faces, n):
     """Vertex adjacency as a sparse boolean matrix (n, n)."""
     e = edges(faces)

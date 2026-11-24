@@ -96,7 +96,7 @@ def smooth_directions(directions, faces, iterations=4):
     return out
 
 
-def winding(points, triangles, chunk=96):
+def winding(points, triangles, chunk=24):
     """Generalised winding number of each point against a triangle soup (F, 3, 3) whose fronts face out: about 1
     inside a closed surface, 0 outside, in between near a hole (Jacobson et al. 2013)."""
     points = np.asarray(points, float).reshape(-1, 3)

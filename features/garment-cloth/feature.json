@@ -75,7 +75,10 @@
     "garment.body.backstop",
     "garment.body.winding",
     "garment.cards.draw",
-    "garment.cards.piece_card"
+    "garment.cards.piece_card",
+    "garment.bind.grow",
+    "garment.gates",
+    "garment/check.py"
   ],
   "flags": {"feature": "FEATURE_GARMENT_CLOTH=1 on consumers linked to garment_cloth"},
   "manuals": {"install": "features/garment-cloth/INSTALL.md"},

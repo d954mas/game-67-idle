@@ -187,7 +187,7 @@ def body_triangles(body, matrices=None):
 
 def piece_card(path, piece, layer="wire", matrices=None, marks=(), lines=(), yaws=(0, 90, 180), shapes=None, title=None):
     """A card of one authored piece (outfit.Piece). layer: wire, r, d, R, b, weights:<joint>, or fail (the marks
-    only); matrices: (J, 4, 4) skin matrices of a pose (model.skin_matrices of one frame), None for rest: the sim
+    only); weights:A+B shows the sum of joints' weights; matrices: (J, 4, 4) skin matrices of a pose (model.skin_matrices of one frame), None for rest: the sim
     mesh is then its reference in that pose. The why-lines of the marked vertices go under the panels."""
     body = body_triangles(piece.outfit.body, matrices)
     x = piece.x if matrices is None else M.skin_points(piece.x, piece.w, matrices[None])[0]
@@ -202,15 +202,19 @@ def piece_card(path, piece, layer="wire", matrices=None, marks=(), lines=(), yaw
         values, unit, low, high = piece.R * 1000, "R mm (body radius behind)", 0.0, 300.0
         special = {"pin": (pins, PIN), "off": ((piece.R == 0) & ~pins, OFF), "plane": (np.isinf(piece.R), PLANE)}
     elif layer.startswith("weights:"):
-        joint = layer.split(":", 1)[1]
-        values, unit, low, high = piece.f.w[joint], f"weight of {joint}", 0.0, 1.0
+        joints = layer.split(":", 1)[1]
+        values = sum(piece.f.w[j] for j in joints.split("+"))
+        unit, low, high = f"weight of {joints}", 0.0, 1.0
     elif layer == "b":
         b = piece.b if matrices is None else M.skin_directions(piece.b, piece.w, matrices[None])[0]
         arrows = (x, x + 0.03 * b)
     elif layer not in ("wire", "fail"):
         raise ValueError(f"unknown layer {layer!r}")
-    why = [f"v{m}: " + "; ".join(f"{k} <- {v}" for k, v in piece.why(int(m)).items() if k != "values")
-           for m in np.asarray(marks, int).ravel()[:6]]
+    groups = {}
+    for m in np.asarray(marks, int).ravel()[:12]:
+        text = "; ".join(f"{k} <- {v}" for k, v in piece.why(int(m)).items() if k != "values")
+        groups.setdefault(text, []).append(f"v{m}")
+    why = [f"{', '.join(ids)}: {text}" for text, ids in groups.items()]
     return draw(path, body, x, piece.faces, values=values, low=low, high=high, unit=unit, special=special,
                 pins=pins if layer in ("wire", "fail", "b") or layer.startswith("weights") else None, marks=marks,
                 arrows=arrows, shapes=shapes, title=title or f"{piece.id}: {layer}", lines=list(lines) + why, yaws=yaws)

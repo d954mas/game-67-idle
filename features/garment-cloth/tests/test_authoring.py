@@ -311,6 +311,61 @@ class TestWeights(unittest.TestCase):
         self.assertIn("test_authoring.py", p.why(int(np.argmin(p.f.y)))["w"])
 
 
+class TestWeightsFollowBody(unittest.TestCase):
+    def test_average_within_r_is_a_mean_over_each_vertex_own_disc(self):
+        scene = Scene(cylinder_scene())
+        try:
+            o = scene.outfit()
+            p = o.piece("sheet", 1, "plain")
+            points, faces = grid(-0.2, 0.2, 0.0, 0.4, 0.2, 9, 9)
+            p.set_mesh(points, faces)
+            p.w[:, 1] = p.f.x < 0
+            p.w[:, 2] = p.f.x >= 0
+            before = p.w.copy()
+            p.weights_average(p.f.all, 0.0)
+            np.testing.assert_array_equal(p.w, before)
+            p.weights_average(p.f.all, 10.0)
+            np.testing.assert_allclose(p.w, np.tile(before.mean(0), (len(p.w), 1)))
+            p.w[:] = before
+            p.weights_average(p.f.all, np.where(np.isclose(p.f.x, 0), 0.06, 0.0))
+            middle = np.isclose(p.f.x, 0) & (p.f.y > 0.05) & (p.f.y < 0.35)
+            # Within 6 cm along the mesh: the vertex and its four 5 cm neighbours (the diagonals are 7 cm), one of them on
+            # the left.
+            np.testing.assert_allclose(p.w[middle, 1], 1 / 5, atol=1e-12)
+        finally:
+            scene.close()
+
+    def test_follow_body_takes_the_body_weights_and_keeps_the_pins(self):
+        scene = Scene(cylinder_scene())
+        try:
+            o = scene.outfit()
+            p = skirt(o)
+            own = p.w.copy()
+            p.weights_follow_body()
+            # The body is weighted to `root` alone, so every free vertex follows it; the pins keep their weights.
+            np.testing.assert_allclose(p.f.w["root"][~p.pins], 1)
+            np.testing.assert_array_equal(p.w[p.pins], own[p.pins])
+            self.assertTrue(np.any(own[~p.pins, 1] > 0.5))
+        finally:
+            scene.close()
+
+
+class TestSideGate(unittest.TestCase):
+    def test_a_reference_past_the_limb_axis_fails_and_one_turning_with_it_passes(self):
+        from garment.gates import Limb
+        rest = np.eye(4)[None]
+        ends = ((0, np.array([0.0, 0.2, 0.0]), 0.08), (0, np.array([0.0, 0.8, 0.0]), 0.06))
+        points = np.array([[0.12, 0.5, 0.0], [0.5, 0.5, 0.0]])
+        r = np.array([0.08, 0.08])
+        limb = Limb(ends, rest, points, r, 0.004)
+        self.assertEqual(limb.near.tolist(), [True, False])
+        crossed = limb.crossing(np.array([[-0.10, 0.5, 0.0], [-0.5, 0.5, 0.0]]), rest, r, 0.004)
+        np.testing.assert_allclose(crossed, [0.10, 0.0])
+        turn = np.eye(4)
+        turn[:3, :3] = [[0, 0, 1], [0, 1, 0], [-1, 0, 0]]
+        np.testing.assert_allclose(limb.crossing(points @ turn[:3, :3].T, turn[None], r, 0.004), 0)
+
+
 class TestBody(unittest.TestCase):
     def test_winding_number_is_one_inside_a_closed_box_and_zero_outside(self):
         corners = np.array([[x, y, z] for x in (0, 1) for y in (0, 1) for z in (0, 1)], float)

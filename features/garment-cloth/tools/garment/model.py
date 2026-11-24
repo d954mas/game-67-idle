@@ -115,8 +115,8 @@ class RenderPiece:
 
     Per render vertex of the primitive:
     - labelled: the vertex carries this piece's label;
-    - height: 0 at the top of the region and 1 at its bottom (NaN off the region), over every corner of the region,
-      the unlabelled row it is sewn to included;
+    - height: 0 at the top of the piece's region and 1 at its bottom (NaN off the region in this primitive), over
+      every corner of the region in every primitive with the label, the unlabelled row it is sewn to included;
     - split: a labelled vertex at the position of an unlabelled one, which must stay with it or the seam cracks.
     sheet: the outer sewn sheet of the region (its points, triangles and the render vertex of each sheet vertex),
     which `Piece.create` turns into the sim mesh."""
@@ -129,19 +129,29 @@ class RenderPiece:
         self.region = faces[self.labelled[faces].any(1)]
         if not len(self.region):
             raise ValueError(f"{model.path}: piece label {label} has no {model.materials[k]!r} triangles")
-        others = [m for j, m in enumerate(model.materials) if j != k and np.any(model.labels[j] == self.label)]
-        if others:
-            raise ValueError(f"{model.path}: label {label} spans primitives {model.materials[k]!r} and {others}")
+        # The height spans the piece's region in every primitive that carries the label (a trim in another
+        # material moves with the piece too).
+        heights = []
+        for j, (x, f, lab) in enumerate(zip(model.positions, model.faces, model.labels)):
+            if np.any(lab == self.label):
+                heights.append(x[np.unique(f[(lab == self.label)[f].any(1)]), 1])
+        heights = np.concatenate(heights)
+        top, span = heights.max(), max(np.ptp(heights), 1e-12)
         used = np.unique(self.region)
-        y = self.positions[used, 1]
         self.height = np.full(len(self.positions), np.nan)
-        self.height[used] = (y.max() - y) / max(np.ptp(y), 1e-12)
+        self.height[used] = (top - self.positions[used, 1]) / span
         from scipy.spatial import cKDTree
         gap, _ = cKDTree(model.unlabelled_points()).query(self.positions, distance_upper_bound=COINCIDENT_M)
         self.split = self.labelled & np.isfinite(gap)
         self.sheet_points, self.sheet_faces, self.sheet_render, _ = sewn_sheet(
             self.positions, outer_faces(self.positions, self.region, outer))
         self.weights = model.weights(k)
+
+    @property
+    def sewn(self):
+        """The render vertices that must move with skinning: the unlabelled ones the piece is sewn to and the labelled
+        copies of them (split)."""
+        return ~self.labelled | self.split
 
     def surface(self):
         """The sheet with the render weights of its vertices: today's weights source."""
