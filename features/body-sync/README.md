@@ -86,7 +86,8 @@ thrower and two catchers either side of the box's line), `breakables` (glass,
 a crate with contents), `load300` (300 bodies, four players), `dummy_wall`
 (a wall and a standing dummy to throw at), `walker_lane` (a mannequin walking
 across a thrower's line), `glass_door` (glass and a heavy door, both broken by
-an impact claim).
+an impact claim), `mug_tables` (three light tables and a mug for each, to throw
+into them).
 
 The test character mirrors a game's mechanics: a dynamic capsule moved by
 setting its velocity, rotation locked, its facing written into its rotation
@@ -357,6 +358,22 @@ starved body shows as a catch-up the render offset or a dynamic hold smooths
   further from her hand. Her first pose is a placement the render offset takes up to a
   lost take's 5 m, so the host's picture glides to her hand instead of jumping
   (`catch_guest_throw_250`: 2.5-3 m at 250 ms).
+- **A flight the host plays.** On the host, a guest's throw held dynamic until it
+  settles is driven, within its step's reach of a body the host simulates, no
+  faster than its owner's body moves as played: the correction steers it onto
+  the owner's path, and its speed past the owner's (playback catching up its
+  clock at a pace up to 1.25, a path rejoined after lost states) would strike
+  harder than the thrower's did; elsewhere it catches up freely. A flight is sent
+  at the full rate, so once playback has passed its newest snapshot while its
+  timeline goes on, the owner's next states are not coming: it goes on its own
+  motion and meets what is in its way once, as the owner's body did, since that
+  snapshot's velocity, set again every tick, would push on through it. A flight its contact ended has its newest state from before the
+  contact (the release goes out from that tick's collect, after the step): at the
+  release the host takes the body back from that state while the copy has not
+  played it yet, and from the copy itself once it has, so the contact is never
+  struck twice. The stub takes a body back by the same rule. `mug_table_100` and
+  `_250` hold this with `expect moved ... solo`; `test_body_sync_checks` plants
+  each rule's undoing (`src/body_sync_plant.h`) and requires the check to fail.
 - **Data and characters.** `body_sync_set_data` gives a local body up to 8
   opaque bytes (the stand's character activity), sent as the fifth rare group
   until acknowledged; `body_sync_data` reads them, on a copy as of its playback
@@ -869,6 +886,7 @@ expect one_of <outcome> <label> <label> ...
 expect moved <body> <=|>= <length>  # the body's travel on the host, first tick to last
 expect effect <body>                # a knockdown or break took the body on the host, shown once on every guest
 expect held <body> <player> ...     # at one tick every endpoint shows the body in one named player's hand, and no endpoint but her own ever shows another named one holding it
+expect moved <body> <=|>= solo <length>  # the body's travel on the host against the solo run's, plus or less the margin
 expect pace <label>                 # a walk to a point keeps up with a local reference run
 expect <metric> <=|>= <value> [stub <value>]   # stub: the bound on the stub, which blends no handover; only jump.max, snap.count, step.count and offset_step.count
 ```
@@ -916,7 +934,16 @@ held to the on-time reference alone it fails). A runner pushing chairs into a
 wall does so in the reference too; a copy that stops her where every
 reference's body gave way fails (planted in `test_body_sync_checks`: her copies
 of the pile's near face held kinematic). An
-absolute `expect result <walk> done` stays where it is derived, a free walk. The whole of `scenarios/edge_throw_cut.scn`:
+absolute `expect result <walk> done` stays where it is derived, a free walk.
+
+`expect moved <body> <= solo <length>` holds the host's world to what physics
+alone does with the same scenario: the stand runs `expect pace`'s reference
+once, every player acting on time, and the body's travel on the host from the
+first tick to the last may pass its travel there by the margin at most (`>=`:
+fall short of it by the margin at most). A margin is derived from what the sync
+may change of the body's motion, never measured (`mug_table_100`: a guest's
+mug may push a table no farther than the same throw solo, 3.6 mm for the
+copy's velocity grid and the host's rest hold). The whole of `scenarios/edge_throw_cut.scn`:
 
 ```text
 # A guest throws, and its link is cut while the body flies.
@@ -1288,7 +1315,10 @@ and the hold until rest (two bits on the wire), the traffic's take counts, the
 scenario word `authority`, `>=` in metric checks, the CLI and viewer flag
 `--authority`, `body_sync_is_pull_paused`, `aligned_gap`, `local_correction`, `local_turn` and the take counts in the
 metrics, `body_sync_old_owner_drops`, `body_sync_teleported`, the host's rebind quarantine, the scenario
-verbs `recall` and `remove`, the `on` trigger and `late_drops`, and the catch:
+verbs `recall` and `remove`, the `on` trigger and `late_drops`, the scenario
+check `expect moved ... solo` and the scene `mug_tables`, a guest's flight on
+the host driven no faster than its owner and taken back without its unheard
+contact, and the catch:
 `body_sync_answer_as` (a grant under another hold than the claimed one),
 `body_sync_agent_overflow`, `body_sync_contact_t.slop` (a field inserted after
 `reach`: a layout change), the scenario check `expect held`, the `stub <value>`

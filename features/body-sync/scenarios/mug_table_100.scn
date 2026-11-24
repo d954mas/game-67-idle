@@ -1,0 +1,50 @@
+# A guest throws a mug into each of three tables: low at the near face (7 m/s), at mid height
+# (9 m/s) and off its centre, so it turns (11 m/s). The host's world shows each table pushed no
+# farther than the same throw pushes it solo, one world and no network.
+scenario mug_table_100
+scene mug_tables
+seed 41
+guests 1
+settle 6s
+
+net g1 rtt 100ms jitter 10ms loss 1%
+
+p1 grab mug_a as lift_a
+p1 wait 300ms
+p1 throw 3.05 0.1 -2.4 speed 7 as throw_a
+p1 wait 1s
+p1 grab mug_b as lift_b
+p1 wait 300ms
+p1 throw 3.05 0.4 0 speed 9 as throw_b
+p1 wait 1s
+p1 grab mug_c as lift_c
+p1 wait 300ms
+p1 throw 3.05 0.1 2 speed 11 as throw_c
+
+expect result lift_a granted
+expect result lift_b granted
+expect result lift_c granted
+expect result throw_c done
+# Derived margin, 0.36 cm. A table leaves a hit at m v / (m + M) at most (0.3 kg mug, 6 kg table)
+# and friction (sqrt(0.6 x 0.3), g 12) stops it over u^2 / (2 mu g): at most 1.1 cm at 7 m/s and
+# 2.7 cm at 11 m/s, growing with the square of the hit's speed.
+# HOST: the host simulates the table, struck by its dynamic copy of the mug, which the seam drives
+# near the host's bodies no faster than the thrower's mug as played (1/32 m/s a component: 0.027
+# m/s off): the correction steers a flight there and never speeds it, so neither playback
+# catching up its clock nor a path rejoined after lost states hits harder. A copy played past the guest's last state goes on its own
+# motion, and the host takes the flight back from the copy, not from that state. 0.027 m/s is 0.8 %
+# of the slide at 7 m/s and 0.5 % at 11 m/s: 0.2 mm.
+# INTERACTION: the thrower takes the table (under the 20 kg light mass) at the hit and simulates
+# it with her own mug, solo's physics less what her copy kept of the hit in that step; the host's
+# dynamic copy follows her and is left as its world settled it within SYNC_SOFT_HOLD_M of her rest
+# pose: 3.4 mm.
+expect moved table_a <= solo 0.36cm
+expect moved table_b <= solo 0.36cm
+expect moved table_c <= solo 0.36cm
+# Every mug hit its table: a travel past the rest hold's 3.4 mm is no rounding of a pose at rest.
+# (Under heavy loss a refused take can miss one: a missed effect, README "Contact claims".)
+expect moved table_a >= 0.34cm
+expect moved table_b >= 0.34cm
+expect moved table_c >= 0.34cm
+expect agree_at_rest 5cm 5deg
+expect no_stuck

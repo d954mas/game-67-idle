@@ -43,8 +43,8 @@
    rotation by normalized lerp on the shorter arc; velocities (for copy records, which carry
    none, the line's between the two snapshots)
    linearly. Before its first snapshot it holds that one's pose; past its newest it holds that
-   pose with that snapshot's velocities (for a dynamic hold; none once frozen), frozen once t
-   is SYNC_FREEZE_TICKS past it, and is driven on when the
+   pose with that snapshot's velocities (for a dynamic hold; none once frozen); past it, waiting
+   (the seam lets a flight go on its own motion), frozen once t is SYNC_FREEZE_TICKS past it, and is driven on when the
    next snapshot comes. A rest snapshot at or before t gives its pose exactly and stops it.
    Rare groups (flags, motion, authority, holder, data) are those of the newest snapshot at or
    before t that carried them, of its current timeline only: a new owner's first snapshot
@@ -191,7 +191,8 @@ typedef struct sync_play {
     float angular[3];
     bool at_rest;
     bool frozen;
-    bool jumped; /* its timeline jumped this tick */
+    bool waiting; /* playback passed its newest snapshot, not frozen: its timeline went on without it */
+    bool jumped;  /* its timeline jumped this tick */
 } sync_play_t;
 
 void sync_playback_sample(const sync_playback_t *p, uint16_t slot, sync_play_t *out);

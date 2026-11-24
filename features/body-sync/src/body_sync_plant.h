@@ -38,5 +38,18 @@ void body_sync_plant_agent_ring_off(body_sync_t *sync);
    on its snapshots; only the authority forgets the old owner. A host claim before the new owner's
    first state then goes on with the old owner's flight. */
 void body_sync_plant_handover_keeps_flight(body_sync_t *sync);
+/* This host steers a guest's flight it holds dynamic to the guest's newest state, not its
+   playback pose, as fast as the correction asks: the copy closes its delay on top of the
+   thrower's speed and strikes the host's bodies faster than the thrower's own body did. */
+void body_sync_plant_copy_catch_up(body_sync_t *sync);
+/* This host drives a dynamic copy whose playback passed its newest state on with that state's
+   velocity: a flight whose release has not come keeps pressing what it hit. */
+void body_sync_plant_waiting_drive(body_sync_t *sync);
+/* This host goes on from the newest state received of a body a guest let go after it: a flight
+   its contact ended resumes from before the contact, flying on into what it struck. */
+void body_sync_plant_resume_newest(body_sync_t *sync);
+/* This host drives a guest's flight it holds dynamic as fast as its correction asks: catching up
+   its playback, the copy strikes faster than the owner's body did. */
+void body_sync_plant_flight_catch_up(body_sync_t *sync);
 
 #endif

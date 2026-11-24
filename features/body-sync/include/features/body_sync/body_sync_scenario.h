@@ -98,7 +98,11 @@ extern "C" {
      expect moved <body> <=|>= <length> [layer <length>]
                                                 the scene body's travel on the host from the
                                                 first tick to the last
-     expect effect <body>                       an effect (a knockdown, a break) took the scene
+     expect moved <body> <=|>= solo <length>    that travel against the same body's in a solo
+                                                run (`pace`'s reference with everyone on time):
+                                                at most the solo's plus the margin, or at
+                                                least the solo's less it
+     expect effect <body>                      an effect (a knockdown, a break) took the scene
                                                 body on the host, and every guest that stayed
                                                 shows it once: knocked down, or gone
      expect held <body> <player> ...            at one tick every endpoint shows the scene body
@@ -258,6 +262,7 @@ typedef struct body_sync_expect {
     double stub_limit;  /* METRIC_AT_MOST: the bound on the stub implementation; negative: `limit` */
     char body[BODY_SYNC_NAME_MAX]; /* MOVED, EFFECT, HELD: the scene body */
     bool at_least;                 /* MOVED: >= rather than <= */
+    bool solo;                     /* MOVED: against the solo run's travel, `limit` the margin */
     uint8_t players;               /* HELD: a bit per player whose hand passes */
 } body_sync_expect_t;
 

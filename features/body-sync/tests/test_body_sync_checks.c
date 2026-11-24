@@ -1,9 +1,11 @@
+#define _CRT_SECURE_NO_WARNINGS
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "features/body_sync/body_sync_stand.h"
+#include "body_sync_plant.h"
 #include "stand_testing.h"
 #include "unity.h"
 
@@ -641,7 +643,94 @@ static void test_pace_holds_a_walk_to_the_others_played_late(void) {
     body_sync_stand_destroy(runs[1]);
 }
 
-int main(void) {
+/* mug_table under HOST with its loss share (one digit) and seed, the host's seam planted first
+   when `plant` is given. Its `expect moved ... solo` checks are the ones read. */
+static body_sync_stand_t *mug_table(uint32_t rtt, const char *loss, uint64_t seed, void (*plant)(body_sync_t *)) {
+    char path[512], text[8192];
+    snprintf(path, sizeof(path), "%s/mug_table_%u.scn", BODY_SYNC_SCENARIOS_DIR, (unsigned)rtt);
+    FILE *f = fopen(path, "rb");
+    TEST_ASSERT_NOT_NULL_MESSAGE(f, path);
+    size_t n = fread(text, 1, sizeof(text) - 1, f);
+    fclose(f);
+    text[n] = 0;
+    char *at = strstr(text, " loss 1%");
+    TEST_ASSERT_NOT_NULL(at);
+    at[6] = loss[0];
+    body_sync_error_t error;
+    TEST_ASSERT_TRUE_MESSAGE(body_sync_scenario_parse(text, strlen(text), &scenario, &error), error.text);
+    scene_named(scenario.scene)->build(&scene);
+    body_sync_stand_config_t config = {.scene = &scene, .scenario = &scenario, .override_seed = true, .seed = seed};
+    body_sync_stand_t *stand = body_sync_stand_create(&config, &error);
+    TEST_ASSERT_NOT_NULL_MESSAGE(stand, error.text);
+    if (plant) {
+        plant(stand_testing_sync(stand, 0));
+    }
+    body_sync_stand_run(stand);
+    return stand;
+}
+
+/* How many of the run's `moved ... solo` checks failed, and the worst one's detail. */
+static uint32_t solo_failures(body_sync_stand_t *stand, char *worst, size_t size) {
+    const body_sync_report_t *r = body_sync_stand_report(stand);
+    uint32_t failed = 0;
+    double over = -1.0;
+    for (uint32_t i = 0; i < r->check_count; i++) {
+        const body_sync_check_metrics_t *c = &r->checks[i];
+        if (strstr(c->detail, "m solo") && !c->passed) {
+            failed++;
+            if (c->value - c->limit > over) {
+                over = c->value - c->limit;
+                snprintf(worst, size, "%s", c->detail);
+            }
+        }
+    }
+    return failed;
+}
+
+/* The host's copy of a guest's mug may push a table no harder than the mug does solo. Seed 24
+   loses the release's first send, so the host plays the flight past its last state and into the
+   table before it hears the end: with the copy driven on by that state's velocity
+   (waiting_drive) or resumed from it (resume_newest) the table is shoved again. Seed 44 at 250 ms
+   and 5 % loses a run of states mid-flight: a copy rejoining its path at the correction's speed
+   (flight_catch_up) strikes faster than the mug. copy_catch_up plays every flight at the newest
+   state. Each runs clean first: the same throw passes. */
+static void test_moved_solo_holds_the_host_to_the_throw_and_fails_on_a_harder_push(void) {
+    char worst[256] = "";
+    body_sync_stand_t *s = mug_table(100, "1", 24, NULL);
+    TEST_ASSERT_TRUE_MESSAGE(body_sync_stand_report(s)->passed, "the shipped throw failed at seed 24");
+    body_sync_stand_destroy(s);
+    s = mug_table(100, "5", 24, NULL);
+    TEST_ASSERT_EQUAL_UINT32_MESSAGE(0, solo_failures(s, worst, sizeof(worst)), worst);
+    body_sync_stand_destroy(s);
+    struct {
+        void (*plant)(body_sync_t *);
+        uint32_t rtt;
+        const char *loss;
+        uint64_t seed;
+    } planted[] = {
+        {body_sync_plant_copy_catch_up, 100, "1", 41},
+        {body_sync_plant_waiting_drive, 100, "1", 24},
+        {body_sync_plant_resume_newest, 100, "1", 24},
+        {body_sync_plant_flight_catch_up, 250, "5", 44},
+    };
+    for (size_t k = 0; k < sizeof(planted) / sizeof(planted[0]); k++) {
+        s = mug_table(planted[k].rtt, planted[k].loss, planted[k].seed, NULL);
+        TEST_ASSERT_EQUAL_UINT32_MESSAGE(0, solo_failures(s, worst, sizeof(worst)), worst);
+        body_sync_stand_destroy(s);
+        s = mug_table(planted[k].rtt, planted[k].loss, planted[k].seed, planted[k].plant);
+        TEST_ASSERT_TRUE_MESSAGE(solo_failures(s, worst, sizeof(worst)) > 0, "a planted harder push passed");
+        TEST_ASSERT_FALSE(body_sync_stand_report(s)->passed);
+        body_sync_stand_destroy(s);
+    }
+}
+
+/* --mug-table runs the mug_table cases alone: twenty stand runs, a slow test of their own. */
+int main(int argc, char **argv) {
+    if (argc > 1 && strcmp(argv[1], "--mug-table") == 0) {
+        UNITY_BEGIN();
+        RUN_TEST(test_moved_solo_holds_the_host_to_the_throw_and_fails_on_a_harder_push);
+        return UNITY_END();
+    }
     UNITY_BEGIN();
     RUN_TEST(test_pace_fails_on_a_copy_held_in_the_walkers_path);
     RUN_TEST(test_pace_holds_a_walk_to_the_others_played_late);

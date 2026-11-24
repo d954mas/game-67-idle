@@ -67,6 +67,10 @@ typedef struct sync_authority_body {
     bool motion_known;
     bool kinematic;
     uint8_t locks;
+    /* Host: a counted release's tick, the sender's stamp, until the next resume reads it or another
+       move of the body forgets it: whether the newest state received is the owner's last. */
+    bool released;
+    uint32_t released_tick;
     /* A record's motion to continue from at the next resume. */
     bool take_motion;
     bool take_kinematic;

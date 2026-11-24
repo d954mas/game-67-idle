@@ -281,6 +281,10 @@ struct body_sync_stand {
     uint32_t ref_shift;
     uint8_t ref_walker;
     bool plant_pace_on_time; /* stand_testing_plant_pace_on_time */
+    /* `expect moved ... solo`: the travel of each scene body in one reference run with every
+       player on time, run once the first such check is evaluated; negative: gone or never run. */
+    bool solo_ran;
+    double solo_travel[STAND_BODIES_MAX];
     float *pace[BODY_SYNC_SCENARIO_EXPECTS_MAX];
     uint32_t pace_len[BODY_SYNC_SCENARIO_EXPECTS_MAX];
     bool pace_checked[BODY_SYNC_SCENARIO_EXPECTS_MAX]; /* the ended run's verdict, kept: each costs up to lag + 1 reference runs */
@@ -2541,9 +2545,8 @@ static void sample_playback(body_sync_stand_t *st) {
     }
 }
 
-static void sample(body_sync_stand_t *st) {
-    stand_metrics_begin_tick(&st->metrics);
-    note_drives(st);
+/* The host's poses and ids at the first tick, on a reference run too: `expect moved` reads both. */
+static void record_start(body_sync_stand_t *st) {
     endpoint_t *host = &st->ep[0];
     if (!st->started) {
         st->started = true;
@@ -2555,6 +2558,12 @@ static void sample(body_sync_stand_t *st) {
             st->start_id[slot] = stand_world_id(host->world, slot);
         }
     }
+}
+
+static void sample(body_sync_stand_t *st) {
+    stand_metrics_begin_tick(&st->metrics);
+    note_drives(st);
+    endpoint_t *host = &st->ep[0];
     /* The host's own motion this tick, so a frozen copy can be told from a body at rest. */
     for (uint32_t slot = 0; slot < STAND_BODIES_MAX; slot++) {
         stand_slot_t *s = &host->world->slots[slot];
@@ -2855,6 +2864,7 @@ bool body_sync_stand_tick(body_sync_stand_t *st) {
     for (uint32_t i = 0; i < st->endpoints; i++) {
         rebuild_view(&st->ep[i]);
     }
+    record_start(st);
     if (!st->local) {
         sample(st);
         plant_jolt(st);
@@ -3227,6 +3237,40 @@ static float *pace_reference(body_sync_stand_t *st, uint32_t i, uint8_t walker, 
     return out;
 }
 
+/* A scene body's travel on `ep`'s world from the first tick to now; negative when it is gone. */
+static double travel_of(const body_sync_stand_t *st, const endpoint_t *ep, const char *name) {
+    body_sync_id_t id = body_id_by_name(st, ep, name);
+    if (id == BODY_SYNC_ID_NONE || !stand_world_slot(ep->world, id)) {
+        return -1.0;
+    }
+    float at[3], rot[4];
+    pose_of(ep, body_sync_id_slot(id), at, rot);
+    return (double)stand_distance3(at, st->start_position[body_sync_id_slot(id)]);
+}
+
+/* `expect moved ... solo`: the pace reference with nobody late, so every body meets what it
+   would in one world with no network, the solo game the sync must not outdo. */
+static void solo_reference(body_sync_stand_t *st) {
+    st->solo_ran = true;
+    for (uint32_t b = 0; b < STAND_BODIES_MAX; b++) {
+        st->solo_travel[b] = -1.0;
+    }
+    body_sync_stand_config_t config = {.scene = &st->scene, .scenario = &st->scenario, .override_seed = true, .seed = st->seed,
+                                       .override_light_mass = true, .light_mass_max = st->light_mass,
+                                       .override_authority = true, .authority = st->authority};
+    body_sync_error_t error;
+    body_sync_stand_t *ref = create_stand(&config, true, &error);
+    if (!ref) {
+        return;
+    }
+    while (body_sync_stand_tick(ref)) {
+    }
+    for (uint32_t b = 0; b < st->scene.body_count && b < STAND_BODIES_MAX; b++) {
+        st->solo_travel[b] = travel_of(ref, &ref->ep[0], st->scene.bodies[b].name);
+    }
+    body_sync_stand_destroy(ref);
+}
+
 static void check_pace_now(body_sync_stand_t *st, uint32_t i, const char *label, body_sync_check_metrics_t *c);
 
 /* `expect pace`: at every tick of the walk, its progress is at least a reference's `lag` ticks
@@ -3423,15 +3467,24 @@ static void evaluate(body_sync_stand_t *st) {
             break;
         }
         case BODY_SYNC_EXPECT_MOVED: {
-            body_sync_id_t id = body_id_by_name(st, host, x->body);
-            stand_slot_t *s = id != BODY_SYNC_ID_NONE ? stand_world_slot(host->world, id) : NULL;
-            float at[3], rot[4];
-            double d = -1.0;
-            if (s) {
-                pose_of(host, body_sync_id_slot(id), at, rot);
-                d = (double)stand_distance3(at, st->start_position[body_sync_id_slot(id)]);
-            }
+            double d = travel_of(st, host, x->body);
             c->value = d;
+            if (x->solo) {
+                if (!st->ended) {
+                    c->passed = false;
+                    snprintf(c->detail, sizeof(c->detail), "%s: the run has not ended", x->body);
+                    break;
+                }
+                if (!st->solo_ran) {
+                    solo_reference(st);
+                }
+                double solo = st->solo_travel[body_sync_scene_find_body(&st->scene, x->body)];
+                c->limit = x->at_least ? solo - x->limit : solo + x->limit;
+                c->passed = d >= 0.0 && solo >= 0.0 && (x->at_least ? d >= c->limit : d <= c->limit);
+                snprintf(c->detail, sizeof(c->detail), "%s moved %.3g m on the host, %.3g m solo, expected %s %.3g m", x->body, d, solo,
+                         x->at_least ? ">=" : "<=", c->limit);
+                break;
+            }
             c->limit = st->light_mass > 0.0f && x->layer_limit >= 0.0 ? x->layer_limit : x->limit;
             c->passed = d >= 0.0 && (x->at_least ? d >= c->limit : d <= c->limit);
             snprintf(c->detail, sizeof(c->detail), "%s moved %.3g m on the host, expected %s %.3g m", x->body, d, x->at_least ? ">=" : "<=", c->limit);

@@ -480,7 +480,8 @@ static b3MotionLocks locks_of(uint8_t bits) {
 }
 
 /* A body that became local continues from the newest state received: its motion, masks and
-   velocities. */
+   velocities. One released after that state goes on as its copy here moves: a flight its contact
+   ended, whose newest state is from before the contact, would fly on into what it struck. */
 static void take_over(body_sync_t *s, uint32_t slot) {
     sync_authority_body_t *a = auth_of(s, slot);
     entry_t *e = &s->entries[slot];
@@ -489,6 +490,8 @@ static void take_over(body_sync_t *s, uint32_t slot) {
     a->resume = false;
     bool has_in = e->has_in && !e->in_old;
     e->in_old = false;
+    bool unheard_end = a->released && has_in && !e->in.asleep && (int32_t)(a->released_tick - e->in_tick) > 0;
+    a->released = false;
     if (has_in || was_copy || a->take_motion) {
         bool kinematic;
         uint8_t locks;
@@ -499,7 +502,7 @@ static void take_over(body_sync_t *s, uint32_t slot) {
         sync_authority_applied(a, kinematic, locks);
     }
     sync_masks_restore(&e->masks, e->body);
-    if (has_in) {
+    if (has_in && !unheard_end) {
         b3Body_SetLinearVelocity(e->body, (b3Vec3){e->in.velocity[0], e->in.velocity[1], e->in.velocity[2]});
         b3Body_SetAngularVelocity(e->body, (b3Vec3){e->in.angular[0], e->in.angular[1], e->in.angular[2]});
     }

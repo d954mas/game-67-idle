@@ -348,6 +348,22 @@ static void build_glass_door(body_sync_scene_t *s) {
     add_player(s, 0.0f, 0.0f, HALF_PI);
 }
 
+/* Three tables in a row before a thrower and a mug for each: a light body a guest throws into a
+   body the host simulates, which the host's copy of the flight must push no harder than the mug
+   itself does. The tables stand apart so a mug's rebound reaches no other. */
+static void build_mug_tables(body_sync_scene_t *s) {
+    body_sync_scene_reset(s, "mug_tables");
+    add_floor(s);
+    static const char *tables[3] = {"table_a", "table_b", "table_c"}, *mugs[3] = {"mug_a", "mug_b", "mug_c"};
+    for (int i = 0; i < 3; i++) {
+        uint32_t table = add_box(s, tables[i], 0.45f, 0.38f, 0.6f, 6.0f, 3.5f, 0.38f, -2.4f + 2.4f * (float)i, 0, 14);
+        s->bodies[table].friction = 0.3f;
+        add_box(s, mugs[i], 0.05f, 0.06f, 0.05f, 0.3f, 0.5f, 0.06f, -0.4f + 0.4f * (float)i, BODY_SYNC_BODY_GRABBABLE, 7);
+    }
+    add_player(s, -3.0f, -3.0f, HALF_PI);
+    add_player(s, 0.0f, 0.0f, HALF_PI);
+}
+
 static const body_sync_scene_entry_t catalog[] = {
     {"floor_wall", "floor and wall with one body: bounce, fast throw, tunnelling", build_floor_wall},
     {"stack10", "a stack of 10 boxes: rest, divergence, jitter", build_stack10},
@@ -364,6 +380,7 @@ static const body_sync_scene_entry_t catalog[] = {
     {"walker_lane", "a mannequin walking across a thrower's line and a rock: an impact claim on a moving host target", build_walker_lane},
     {"glass_door", "glass, a heavy door and two rocks: breaks by a guest's impact claim, the door ending the flight", build_glass_door},
     {"four_chars_item", "four characters and one item: a guest catches another guest's throw", build_four_chars_item},
+    {"mug_tables", "three tables and a mug for each: a guest's light throw into the host's bodies pushes them as it would solo", build_mug_tables},
 };
 
 const body_sync_scene_entry_t *body_sync_scene_catalog(uint32_t *count) {

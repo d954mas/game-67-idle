@@ -105,6 +105,10 @@ struct body_sync {
     body_sync_config_t config;
     bool plant_transform_sleep; /* body_sync_plant_transform_sleep */
     bool plant_end_grace_zero;  /* body_sync_plant_end_grace_zero */
+    bool plant_copy_catch_up;   /* body_sync_plant_copy_catch_up */
+    bool plant_waiting_drive;   /* body_sync_plant_waiting_drive */
+    bool plant_resume_newest;   /* body_sync_plant_resume_newest */
+    bool plant_flight_catch_up; /* body_sync_plant_flight_catch_up */
     marking_t marking;
     float dt;
     uint32_t now; /* the last apply's or collect's tick */
@@ -217,6 +221,10 @@ void body_sync_plant_approach_from_ring(body_sync_t *s) { s->authority.plant_app
 void body_sync_plant_evidence_age_unbounded(body_sync_t *s) { s->authority.plant_evidence_age_unbounded = true; }
 void body_sync_plant_transform_sleep(body_sync_t *s) { s->plant_transform_sleep = true; }
 void body_sync_plant_end_grace_zero(body_sync_t *s) { s->plant_end_grace_zero = true; }
+void body_sync_plant_copy_catch_up(body_sync_t *s) { s->plant_copy_catch_up = true; }
+void body_sync_plant_waiting_drive(body_sync_t *s) { s->plant_waiting_drive = true; }
+void body_sync_plant_resume_newest(body_sync_t *s) { s->plant_resume_newest = true; }
+void body_sync_plant_flight_catch_up(body_sync_t *s) { s->plant_flight_catch_up = true; }
 void body_sync_plant_recall_keeps_number(body_sync_t *s) { s->authority.plant_recall_keeps_number = true; }
 void body_sync_plant_move_keeps_received(body_sync_t *s) { s->authority.plant_move_keeps_received = true; }
 void body_sync_plant_agent_ring_off(body_sync_t *s) { s->authority.plant_agent_ring_off = true; }
@@ -971,6 +979,16 @@ static void resume(body_sync_t *s, uint32_t slot, bool was_copy) {
         e->took_pending = a->claim_pending;
         e->took_any = sync_playback_newest(&s->playback, (uint16_t)slot, &e->took_tick);
     }
+    /* Released after the newest state the host took of it, a moving body's last motion never came:
+       a flight its contact ended (the release goes out from that tick's collect, after the step)
+       has its newest state from before the contact. Still ahead of the copy, that state replays
+       the owner's flight into the contact; once the copy has played past it, it has met here what
+       it met, and the state would fly it into that again: it goes on as it moves. */
+    sync_play_t play;
+    sync_playback_sample(&s->playback, (uint16_t)slot, &play);
+    bool unheard_end = a->released && in->has && !in->newest.at_rest && (int32_t)(a->released_tick - in->tick) > 0 && play.known &&
+                       (play.waiting || play.frozen) && !s->plant_resume_newest;
+    a->released = false;
     if (!in->has && !was_copy && !a->take_motion) {
         return;
     }
@@ -997,6 +1015,7 @@ static void resume(body_sync_t *s, uint32_t slot, bool was_copy) {
        a fraction of a millimetre off them, would drop or be pushed out as it is placed, waking the
        heap. The difference is the layer's, and nobody sees it; the velocities are the owner's. */
     bool keep_pose = false;
+    keep_own = keep_own || (unheard_end && was_copy && was_simulated);
     if (in->has && was_copy && was_simulated && !keep_own) {
         float p[3], q[4], turn[3];
         pose_now(e->body, p, q);
@@ -1085,6 +1104,34 @@ static void drive_soft(body_sync_t *s, uint32_t slot, const float p[3], const fl
     }
 }
 
+typedef struct own_near {
+    const body_sync_t *s;
+    b3BodyId self;
+    bool found;
+} own_near_t;
+
+static bool find_own(b3ShapeId shape, void *context) {
+    own_near_t *n = context;
+    b3BodyId body = b3Shape_GetBody(shape);
+    if (B3_ID_EQUALS(body, n->self) || b3Body_GetType(body) != b3_dynamicBody) {
+        return true;
+    }
+    uint32_t slot = hash_get(n->s, body);
+    n->found = slot >= BODY_SYNC_BODIES_MAX || sync_authority_local(&n->s->authority, &n->s->authority.bodies[slot]);
+    return !n->found;
+}
+
+/* Whether a dynamic body this side simulates (bound or not) lies within `reach` of the copy's
+   bounds: what its step may strike. */
+static bool meets_own_body(const body_sync_t *s, b3BodyId copy, float reach) {
+    b3AABB box = b3Body_ComputeAABB(copy);
+    box.lowerBound = (b3Vec3){box.lowerBound.x - reach, box.lowerBound.y - reach, box.lowerBound.z - reach};
+    box.upperBound = (b3Vec3){box.upperBound.x + reach, box.upperBound.y + reach, box.upperBound.z + reach};
+    own_near_t n = {.s = s, .self = copy};
+    b3World_OverlapAABB(s->config.world, box, b3DefaultQueryFilter(), find_own, &n);
+    return n.found;
+}
+
 /* A copy this tick: its hold, then a move to its playback pose within the seam's speeds. */
 static void drive_copy(body_sync_t *s, uint32_t slot) {
     sync_authority_body_t *a = &s->authority.bodies[slot];
@@ -1097,6 +1144,11 @@ static void drive_copy(body_sync_t *s, uint32_t slot) {
     }
     sync_play_t play;
     sync_playback_sample(&s->playback, (uint16_t)slot, &play);
+    if (s->plant_copy_catch_up && is_host(s) && play.known && in->has && a->seat != BODY_SYNC_SEAT_HOST &&
+        (a->has_in ? a->in_hold : a->hold) == BODY_SYNC_HOLD_UNTIL_SETTLED) {
+        memcpy(play.position, in->newest.position, sizeof(play.position));
+        memcpy(play.velocity, in->velocity, sizeof(play.velocity));
+    }
     /* A body its owner moves fast is in flight there (an owner's own throw has no hold to say
        so): it is driven along the owner's path, and soft again once it has slowed. */
     float owner_speed = sqrtf(play.velocity[0] * play.velocity[0] + play.velocity[1] * play.velocity[1] + play.velocity[2] * play.velocity[2]);
@@ -1271,8 +1323,28 @@ static void drive_copy(body_sync_t *s, uint32_t slot) {
             sqrtf(home_r[0] * home_r[0] + home_r[1] * home_r[1] + home_r[2] * home_r[2]) <= SYNC_SOFT_HOLD_RAD) {
             return;
         }
+        /* A flight is sent at the full rate, so playback past its newest snapshot means its owner's
+           next states are not coming (the contact that ended it, its release not yet here): it
+           goes on its own motion, meeting what is in its way once, as the owner's body did. The
+           snapshot's velocity, set again every tick, would drive it on through whatever it met,
+           a motor the owner's body never was. A slower body's states come less often, and between
+           them it is fed forward; a handover holds its copy by its own rule. */
+        if (play.waiting && settling && !e->handover && !s->plant_waiting_drive) {
+            return;
+        }
         float v[3], w[3];
         sync_drive_dynamic(p, q, &play, s->dt, v, w);
+        /* A flight strikes this side's bodies no faster than its owner's body moves: the
+           correction only steers it onto the owner's path, and its speed past the owner's
+           (playback catching up its clock, the path rejoined after lost states) would hit harder
+           than the owner did. Away from them it catches up freely. */
+        float owner = sqrtf(play.velocity[0] * play.velocity[0] + play.velocity[1] * play.velocity[1] + play.velocity[2] * play.velocity[2]);
+        float drive = sqrtf(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+        if (settling && drive > owner && !s->plant_flight_catch_up && !s->plant_copy_catch_up && meets_own_body(s, e->body, drive * s->dt)) {
+            for (int i = 0; i < 3; i++) {
+                v[i] *= owner / drive;
+            }
+        }
         b3Body_SetLinearVelocity(e->body, (b3Vec3){v[0], v[1], v[2]});
         b3Body_SetAngularVelocity(e->body, (b3Vec3){w[0], w[1], w[2]});
         /* Locked axes ignore a spin: their part of the owner's rotation is set, as the owner sets

@@ -103,6 +103,7 @@ static void host_move_to(sync_authority_t *a, sync_authority_body_t *b, uint8_t 
                          uint8_t announce, sync_authority_end_t end) {
     bool was_local = sync_authority_local(a, b);
     uint32_t slot = slot_of(a, b);
+    b->released = false;
     /* The body leaves a seat whose take grant has not left yet: that answer now names another
        seat, which the seat reads as a refusal and declares two on for its next take (guest
        take_refused), so the host skips the same. */
@@ -737,6 +738,8 @@ body_sync_result_t sync_authority_receive(sync_authority_t *a, uint8_t seat, uin
         if (b->seat == seat && (r.number == b->number || (r.sequence != 0 && r.sequence == b->granted_seq))) {
             host_move(a, b, BODY_SYNC_SEAT_HOST, BODY_SYNC_HOLD_UNTIL_RELEASE, 0, false, SYNC_END_VOLUNTARY);
             take_record(b, &r, false);
+            b->released = true;
+            b->released_tick = tick;
         } else if (!withdrew) {
             (*stale)++;
             sync_authority_old_owner_drop(a, seat, slot, b->generation, 16u);
