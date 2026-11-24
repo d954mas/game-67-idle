@@ -50,7 +50,9 @@ typedef struct entry {
     bool soft_hit;
     bool soft_paused; /* its pull waited at the last apply (sync_soft_out_t.paused) */
     bool owner_flying;
-    float played_speed; /* its owner's speed as last played, kept while playback is frozen */
+    /* A flight's velocity as last driven less its owner's as played then: the correction it
+       carries while it coasts, which no contact of the host's and no take-back may keep. */
+    float carried_fix[3];
     bool waited;        /* playback waited at its newest snapshot last tick... */
     uint32_t waited_at; /* ...this one, by its tick */
     bool owner_rests; /* its owner rests at playback time (sync_soft_owner_rests), as of the last apply */
@@ -1022,16 +1024,14 @@ static void resume(body_sync_t *s, uint32_t slot, bool was_copy) {
        heap. The difference is the layer's, and nobody sees it; the velocities are the owner's. */
     bool keep_pose = false;
     keep_own = keep_own || (unheard_end && was_copy && was_simulated);
-    /* Taken back from its copy, a flight goes on no faster than its owner as played (cap_flight's
-       rule, wherever it is): the copy's speed past the owner's is its correction catching up, and
-       the host's own simulation would carry it into what the flight strikes next. */
+    /* Taken back from its copy, a flight goes on without the correction the copy carried: that
+       is the copy catching up its owner, and the host's own simulation would carry it into what
+       the flight strikes next. What it gained since as it coasted (falling, a knock) stays. */
     if (unheard_end && was_copy && was_simulated && !s->plant_flight_catch_up && !s->plant_copy_catch_up) {
         b3Vec3 v = b3Body_GetLinearVelocity(e->body);
-        float speed = b3Length(v);
-        if (speed > e->played_speed) {
-            b3Body_SetLinearVelocity(e->body, b3MulSV(e->played_speed / speed, v));
-        }
+        b3Body_SetLinearVelocity(e->body, (b3Vec3){v.x - e->carried_fix[0], v.y - e->carried_fix[1], v.z - e->carried_fix[2]});
     }
+    memset(e->carried_fix, 0, sizeof(e->carried_fix));
     if (in->has && was_copy && was_simulated && !keep_own) {
         float p[3], q[4], turn[3];
         pose_now(e->body, p, q);
@@ -1148,11 +1148,12 @@ static bool meets_own_body(const body_sync_t *s, b3BodyId copy, float reach) {
     return n.found;
 }
 
-/* Near a body this side simulates, a guest's flight never moves faster than its owner as played,
-   driven or coasting: the correction only steers it onto the owner's path, and speed past the
-   owner's (playback catching up its clock, the path rejoined after lost states) would strike
-   harder than the owner did. A speed, not a direction: the copy brings no more energy than the
-   owner's body, whatever the contact's normal. Away from those bodies it catches up freely. */
+/* Near a body this side simulates, a guest's flight driven never moves faster than its owner as
+   played, and coasting carries no correction (drive_copy): the correction only steers it onto the
+   owner's path, and speed past the owner's (playback catching up its clock, the path rejoined
+   after lost states) would strike harder than the owner did. A speed, not a direction: the copy
+   brings no more energy than the owner's body, whatever the contact's normal. Away from those
+   bodies it catches up freely. */
 static void cap_flight(const body_sync_t *s, b3BodyId copy, float owner, float v[3]) {
     float speed = sqrtf(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
     if (speed > owner && !s->plant_flight_catch_up && !s->plant_copy_catch_up && meets_own_body(s, copy, speed * s->dt)) {
@@ -1317,10 +1318,6 @@ static void drive_copy(body_sync_t *s, uint32_t slot) {
         drive_soft(s, slot, p, q, &play);
         return;
     }
-    float played = sqrtf(play.velocity[0] * play.velocity[0] + play.velocity[1] * play.velocity[1] + play.velocity[2] * play.velocity[2]);
-    if (!play.frozen) {
-        e->played_speed = played;
-    }
     uint32_t newest = 0;
     bool at_newest = play.waiting && sync_playback_newest(&s->playback, (uint16_t)slot, &newest);
     bool stalled = at_newest && e->waited && e->waited_at == newest;
@@ -1336,11 +1333,12 @@ static void drive_copy(body_sync_t *s, uint32_t slot) {
        its copy by its own rule. */
     if (dynamic && settling && (stalled || play.past || (play.frozen && !s->plant_frozen_drive)) && e->placed && !e->handover &&
         !s->plant_waiting_drive) {
+        /* Coasting near a body this side simulates, it sheds the correction it carries, once:
+           what is left is its owner's motion as last played, carried on as the owner's would be. */
         b3Vec3 now_v = b3Body_GetLinearVelocity(e->body);
-        float v[3] = {now_v.x, now_v.y, now_v.z};
-        cap_flight(s, e->body, e->played_speed, v);
-        if (v[0] != now_v.x || v[1] != now_v.y || v[2] != now_v.z) {
-            b3Body_SetLinearVelocity(e->body, (b3Vec3){v[0], v[1], v[2]});
+        if (!s->plant_flight_catch_up && !s->plant_copy_catch_up && meets_own_body(s, e->body, b3Length(now_v) * s->dt)) {
+            b3Body_SetLinearVelocity(e->body, (b3Vec3){now_v.x - e->carried_fix[0], now_v.y - e->carried_fix[1], now_v.z - e->carried_fix[2]});
+            memset(e->carried_fix, 0, sizeof(e->carried_fix));
         }
         return;
     }
@@ -1364,6 +1362,7 @@ static void drive_copy(body_sync_t *s, uint32_t slot) {
     if (play.jumped || !e->placed || !reachable) {
         place(e, play.position, play.rotation);
         e->handover = e->handover && !handed;
+        memset(e->carried_fix, 0, sizeof(e->carried_fix));
         if (dynamic) {
             b3Body_SetLinearVelocity(e->body, (b3Vec3){play.velocity[0], play.velocity[1], play.velocity[2]});
             b3Body_SetAngularVelocity(e->body, (b3Vec3){play.angular[0], play.angular[1], play.angular[2]});
@@ -1383,7 +1382,10 @@ static void drive_copy(body_sync_t *s, uint32_t slot) {
         float v[3], w[3];
         sync_drive_dynamic(p, q, &play, s->dt, v, w);
         if (settling) {
-            cap_flight(s, e->body, played, v);
+            cap_flight(s, e->body, sqrtf(play.velocity[0] * play.velocity[0] + play.velocity[1] * play.velocity[1] + play.velocity[2] * play.velocity[2]), v);
+        }
+        for (int i = 0; i < 3; i++) {
+            e->carried_fix[i] = settling ? v[i] - play.velocity[i] : 0.0f;
         }
         b3Body_SetLinearVelocity(e->body, (b3Vec3){v[0], v[1], v[2]});
         b3Body_SetAngularVelocity(e->body, (b3Vec3){w[0], w[1], w[2]});

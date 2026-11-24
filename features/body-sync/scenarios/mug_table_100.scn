@@ -29,13 +29,14 @@ expect result throw_c done
 # table) and friction (sqrt(0.6 x 0.3), g 12) stops it over u^2 / (2 mu g): at most 1.1, 1.8 and
 # 2.7 cm at 7, 9 and 11 m/s, growing with the square of the hit's speed.
 # HOST, a margin a table (test_body_sync_checks --mug-table re-derives them): the host simulates
-# the table, struck by its dynamic copy of the mug. Near the host's bodies, and when the host
-# takes the flight back from it, the copy moves no faster than the thrower's mug as played, which
+# the table, struck by its dynamic copy of the mug. Near the host's bodies the copy is driven no
+# faster than the thrower's mug as played and coasts, or is taken back, without its correction;
 # the velocity grid leaves up to sqrt(3)/64 m/s over her speed: 2 x that / v of the largest slide,
 # 0.10, 0.11 and 0.14 mm. The copy plays her clock at fractional ticks, so it meets the table
 # anywhere within a tick of where she did and a little off her path: Box3D's answer to the same
 # hit over that tick and 1 cm off it passes the solo slide by up to 0.13, 0.04 and 0.88 mm (the
-# turning hit). 0.23, 0.15 and 1.02 mm in all.
+# turning hit). 0.23, 0.15 and 1.02 mm in all. The 1 cm is what these scenes' links showed (7.5 mm
+# at most, up to 80 ms of jitter and 5 % loss), not a derived bound: the margins hold for them.
 # INTERACTION, 3.4 mm: the thrower takes the table (under the 20 kg light mass) at the hit and
 # simulates it with her own mug, solo's physics less what her copy kept of the hit in that step;
 # the host's dynamic copy follows her and is left as its world settled it within SYNC_SOFT_HOLD_M

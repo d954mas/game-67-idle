@@ -362,10 +362,11 @@ starved body shows as a catch-up the render offset or a dynamic hold smooths
   settles keeps to its owner's motion as played:
   - *Near the host's bodies, never faster than its owner.* Within its step's reach
     of a body the host simulates, the copy's speed, driven or coasting, is at most
-    its owner's speed as played (as last played while frozen), and so is the
-    speed the host goes on with when it takes the flight back from the copy,
-    wherever that is: the copy's speed past its owner's is its correction
-    catching up, which the host's own simulation would carry into what it strikes. The correction
+    its owner's speed as played; coasting there, and when the host takes the
+    flight back from the copy wherever that is, it sheds the correction it last
+    carried over its owner's velocity: that is the copy catching up, which the
+    host's own simulation would carry into what it strikes, while what it gained
+    as it coasted (falling, a knock) stays. The correction
     steers it onto the owner's path, and speed past the owner's (playback catching
     up its clock at a pace up to 1.25, a path rejoined after lost states) would
     strike harder than the thrower's did. It bounds the speed, not the velocity

@@ -268,10 +268,7 @@ static void test_a_guests_body_comes_back_moving(void) {
    SYNC_FREEZE_TICKS. The host's copy flies on its own motion throughout, as the body did; driven
    back to the frozen pose it would turn round toward where it was. The host's velocity along the
    throw at the end, `planted` with the frozen flight driven. */
-static float flight_unheard_for_20_ticks(bool planted) {
-    if (planted) {
-        body_sync_plant_frozen_drive(host.sync);
-    }
+static void throw_and_release_unheard(uint32_t ticks) {
     const body_sync_id_t flyer = body_sync_id_make(9, 1);
     tick_all();
     grant(&guest, body_sync_id_make(BODIES - 1, 1), BODY_SYNC_HOLD_UNTIL_RELEASE);
@@ -284,7 +281,7 @@ static float flight_unheard_for_20_ticks(bool planted) {
     }
     TEST_ASSERT_TRUE_MESSAGE(apart(host.bodies[9], guest.bodies[9]) < 0.5f, "the host did not play the flight");
     TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_release(guest.sync, flyer));
-    for (int k = 0; k < 20; k++) {
+    for (uint32_t k = 0; k < ticks; k++) {
         tick_no++;
         step(&host);
         step(&guest);
@@ -293,6 +290,31 @@ static float flight_unheard_for_20_ticks(bool planted) {
         records(&host, &guest);
     }
     TEST_ASSERT_FALSE_MESSAGE(body_sync_is_local(host.sync, flyer), "the release reached the host: the case is not met");
+}
+
+/* A flight whose release the host hears 45 ticks late: the host's copy has coasted, falling, and
+   flies faster than it was thrown (7.2 m/s; about 8.4 m/s by then). The take-back takes off only
+   the correction the copy carried, next to nothing here, and keeps what it gained. */
+static void test_a_flight_taken_back_late_keeps_the_speed_it_gained_falling(void) {
+    const body_sync_id_t flyer = body_sync_id_make(9, 1);
+    throw_and_release_unheard(45);
+    float before = speed_of(host.bodies[9]);
+    TEST_ASSERT_TRUE_MESSAGE(before > 7.4f, "the copy did not fall faster than its throw: the case is not met");
+    records(&guest, &host);
+    tick_no++;
+    step(&host);
+    TEST_ASSERT_TRUE_MESSAGE(body_sync_is_local(host.sync, flyer), "the host did not take the flight back");
+    float after = speed_of(host.bodies[9]);
+    char what[96];
+    snprintf(what, sizeof(what), "the take-back changed the flight's speed from %.2f to %.2f m/s", (double)before, (double)after);
+    TEST_ASSERT_TRUE_MESSAGE(fabsf(after - before) < 0.5f, what);
+}
+
+static float flight_unheard_for_20_ticks(bool planted) {
+    if (planted) {
+        body_sync_plant_frozen_drive(host.sync);
+    }
+    throw_and_release_unheard(20);
     return b3Body_GetLinearVelocity(host.bodies[9]).x;
 }
 
@@ -3095,6 +3117,7 @@ int main(void) {
     RUN_TEST(test_worlds_at_rest_agree_and_go_quiet);
     RUN_TEST(test_a_guests_body_comes_back_moving);
     RUN_TEST(test_a_frozen_flight_goes_on_its_own_motion);
+    RUN_TEST(test_a_flight_taken_back_late_keeps_the_speed_it_gained_falling);
     RUN_TEST(test_a_pose_of_an_old_grant_is_rejected);
     RUN_TEST(test_flags_type_and_holder_move_with_authority);
     RUN_TEST(test_locks_follow_the_last_owner);
