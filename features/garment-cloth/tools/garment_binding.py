@@ -171,34 +171,39 @@ def surface_rows(proxy, triangles, positions, faces, take, corners, distance):
 
 
 BINDING_DISTANCE_M = 0.16
+LINING_GAP_M = 0.008  # solidified shells closer than this are one fabric layer
+PATH_STRETCH = 2 / np.sqrt(3)  # longest path along the sides of equilateral triangles per unit of straight line
 
 
-def torn_edges(positions, faces, take, bound, proxy, triangles):
-    """Render edges whose two ends bind to proxy places farther apart along the proxy than any honest binding allows.
+def torn_edges(positions, faces, take, corners, proxy, triangles):
+    """Render edges whose two ends bind to proxy places farther apart along the proxy than the sheet allows.
 
-    bound: per render vertex the proxy vertices it reads (an empty list for a skinned vertex). Two ends of one render
-    edge bind to proxy triangles that meet or lie about the edge's length apart, so a proxy path joins their nearest
-    bound vertices within the edge's length plus a proxy edge or two. A path longer by 2.5 typical (median) proxy edges
-    runs around an opening of the sheet, and the render edge would stretch across that opening as soon as it opens.
+    corners: per render vertex the three proxy vertices of the triangle it binds to (None where the piece does not
+    take the vertex). A proxy path from a corner at one end to a corner at the other needs at most the edge's length
+    stretched by PATH_STRETCH, plus the longest side of each end's triangle to reach a corner from the bound place. A
+    longer path runs around an opening of the sheet, and the render edge would stretch across it once it opens.
     """
     from scipy.sparse import coo_matrix
     from scipy.sparse.csgraph import dijkstra
     tri = np.asarray(triangles)
-    pairs = np.concatenate([tri[:, [0, 1]], tri[:, [1, 2]], tri[:, [2, 0]]])
+    pairs = np.unique(np.sort(np.concatenate([tri[:, [0, 1]], tri[:, [1, 2]], tri[:, [2, 0]]]), axis=1), axis=0)
     lengths = np.linalg.norm(proxy[pairs[:, 0]] - proxy[pairs[:, 1]], axis=1)
     graph = coo_matrix((lengths, (pairs[:, 0], pairs[:, 1])), shape=(len(proxy),) * 2).tocsr()
-    reach = 2.5 * float(np.median(lengths))
     edges = np.unique(np.sort(np.concatenate([faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]]]), axis=1), axis=0)
-    edges = edges[take[edges].all(1) & np.array([bool(bound[a]) and bool(bound[b]) for a, b in edges], bool)]
+    edges = edges[take[edges].all(1)]
     if not len(edges):
         return edges
+    side = {}
+    for v in np.unique(edges):
+        c = proxy[list(corners[v])]
+        side[v] = max(np.linalg.norm(c[i] - c[(i + 1) % 3]) for i in range(3))
     span = np.linalg.norm(positions[edges[:, 0]] - positions[edges[:, 1]], axis=1)
-    sources = sorted({v for a, _ in edges for v in bound[a]})
-    index = {v: i for i, v in enumerate(sources)}
-    distance = dijkstra(graph, directed=False, indices=sources, limit=float(span.max()) + 2 * reach)
-    path = np.array([min(distance[index[u], v] for u in bound[a] for v in bound[b]) for a, b in edges])
-    return edges[path > span + reach]
-LINING_GAP_M = 0.008  # solidified shells closer than this are one fabric layer
+    allowed = PATH_STRETCH * span + np.array([side[a] + side[b] for a, b in edges])
+    sources = sorted({u for a in np.unique(edges) for u in corners[a]})
+    index = {u: i for i, u in enumerate(sources)}
+    distance = dijkstra(graph, directed=False, indices=sources, limit=float(allowed.max()) * 1.01)
+    path = np.array([min(distance[index[u], v] for u in corners[a] for v in corners[b]) for a, b in edges])
+    return edges[path > allowed]
 
 
 def bind_render(positions, faces, normals, labels, freedom, pieces, palette_offsets):
@@ -227,8 +232,8 @@ def bind_render(positions, faces, normals, labels, freedom, pieces, palette_offs
             for col in triangles.T:
                 np.add.at(p_vn, col, np.cross(b - a, c - a))
             p_vn /= np.maximum(np.linalg.norm(p_vn, axis=1, keepdims=True), 1e-12)
-            bound = np.array([sum(w * p_vn[v] for v, w in zip(rows[int(u)][:3], rows[int(u)][3:])) for u in inverse])
-            dots = np.einsum("ij,ij->i", normals[take_idx], bound)
+            bound_normal = np.array([sum(w * p_vn[v] for v, w in zip(rows[int(u)][:3], rows[int(u)][3:])) for u in inverse])
+            dots = np.einsum("ij,ij->i", normals[take_idx], bound_normal)
             outer, inner = np.flatnonzero(dots > 0.15), np.flatnonzero(dots < -0.15)
             if len(outer) and len(inner):
                 gap, nearest = cKDTree(positions[take_idx[outer]]).query(positions[take_idx[inner]], k=1)
@@ -243,12 +248,10 @@ def bind_render(positions, faces, normals, labels, freedom, pieces, palette_offs
             amount[vertex] = (w0 * free[v0] + w1 * free[v1] + w2 * free[v2]) if freedom[vertex] > 0 else 0.0
             stream[vertex] = pack_vertex_binding_u16x4(offset + v0 + 1, offset + v1 + 1, offset + v2 + 1,
                                                        w0, w1, w2, amount[vertex])
-        bound = [[]] * len(positions)
+        bound_corners = [None] * len(positions)
         for local, vertex in enumerate(take_idx):
-            if amount[vertex] > 0:
-                row = rows[int(inverse[local])]
-                bound[vertex] = [v for v, w in zip(row[:3], row[3:]) if w > 0]
-        torn = torn_edges(positions, faces, take, bound, proxy, triangles)
+            bound_corners[vertex] = rows[int(inverse[local])][:3]
+        torn = torn_edges(positions, faces, take, bound_corners, proxy, triangles)
         if len(torn):
             raise ValueError(f"piece {label}: {len(torn)} render edges bind across an opening of the proxy, "
                              f"around {np.round(positions[torn[0]].mean(0), 3).tolist()}")

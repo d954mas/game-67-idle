@@ -87,9 +87,10 @@ class OpeningGuard(unittest.TestCase):
         faces = np.array([(0, 1, 3), (0, 3, 2)])
         return positions, faces
 
-    def bind(self, positions, faces):
+    def bind(self, positions, faces, freedom=None, normals=None):
         piece = (1, self.proxy, self.triangles, None, np.zeros(len(self.proxy), bool))
-        return bind_render(positions, faces, None, np.ones(len(positions)), np.ones(len(positions)), [piece], [0])
+        freedom = np.ones(len(positions)) if freedom is None else freedom
+        return bind_render(positions, faces, normals, np.ones(len(positions)), freedom, [piece], [0])
 
     def test_a_ribbon_across_the_opening_fails_the_cook(self):
         with self.assertRaisesRegex(ValueError, "across an opening"):
@@ -99,6 +100,26 @@ class OpeningGuard(unittest.TestCase):
         for x0, x1, y in ((-0.12, -0.04, 0.05), (-0.03, 0.03, 0.3)):
             stream, amount = self.bind(*self.ribbon(x0, x1, y))
             self.assertTrue(np.all(amount > 0))
+
+    def test_a_skinned_end_across_the_opening_still_fails(self):
+        positions, faces = self.ribbon(-0.03, 0.03, 0.05)
+        with self.assertRaisesRegex(ValueError, "across an opening"):
+            self.bind(positions, faces, freedom=np.array([0.0, 1.0, 0.0, 1.0]))
+
+    def test_a_long_edge_across_the_grain_of_the_triangles_binds(self):
+        # The grid's diagonals run along (1, 1); this edge runs along (1, -1) across the whole left half, where a
+        # path along triangle sides is longest against the straight line.
+        positions = np.array([(-0.19, 0.39, 0.002), (-0.01, 0.21, 0.002), (-0.01, 0.23, 0.002)])
+        _, amount = self.bind(positions, np.array([(0, 1, 2)]))
+        self.assertTrue(np.all(amount > 0))
+
+    def test_a_lined_ribbon_beside_the_opening_binds(self):
+        outer, faces = self.ribbon(-0.12, -0.04, 0.05)
+        lining = outer * [1, 1, -1]
+        positions = np.vstack((outer, lining))
+        normals = np.repeat([[0, 0, 1.0], [0, 0, -1.0]], 4, axis=0)
+        _, amount = self.bind(positions, np.vstack((faces, faces[:, ::-1] + 4)), normals=normals)
+        self.assertTrue(np.all(amount > 0))
 
 
 if __name__ == "__main__":
