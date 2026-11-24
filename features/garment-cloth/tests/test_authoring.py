@@ -196,6 +196,12 @@ class TestMaps(unittest.TestCase):
         self.assertTrue(np.all(p.r[p.pins] == 0))
         p.smooth("r", p.f.all, 3)
         self.assertTrue(np.all(p.r[p.pins] == 0))
+        # Tight to a line, then opening below it: past 0.2 m of fabric r grows on from 0.02 at 0.5 m per metre.
+        p.gradient(rate=0.1, cap=0.04)
+        p.gradient(rate=0.5, cap=0.15, start=0.2, base=0.02)
+        drop = 0.5 - p.f.y[column]
+        expect = np.where(drop < 0.2, 0.1 * drop, np.minimum(0.02 + 0.5 * (drop - 0.2), 0.15))
+        np.testing.assert_allclose(p.r[column], expect, atol=1e-12)
         p.unpin(p.f.y > 0.499)
         self.assertTrue(np.isnan(p.r).any() and not p.pins.any())
 
@@ -242,6 +248,7 @@ class TestMaps(unittest.TestCase):
         outer.gradient(rate=0.5, cap=0.2)
         outer.backstop_from_body()
         r_before = inner.r.copy()
+        outer.weights_set(outer.f.all, "right", 1.0)
         counts = o.layer("over", "skirt")
         self.assertGreater(counts["outer"], 0)
         self.assertGreater(counts["inner"], 0)
@@ -254,6 +261,8 @@ class TestMaps(unittest.TestCase):
         self.assertTrue(np.all(inner.r[under] <= (0.16 - CLOTH_R - t) / 2 + 3e-3))
         self.assertTrue(np.all(inner.r <= r_before + 1e-15))
         self.assertEqual(o.layers, [("over", "skirt")])
+        # Under the outer the inner rides on the outer's weights.
+        np.testing.assert_allclose(inner.f.w["right"][under], 1.0)
 
     def test_from_render_selects_where_every_corner_is_selected(self):
         o = self.scene.outfit()

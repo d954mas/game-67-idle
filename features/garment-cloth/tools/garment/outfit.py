@@ -293,14 +293,20 @@ class Piece:
         self.r[mask] = np.nan
         self._mark("r", mask)
 
-    def gradient(self, rate, cap, mask=None):
-        """r = min(rate x geodesic distance to the pins, cap) on the masked free vertices: the cloth may move `rate`
-        metres per metre of fabric from where it is held, up to `cap` at the hem."""
+    def gradient(self, rate, cap, mask=None, start=0.0, base=0.0):
+        """r = min(base + rate x (geodesic distance to the pins - start), cap) on the masked free vertices where that
+        distance is past `start`: the cloth may move `rate` metres per metre of fabric from where it is held, up to
+        `cap` at the hem. The defaults give the plain gradient; start and base continue it from a depth on, so a
+        piece can stay tight to a line and open below it:
+            p.gradient(rate=0.1, cap=0.04)                                    # tight down to the hip line
+            p.gradient(rate=0.5, cap=0.16, mask=p.f.y < HIP, start=depth_of_hip, base=0.04)   # then opening
+        (depth_of_hip: p.f.geo at the hip line, e.g. its median over the vertices there)."""
         mask = self._mask(mask) & ~self.pins
         if not self.pins.any():
             raise ValueError(f"{self.id}: pin the piece before its max-distance gradient")
         geo, _ = geodesic_depth(self.x, self.faces, np.flatnonzero(self.pins))
-        self.r[mask] = np.minimum(rate * geo, cap)[mask]
+        mask &= geo >= start
+        self.r[mask] = np.minimum(base + rate * (geo - start), cap)[mask]
         self._mark("r", mask)
 
     def paint(self, name, mask, value):
@@ -444,11 +450,12 @@ class Piece:
                         correctives={k: (single(dx), single(db)) for k, (dx, db) in self.correctives.items()})
 
 
-def layer_rays(outer, inner, reach):
-    """Per outer vertex the first hit of its body direction on the inner mesh within reach: (t, face, bary)."""
+def layer_rays(outer, inner, reach, sign=1.0):
+    """Per outer vertex the first hit of its body direction (times sign) on the inner mesh within reach:
+    (t, face, bary)."""
     t, f, b = np.full(len(outer.x), np.inf), np.full(len(outer.x), -1), np.zeros((len(outer.x), 3))
     for v in range(len(outer.x)):
-        hit = sim.ray_hits(outer.x[v:v + 1], outer.b[v:v + 1], inner.x, inner.faces, reach[v])
+        hit = sim.ray_hits(outer.x[v:v + 1], sign * outer.b[v:v + 1], inner.x, inner.faces, reach[v])
         t[v], f[v], b[v] = hit[0][0], hit[1][0], hit[2][0]
     return t, f, b
 
@@ -544,9 +551,10 @@ class Outfit:
             self.layers.append((outer, inner))
 
     def separate(self, outer, inner):
-        """Where the outer piece's free vertices lie over the inner piece closer than the two fabrics are thick, move
-        them outward by the difference (spec B.6: a gap thinner than the fabrics is fixed by offsetting the outer sim
-        mesh), then recompute the outer backstop. Returns the count moved. Run it before `layer`."""
+        """Where the outer piece's free vertices lie over the inner piece closer than the two fabrics are thick at
+        rest, move them outward by the difference (spec B.6: a gap thinner than the fabrics is fixed by offsetting
+        the outer sim mesh), then recompute the outer backstop. Returns the count moved. Run it before `layer`. A gap
+        that closes only in motion is the skinning's, not the mesh's: `layer` reads it from the clips."""
         o, i = self.get(outer), self.get(inner)
         t = o.thickness + i.thickness
         moved = np.zeros(len(o.x), bool)
@@ -563,39 +571,97 @@ class Outfit:
         return int(moved.sum())
 
     def layer(self, outer, inner):
-        """The layer rule of spec B.6 for an outer piece over an inner one, without cloth-to-cloth contact: where the
-        outer lies over the inner at rest with gap g, r_in = d_out = (g - t_in - t_out) / 2, so neither may reach the
-        other. The inner r only shrinks (the gradient stays an upper bound); the outer backstop takes the body radius
-        where it can now act. Returns counts: outer and inner vertices in the overlap, and vertices whose gap is
-        thinner than the two fabrics (left at 0: offset the outer mesh there)."""
+        """The layer rule of spec B.6 for an outer piece over an inner one, without cloth-to-cloth contact.
+
+        Both references first ride on one skinning: under the outer the inner takes the outer's weights, and where
+        the inner is held (a pin) the outer takes the inner's. Then, with g the narrowest gap the two references
+        leave in any frame of the outfit's clips (the rest gap without clips), r_in = d_out = (g - t_in - t_out) / 2,
+        so neither may reach the other. The inner r only shrinks (the gradient stays an upper bound); the outer
+        backstop takes the body radius where it can now act. Run it after the weights. Returns counts: outer and
+        inner vertices in the overlap, and vertices whose narrowest gap is thinner than the two fabrics (left at 0:
+        `separate` the outer mesh there)."""
         o, i = self.get(outer), self.get(inner)
         t = o.thickness + i.thickness
-        g_out, g_in = overlap(o.x, o.faces, o.b, i.x, i.faces, i.b, self.body.closest(o.x)[2], np.inf)
-        hit_o = np.isfinite(g_out) & ~o.pins
-        share_o = np.maximum((g_out - t) / 2, 0)
-        o.d[hit_o] = share_o[hit_o]
+        (gap_o, face_o, bary_o), (gap_i, face_i, bary_i) = self._share_weights(o, i)
+        g_o = self._narrowest(o, i, gap_o, face_o, bary_o)
+        g_i = self._narrowest(i, o, gap_i, face_i, bary_i, sign=-1.0)
+        hit_o = np.isfinite(g_o) & ~o.pins
+        o.d[hit_o] = np.maximum((g_o[hit_o] - t) / 2, 0)
         face, _, _, point, normal, rim = self.body.closest(o.x)
         for v in np.flatnonzero(hit_o & (o.R == 0) & (o.d < o.r) & ~rim):
             o.R[v] = self.body.radius(face[v], point[v], normal[v])
         o.R[o.d >= o.r] = 0
         o._mark("backstop", hit_o)
-        hit_i = np.isfinite(g_in) & ~i.pins
-        share_i = np.maximum((g_in - t) / 2, 0)
-        i.r[hit_i] = np.minimum(i.r[hit_i], share_i[hit_i])
+        hit_i = np.isfinite(g_i) & ~i.pins
+        i.r[hit_i] = np.minimum(i.r[hit_i], np.maximum((g_i[hit_i] - t) / 2, 0))
         # Where any outer vertex's ray lands on an inner triangle (a pin's too), every free corner of it keeps within
         # what the outer leaves of the gap: g - t - its reach toward the inner, so G8 holds at the hit as well.
-        gap, face, _ = layer_rays(o, i, self.body.closest(o.x)[2])
         reach = np.minimum(o.d, o.r)
-        for v in np.flatnonzero(np.isfinite(gap)):
-            corners = i.faces[face[v]]
+        for v in np.flatnonzero(np.isfinite(g_o)):
+            corners = i.faces[face_o[v]]
             free = corners[i.r[corners] > 0]
-            i.r[free] = np.minimum(i.r[free], max(gap[v] - t - reach[v], 0.0))
+            i.r[free] = np.minimum(i.r[free], max(g_o[v] - t - reach[v], 0.0))
             hit_i[free] = True
         i.R[i.d >= i.r] = 0
         i._mark("r", hit_i)
         self.over(outer, inner)
         return dict(outer=int(hit_o.sum()), inner=int(hit_i.sum()),
-                    too_thin=int(((g_out < t) & hit_o).sum() + ((g_in < t) & hit_i).sum()))
+                    too_thin=int(((g_o < t) & hit_o).sum() + ((g_i < t) & hit_i).sum()))
+
+    def _share_weights(self, o, i):
+        """Both references on one skinning where they overlap (see `layer`); returns the rest rays of both sides,
+        ((gap, face, bary) of the outer's, (gap, face, bary) of the inner's outward)."""
+        rays_o = layer_rays(o, i, self.body.closest(o.x)[2])
+        rays_i = layer_rays(i, o, np.full(len(i.x), np.inf), sign=-1.0)
+        _, face_o, bary_o = rays_o
+        _, face_i, bary_i = rays_i
+        hit = np.flatnonzero(face_o >= 0)
+        r_at = np.einsum("nk,nk->n", bary_o[hit], i.r[i.faces[face_o[hit]]])
+        follow_inner = hit[(r_at == 0) & ~o.pins[hit]]
+        total, count = np.zeros_like(i.w), np.zeros(len(i.x))
+        for v in hit[r_at > 0]:
+            corners = i.faces[face_o[v]]
+            free = corners[~i.pins[corners]]
+            total[free] += o.w[v]
+            count[free] += 1
+        under = np.flatnonzero((face_i >= 0) & ~i.pins)
+        total[under] += np.einsum("nk,nkj->nj", bary_i[under], o.w[o.faces[face_i[under]]])
+        count[under] += 1
+        ride = count > 0
+        i.w[ride] = total[ride] / count[ride, None]
+        i._mark("w", ride)
+        o.w[follow_inner] = np.einsum("nk,nkj->nj", bary_o[follow_inner], i.w[i.faces[face_o[follow_inner]]])
+        o._mark("w", np.isin(np.arange(len(o.x)), follow_inner))
+        return rays_o, rays_i
+
+    def _narrowest(self, a, b, gap, face, bary, sign=1.0):
+        """Per vertex of `a` with a ray hit on `b`: the smallest gap along a's body direction (times sign) between
+        the two references over the rest pose and every key frame of the outfit's clips, with the weights as the
+        sidecar stores them (four influences); inf where there is no hit."""
+        out = np.where(face >= 0, gap, np.inf)
+        if self.clips is None or not (face >= 0).any():
+            return out
+        from . import model as Mo
+        hit = np.flatnonzero(face >= 0)
+        dense = []
+        for piece in (a, b):
+            order, values = top_influences(piece.w)
+            w = np.zeros_like(piece.w)
+            np.put_along_axis(w, order, values, axis=1)
+            dense.append(w)
+        glb, joints = self.model.glb, self.model.joints
+        ibm = glb.inverse_binds()
+        for _, path in Mo.clips(self.clips):
+            clip = Mo.load(path)
+            matrices = Mo.skin_matrices(glb, joints, ibm, Mo.clip_worlds(glb, clip, clip.key_times()))
+            pa = Mo.skin_points(a.x[hit], dense[0][hit], matrices)
+            da = Mo.skin_directions(a.b[hit], dense[0][hit], matrices)
+            corners = b.faces[face[hit]]
+            pb = Mo.skin_points(b.x, dense[1], matrices)
+            point = np.einsum("nk,fnkj->fnj", bary[hit], pb[:, corners])
+            g = np.einsum("fnj,fnj->fn", point - pa, sign * da).min(0)
+            out[hit] = np.minimum(out[hit], g)
+        return out
 
     def sidecar_path(self):
         name = self.model_path.name.removesuffix(".glb") + ".cloth.glb"
