@@ -628,7 +628,9 @@ ignores the mode.
     until it hears of the end, so its honest claims of that time land within a
     round trip of it. The grace is the evidence's span: a round trip, a
     playback delay and a tick, capped at `SYNC_POLICY_EVIDENCE_AGE_MAX_S` (1 s;
-    the stub: one tick). Past it, the claim would credit a landing of whoever
+    the stub, which plays no delay: its round trip plus four mean deviations of
+    it, for a state and its claim crossing on packets of their own, and a
+    tick). Past it, the claim would credit a landing of whoever
     flies the body since.
   - REVOKED for good after a recall: `body_sync_assign` to any seat (its own
     included), the seat leaving. The recall drops the seat's late claims.
@@ -731,7 +733,9 @@ records of the tick are all out, so a claim never overtakes its release. Every
 claim the host parses lands in one of `claims_overflow`, `claims_repeat`,
 `claims_rejected`, `claims_idle` (accepted, nothing left to do: no effect, a
 push of a body the host does not simulate) and `claim_effects`, which add up to
-`claims`; `claims_format` counts what the parser refused. The sweep
+`claims`; `claims_format` counts what the parser refused, and `claims_ended`
+the claims the gate passed after the agent's ownership had ended (a flight a
+heavy door ends sends its release first: `throw_glass_door`). The sweep
 (`test_body_sync_claims --sweep`) throws at the glass from rest and after a
 walk, in both modes: at 100 ms, 20 ms of jitter and 2 % loss, and at 150 ms,
 60 ms and 10 %, every honest claim applies; at 200 ms, 80 ms and 25 % over 24
@@ -1001,7 +1005,10 @@ following interaction sits on the host. `local_correction.max` is what the seam
 moved a body a guest simulates beyond its own step (its move at the apply plus
 its render offset's change): the thrower's own corrections, 0 by construction
 under interaction outside a contest; `local_turn.max` is the same of its
-rotation, in degrees. An offset left from the body's time as a
+rotation, in degrees. A guest that threw and simulated no body has no sample
+of either, and a check of them fails: a thrower simulates what it throws. `own_ticks.max` is the other half of a throw's zero
+delay: the ticks from a throw's start until its thrower draws the body 5 cm on.
+An offset left from the body's time as a
 copy only decays by the seam's law, that copy's correction ending, and is not
 counted; once the seam sets the offset while the guest simulates the body,
 every change counts. Planted in `test_body_sync_checks`: a move of a local body

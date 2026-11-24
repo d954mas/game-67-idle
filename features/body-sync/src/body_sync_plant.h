@@ -21,5 +21,8 @@ void body_sync_plant_evidence_age_unbounded(body_sync_t *sync);
 /* This side's bodies rest whenever Box3D keeps them asleep, a body moved by transform included:
    a carried body goes out no more once its rest pose is acknowledged. */
 void body_sync_plant_transform_sleep(body_sync_t *sync);
+/* This host gives a contact claim no grace after the agent's ownership ended: the claim of a
+   flight its own release ended, sent behind that release, is refused. */
+void body_sync_plant_end_grace_zero(body_sync_t *sync);
 
 #endif

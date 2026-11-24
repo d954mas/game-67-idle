@@ -158,6 +158,9 @@ void stand_metrics_lost_take(stand_metrics_t *metrics, uint32_t guest, double ha
 }
 
 void stand_metrics_local_correction(stand_metrics_t *metrics, uint32_t guest, double correction_m, double correction_deg) {
+    if (guest < metrics->guests) {
+        metrics->local_samples[guest]++;
+    }
     if (guest < metrics->guests && isfinite(correction_deg) && correction_deg > metrics->local_turn_deg[guest]) {
         metrics->local_turn_deg[guest] = correction_deg;
     }
@@ -356,6 +359,7 @@ void stand_metrics_summarize(const stand_metrics_t *metrics, body_sync_report_t 
         out->flight_pause_gap_p95_m = stand_hist_quantile(&metrics->flight_pause[g], 0.95);
         out->local_correction_max_m = metrics->local_correction[g];
         out->local_turn_max_deg = metrics->local_turn_deg[g];
+        out->local_samples = metrics->local_samples[g];
         out->lost_takes = metrics->lost_takes[g];
         out->lost_take_max_m = metrics->lost_take_max[g];
         summarize_bytes(metrics, g, STAND_DIR_TO_GUEST, &out->to_guest);
@@ -387,7 +391,8 @@ static const struct {
     {"returns.count", STAND_UNIT_COUNT},         {"lost_takes.count", STAND_UNIT_COUNT},      {"lost_takes.max", STAND_UNIT_LENGTH},
     {"claims.count", STAND_UNIT_COUNT},          {"claims_rejected.count", STAND_UNIT_COUNT}, {"claims_format.count", STAND_UNIT_COUNT},
     {"claims_repeat.count", STAND_UNIT_COUNT},   {"claim_effects.count", STAND_UNIT_COUNT},   {"claims_overflow.count", STAND_UNIT_COUNT},
-    {"claims_idle.count", STAND_UNIT_COUNT},     {"carry_gap.max", STAND_UNIT_LENGTH},
+    {"claims_idle.count", STAND_UNIT_COUNT},     {"carry_gap.max", STAND_UNIT_LENGTH},       {"claims_ended.count", STAND_UNIT_COUNT},
+    {"own_ticks.max", STAND_UNIT_TICKS},
 };
 
 bool stand_metric_unit(const char *name, stand_metric_unit_t *unit) {
@@ -411,6 +416,17 @@ static double peak_total(const stand_metrics_t *m, uint32_t g, int dir) {
         peak = sum > peak ? sum : peak;
     }
     return peak;
+}
+
+/* A throw by `seat`'s player that ended done. */
+static bool threw(const body_sync_report_t *report, uint8_t seat) {
+    for (uint32_t i = 0; i < report->action_count; i++) {
+        const body_sync_action_metrics_t *a = &report->actions[i];
+        if (a->player == seat && a->start_tick != UINT32_MAX && a->verb == BODY_SYNC_VERB_THROW && a->outcome == BODY_SYNC_OUTCOME_DONE) {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool stand_metric_value(const body_sync_report_t *report, const stand_metrics_t *metrics, const char *name, double *value, char *detail,
@@ -442,6 +458,29 @@ bool stand_metric_value(const body_sync_report_t *report, const stand_metrics_t 
             worst = (double)v > worst ? (double)v : worst;
         }
         *value = worst;
+        return true;
+    }
+    if (strcmp(name, "own_ticks.max") == 0) {
+        uint32_t throws = 0;
+        for (uint32_t i = 0; i < report->action_count; i++) {
+            const body_sync_action_metrics_t *a = &report->actions[i];
+            if (a->start_tick == UINT32_MAX || a->verb != BODY_SYNC_VERB_THROW || a->outcome != BODY_SYNC_OUTCOME_DONE) {
+                continue;
+            }
+            throws++;
+            if (a->own_ticks < 0) {
+                if (detail && detail_size) {
+                    snprintf(detail, detail_size, "%s on line %u never flew on its thrower", a->label[0] ? a->label : "throw", a->line);
+                }
+                *value = (double)INFINITY;
+                return true;
+            }
+            worst = (double)a->own_ticks > worst ? (double)a->own_ticks : worst;
+        }
+        if (throws == 0 && detail && detail_size) {
+            snprintf(detail, detail_size, "no throw was measured");
+        }
+        *value = throws == 0 ? (double)INFINITY : worst;
         return true;
     }
     for (uint32_t g = 0; g < report->guest_count; g++) {
@@ -539,6 +578,14 @@ bool stand_metric_value(const body_sync_report_t *report, const stand_metrics_t 
             v = m->aligned_gap_max_m;
         } else if (strcmp(name, "aligned_gap.p95") == 0) {
             v = m->aligned_gap_p95_m;
+        } else if ((strcmp(name, "local_correction.max") == 0 || strcmp(name, "local_turn.max") == 0) && m->local_samples == 0 &&
+                   threw(report, m->seat)) {
+            /* A thrower simulates what it throws: none measured is no evidence of no correction. */
+            if (detail && detail_size) {
+                snprintf(detail, detail_size, "g%u threw but no body it simulates was measured", (unsigned)m->seat);
+            }
+            *value = (double)INFINITY;
+            return true;
         } else if (strcmp(name, "local_correction.max") == 0) {
             v = m->local_correction_max_m;
         } else if (strcmp(name, "local_turn.max") == 0) {
@@ -569,6 +616,8 @@ bool stand_metric_value(const body_sync_report_t *report, const stand_metrics_t 
             v = (double)m->claims_overflow;
         } else if (strcmp(name, "claims_idle.count") == 0) {
             v = (double)m->claims_idle;
+        } else if (strcmp(name, "claims_ended.count") == 0) {
+            v = (double)m->claims_ended;
         } else if (strcmp(name, "step.count") == 0) {
             v = (double)m->step_count;
         } else if (strcmp(name, "snap.count") == 0) {
@@ -851,6 +900,9 @@ bool stand_json_write(const body_sync_report_t *r, const stand_metrics_t *m, boo
         key(&j, "local_turn_max");
         number(&j, gm->local_turn_max_deg);
         put(&j, ",");
+        key(&j, "local_samples");
+        putf(&j, "%u", gm->local_samples);
+        put(&j, ",");
         key(&j, "takes");
         putf(&j, "%u", gm->takes);
         put(&j, ",");
@@ -883,6 +935,9 @@ bool stand_json_write(const body_sync_report_t *r, const stand_metrics_t *m, boo
         put(&j, ",");
         key(&j, "claim_effects");
         putf(&j, "%u", gm->claim_effects);
+        put(&j, ",");
+        key(&j, "claims_ended");
+        putf(&j, "%u", gm->claims_ended);
         put(&j, ",");
         key(&j, "claims_overflow");
         putf(&j, "%u", gm->claims_overflow);
@@ -1008,7 +1063,8 @@ bool stand_json_write(const body_sync_report_t *r, const stand_metrics_t *m, boo
         put(&j, ",");
         key(&j, "outcome");
         string(&j, body_sync_outcome_name(a->outcome));
-        putf(&j, ",\"host_ticks\":%d,\"echo_ticks\":%d,\"seen_ticks\":%d,\"shows\":%s,\"answered\":%s}", a->host_ticks, a->echo_ticks, a->seen_ticks,
+        putf(&j, ",\"host_ticks\":%d,\"echo_ticks\":%d,\"seen_ticks\":%d,\"own_ticks\":%d,\"shows\":%s,\"answered\":%s}", a->host_ticks, a->echo_ticks,
+             a->seen_ticks, a->own_ticks,
              a->shows ? "true" : "false", a->answered ? "true" : "false");
     }
     put(&j, "],");

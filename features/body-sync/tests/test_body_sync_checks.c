@@ -199,6 +199,22 @@ static void test_effects_fail_on_a_spawn_missing_on_a_guest(void) {
     body_sync_stand_destroy(stand);
 }
 
+/* The glass breaks on the host by the guest's claim, but the guest never removes it. */
+static void test_effect_fails_on_a_break_a_guest_never_shows(void) {
+    const char *text = "scenario planted\nscene glass_door\nguests 1\nsettle 6s\nnet g1 rtt 100ms jitter 20ms loss 2%\n"
+                       "p1 grab rock_a as lift\np1 wait 300ms\np1 throw glass speed 7 as throw\nexpect effect glass\n";
+    body_sync_error_t error;
+    TEST_ASSERT_TRUE_MESSAGE(body_sync_scenario_parse(text, strlen(text), &scenario, &error), error.text);
+    scene_named(scenario.scene)->build(&scene);
+    body_sync_stand_config_t config = {.scene = &scene, .scenario = &scenario};
+    body_sync_stand_t *stand = body_sync_stand_create(&config, &error);
+    TEST_ASSERT_NOT_NULL_MESSAGE(stand, error.text);
+    stand_testing_plant_keep_broken(stand, 1);
+    body_sync_stand_run(stand);
+    fails(stand, 9, "g1: glass not gone");
+    body_sync_stand_destroy(stand);
+}
+
 static void test_effects_fail_on_a_break_that_lost_its_spawns(void) {
     body_sync_stand_t *stand = run("scenario planted\nscene breakables\nguests 1\np0 wait 10t\nexpect effects_once\n");
     stand_world_t *h = stand_testing_world(stand, 0);
@@ -654,6 +670,7 @@ int main(void) {
     RUN_TEST(test_effects_fail_on_a_broken_body_back_on_a_guest);
     RUN_TEST(test_effects_fail_on_a_spawn_missing_on_a_guest);
     RUN_TEST(test_effects_fail_on_a_break_that_lost_its_spawns);
+    RUN_TEST(test_effect_fails_on_a_break_a_guest_never_shows);
     RUN_TEST(test_the_world_hash_sees_what_it_names);
     return UNITY_END();
 }

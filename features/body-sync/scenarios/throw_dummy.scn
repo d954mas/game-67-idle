@@ -3,7 +3,6 @@
 # guest's impact claim, once.
 scenario throw_dummy
 scene dummy_wall
-seed 23
 guests 1
 settle 8s
 
@@ -31,5 +30,9 @@ expect claims_format.count <= 0
 # Derived as in layer_bounce: a body this guest simulates is moved by the seam only when it becomes
 # local, and the render offset takes that move: float noise, 1 cm.
 expect local_correction.max <= 1cm
+# Derived: the stand takes the thrown body's pose at the throw's first tick; one step at a throw's
+# speed (7 m/s and up: 12 cm) carries it past the 5 cm a move needs, and the seam never holds a
+# body its thrower simulates: 1.
+expect own_ticks.max <= 1t
 expect agree_at_rest 5cm 5deg
 expect no_stuck

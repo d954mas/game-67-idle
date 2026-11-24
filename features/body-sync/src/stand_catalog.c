@@ -253,7 +253,7 @@ static uint32_t add_mannequin(body_sync_scene_t *s, const char *name, float x, f
     person.role = BODY_SYNC_ROLE_MANNEQUIN;
     person.model_tag = 9;
     /* Written out, not left to the default: the throw scenarios' checks are derived from it (a
-       thrown rock at 9 m/s fells it, a lob at 3 m/s does not). */
+       thrown rock at 9 m/s fells it, a lob at 3.5 m/s does not). */
     person.fall_speed = 5.0f;
     if (route != BODY_SYNC_ROUTE_NONE) {
         person.motion = BODY_SYNC_MOTION_KINEMATIC;

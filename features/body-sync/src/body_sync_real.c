@@ -101,6 +101,7 @@ typedef struct marking {
 struct body_sync {
     body_sync_config_t config;
     bool plant_transform_sleep; /* body_sync_plant_transform_sleep */
+    bool plant_end_grace_zero;  /* body_sync_plant_end_grace_zero */
     marking_t marking;
     float dt;
     uint32_t now; /* the last apply's or collect's tick */
@@ -212,6 +213,7 @@ void body_sync_plant_evidence_grows_over_gaps(body_sync_t *s) { s->authority.pla
 void body_sync_plant_approach_from_ring(body_sync_t *s) { s->authority.plant_approach_from_ring = true; }
 void body_sync_plant_evidence_age_unbounded(body_sync_t *s) { s->authority.plant_evidence_age_unbounded = true; }
 void body_sync_plant_transform_sleep(body_sync_t *s) { s->plant_transform_sleep = true; }
+void body_sync_plant_end_grace_zero(body_sync_t *s) { s->plant_end_grace_zero = true; }
 
 body_sync_t *body_sync_create(const body_sync_config_t *config) {
     if (!config || !b3World_IsValid(config->world) || config->seats < 1 || config->seats > BODY_SYNC_SEATS_MAX ||
@@ -393,7 +395,8 @@ body_sync_contact_verdict_t body_sync_check_contact(const body_sync_t *s, uint8_
     *out = (body_sync_contact_t){.gap = INFINITY};
     float ticks = seat < s->config.seats ? evidence_ticks(s, seat) : 0.0f;
     const sync_authority_ended_t *ended;
-    body_sync_contact_verdict_t verdict = sync_authority_check_contact(&s->authority, seat, agent, number, (uint32_t)ceilf(ticks), &ended);
+    uint32_t grace = s->plant_end_grace_zero ? 0u : (uint32_t)ceilf(ticks);
+    body_sync_contact_verdict_t verdict = sync_authority_check_contact(&s->authority, seat, agent, number, grace, &ended);
     if (verdict == BODY_SYNC_CONTACT_STALE || agent == target || !sync_authority_body_const(&s->authority, target)) {
         return BODY_SYNC_CONTACT_STALE;
     }

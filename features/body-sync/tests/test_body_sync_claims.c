@@ -25,6 +25,7 @@ static bool plant_grows;      /* --plant-evidence-grows-over-gaps: the host's ev
 static bool plant_sleep;      /* --plant-transform-sleep: guest 1 stops sending a body it carries asleep */
 static bool plant_ring_approach; /* --plant-approach-from-ring: a contact's approach is the ring's fastest step */
 static bool plant_age;           /* --plant-evidence-age-unbounded: a state stands however long ago the host took it */
+static bool plant_end_grace;     /* --plant-end-grace-zero: no claim counts once the agent's ownership ended */
 static body_sync_scene_t scene;
 static body_sync_scenario_t scenario;
 static bool third_player; /* the next make() gives the breakables a third player and a rock for it */
@@ -73,6 +74,7 @@ static body_sync_stand_t *make(const char *text, int mode) {
     body_sync_stand_t *stand = body_sync_stand_create(&config, &error);
     TEST_ASSERT_NOT_NULL_MESSAGE(stand, error.text);
     stand_testing_plant_claim_limits(stand, plant_reach, plant_approach);
+#ifndef CLAIMS_STUB /* the seam's plants are the real one's */
     if (plant_take_reach) {
         body_sync_plant_take_reach_unbounded(stand_testing_sync(stand, 0));
     }
@@ -88,6 +90,10 @@ static body_sync_stand_t *make(const char *text, int mode) {
     if (plant_age) {
         body_sync_plant_evidence_age_unbounded(stand_testing_sync(stand, 0));
     }
+    if (plant_end_grace) {
+        body_sync_plant_end_grace_zero(stand_testing_sync(stand, 0));
+    }
+#endif
     return stand;
 }
 
@@ -206,6 +212,23 @@ static void guest_throw_knocks_dummy(int mode) {
     body_sync_stand_destroy(stand);
 }
 static void test_guest_throw_knocks_dummy_host(void) { guest_throw_knocks_dummy(MODE_HOST); }
+
+/* A heavy door ends the rock's flight on contact under either mode: the guest's release reaches
+   the host before its claim, which the gate judges within the grace after that end. */
+static void guest_throw_breaks_door(int mode) {
+    body_sync_stand_t *stand = make("scenario claims\nscene glass_door\nguests 1\nsettle 8s\nnet g1 rtt 100ms jitter 20ms loss 2%\n"
+                                    "p1 walk rock_b\np1 grab rock_b as lift\np1 wait 300ms\np1 throw door speed 9 as throw\n"
+                                    "expect result lift granted\nexpect effects_once\nexpect no_stuck\n",
+                                    mode);
+    const body_sync_report_t *report = body_sync_stand_run(stand);
+    all_pass(report);
+    TEST_ASSERT_FALSE_MESSAGE(on_host(stand, "door"), "the door survived an honest throw");
+    TEST_ASSERT_EQUAL_UINT32(1, report->guests[0].claim_effects);
+    TEST_ASSERT_EQUAL_UINT32_MESSAGE(1, report->guests[0].claims_ended, "the door's claim was not judged after the flight's end");
+    body_sync_stand_destroy(stand);
+}
+static void test_guest_throw_breaks_door_host(void) { guest_throw_breaks_door(MODE_HOST); }
+static void test_guest_throw_breaks_door_interaction(void) { guest_throw_breaks_door(MODE_INTERACTION); }
 static void test_guest_throw_knocks_dummy_interaction(void) { guest_throw_knocks_dummy(MODE_INTERACTION); }
 
 /* The host's own throw is judged on the host by the same rule: no claim crosses. */
@@ -674,11 +697,36 @@ int main(int argc, char **argv) {
             plant_ring_approach = true;
         } else if (strcmp(argv[i], "--plant-evidence-age-unbounded") == 0) {
             plant_age = true;
+        } else if (strcmp(argv[i], "--plant-end-grace-zero") == 0) {
+            plant_end_grace = true;
         } else if (strcmp(argv[i], "--sweep") == 0) {
             sweep = true;
         }
     }
     UNITY_BEGIN();
+#ifdef CLAIMS_STUB
+    /* The stub is the contract's reference: the same honest claims apply, the same forgeries are
+       refused. It takes nothing by interaction, so only the host's authority runs. */
+    (void)sweep;
+    RUN_TEST(test_guest_throw_breaks_glass_host);
+    RUN_TEST(test_guest_throw_knocks_dummy_host);
+    RUN_TEST(test_guest_throw_breaks_door_host);
+    RUN_TEST(test_host_throw_knocks_dummy);
+    RUN_TEST(test_second_throw_claims_again);
+    RUN_TEST(test_forged_far_claim_is_rejected_host);
+    RUN_TEST(test_resent_claim_applies_once);
+    RUN_TEST(test_flung_far_claim_is_rejected_host);
+    RUN_TEST(test_inflated_claim_speed_is_rejected);
+    RUN_TEST(test_two_seats_claim_one_target);
+    RUN_TEST(test_a_flood_starves_only_its_own_seat);
+    RUN_TEST(test_forger_at_600ms_never_fits_host);
+    RUN_TEST(test_forger_after_a_cut_never_fits_host);
+    RUN_TEST(test_an_accepted_hit_that_does_nothing_is_idle);
+    RUN_TEST(test_a_gentle_touch_claims_no_hard_hit_host);
+    RUN_TEST(test_an_old_contact_tick_has_no_evidence_host);
+    RUN_TEST(test_a_carried_rock_follows_its_carrier_host);
+    return UNITY_END();
+#endif
     if (sweep) {
         RUN_TEST(test_loss_sweep_100ms);
         RUN_TEST(test_loss_sweep_150ms);
@@ -689,6 +737,8 @@ int main(int argc, char **argv) {
     RUN_TEST(test_guest_throw_breaks_glass_interaction);
     RUN_TEST(test_guest_throw_knocks_dummy_host);
     RUN_TEST(test_guest_throw_knocks_dummy_interaction);
+    RUN_TEST(test_guest_throw_breaks_door_host);
+    RUN_TEST(test_guest_throw_breaks_door_interaction);
     RUN_TEST(test_host_throw_knocks_dummy);
     RUN_TEST(test_second_throw_claims_again);
     RUN_TEST(test_forged_far_claim_is_rejected_host);

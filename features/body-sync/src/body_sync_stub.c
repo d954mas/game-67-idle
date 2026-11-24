@@ -20,6 +20,15 @@ _Static_assert(BODY_SYNC_TRAFFIC_COUNT == 5, "body_sync_metrics.h repeats the se
 
 /* A copy farther than this from its new pose jumps there instead of being driven at speed. */
 #define SNAP_DISTANCE 2.0f
+/* State packets per seat whose fate the stub waits for: past a second of them at 60 Hz the
+   oldest is forgotten, as one never answered. */
+enum { SENT_WINDOW = 64 };
+
+typedef struct sent_packet {
+    bool used;
+    uint16_t number;
+    uint32_t tick;
+} sent_packet_t;
 
 typedef struct entry {
     b3BodyId body;
@@ -50,6 +59,11 @@ struct body_sync {
     uint32_t cursor[BODY_SYNC_SEATS_MAX];
     bool writing[BODY_SYNC_SEATS_MAX];
     body_sync_traffic_t traffic[BODY_SYNC_SEATS_MAX];
+    /* The round trip to each seat, ticks from a state packet's send to its arrival fate, and its
+       mean deviation, smoothed as TCP does; 0 unknown. The claim gate's grace is built from them. */
+    sent_packet_t sent[BODY_SYNC_SEATS_MAX][SENT_WINDOW];
+    uint32_t sent_next[BODY_SYNC_SEATS_MAX];
+    float round_trip[BODY_SYNC_SEATS_MAX], round_trip_dev[BODY_SYNC_SEATS_MAX];
     stub_body_state_t scratch[BODY_SYNC_BODIES_MAX];
     char error[128];
 };
@@ -124,6 +138,13 @@ void body_sync_destroy(body_sync_t *sync) {
 
 static bool seat_ok(const body_sync_t *s, uint8_t seat) { return seat < s->config.seats && seat != s->config.seat; }
 
+/* A new session of the seat numbers its packets afresh, over a path of its own. */
+static void forget_round_trip(body_sync_t *s, uint8_t seat) {
+    memset(s->sent[seat], 0, sizeof(s->sent[seat]));
+    s->sent_next[seat] = 0;
+    s->round_trip[seat] = s->round_trip_dev[seat] = 0.0f;
+}
+
 /* The tick order holds within one session of a seat: a join forgets what the seat sent before,
    a leave keeps it (the host continues those bodies from it) without its order. */
 static void forget_states(body_sync_t *s, uint8_t seat, bool keep_states) {
@@ -143,6 +164,7 @@ void body_sync_seat_joined(body_sync_t *s, uint8_t seat) {
     }
     s->writing[seat] = false;
     forget_states(s, seat, false);
+    forget_round_trip(s, seat);
     sync_authority_seat_joined(&s->authority, seat);
     s->joined[seat] = true;
 }
@@ -154,6 +176,7 @@ void body_sync_seat_left(body_sync_t *s, uint8_t seat) {
     s->joined[seat] = false;
     s->writing[seat] = false;
     forget_states(s, seat, true);
+    forget_round_trip(s, seat);
     sync_authority_seat_left(&s->authority, seat);
 }
 
@@ -206,16 +229,25 @@ bool body_sync_contact_number(const body_sync_t *s, body_sync_id_t id, uint16_t 
 
 static float length3(const float v[3]) { return sqrtf(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]); }
 
-/* The stub drives a copy to the newest pose it received within the step: a state crosses no
-   slower than the claim behind it but by a tick. The agent is measured where the host's last
-   taken state of that ownership put it (body_sync_real.c says why not its declared velocity). */
+/* The claim's grace, ticks: the real seam's (sync_policy_evidence_ticks) with no playback delay,
+   since a copy here shows the newest pose at once. A state and the claim behind it cross on
+   packets of their own, each late by the path's jitter, and a lost one is resent: four mean
+   deviations of the round trip cover what the jitter spreads, as TCP's retransmit timer does. */
+static uint32_t claim_grace(const body_sync_t *s, uint8_t seat) {
+    float rtt = seat < s->config.seats ? s->round_trip[seat] + 4.0f * s->round_trip_dev[seat] : 0.0f;
+    return (uint32_t)ceilf(sync_policy_evidence_ticks(rtt, 0.0f, s->config.tick_hz));
+}
+
+/* The agent is measured where the host's last taken state of that ownership put it
+   (body_sync_real.c says why not its declared velocity). */
 body_sync_contact_verdict_t body_sync_check_contact(const body_sync_t *s, uint8_t seat, body_sync_id_t agent, uint16_t number,
                                                     body_sync_id_t target, uint32_t contact_tick, body_sync_contact_t *out) {
     body_sync_contact_t scratch;
     out = out ? out : &scratch;
     *out = (body_sync_contact_t){.gap = INFINITY};
     const sync_authority_ended_t *ended;
-    body_sync_contact_verdict_t verdict = sync_authority_check_contact(&s->authority, seat, agent, number, 1u, &ended);
+    uint32_t grace = claim_grace(s, seat);
+    body_sync_contact_verdict_t verdict = sync_authority_check_contact(&s->authority, seat, agent, number, grace, &ended);
     const entry_t *g = entry_const(s, agent), *t = entry_const(s, target);
     if (verdict == BODY_SYNC_CONTACT_STALE || agent == target || !g || !t || !b3Body_IsValid(g->body) || !b3Body_IsValid(t->body)) {
         return BODY_SYNC_CONTACT_STALE;
@@ -234,7 +266,7 @@ body_sync_contact_verdict_t body_sync_check_contact(const body_sync_t *s, uint8_
                                   .tick_hz = s->config.tick_hz,
                                   .max_speed = s->limits.max_speed,
                                   .contact_tick = contact_tick,
-                                  .window_ticks = 2u}; /* the tick a state crosses in and the one the claim is judged in */
+                                  .window_ticks = grace > 2u ? grace : 2u}; /* at least the tick a state crosses in and the one the claim is judged in */
     sync_authority_contact_measure(&s->authority, agent, seat, ended, &scene, &out->gap, &out->reach, &out->approach_max);
     return verdict;
 }
@@ -600,25 +632,42 @@ bool body_sync_write_state(body_sync_t *s, uint8_t seat, uint8_t *buffer, uint32
 }
 
 void body_sync_state_sent(body_sync_t *s, uint8_t seat, uint16_t number) {
-    (void)number;
     if (seat < s->config.seats) {
         s->traffic[seat].packets_sent++;
+        s->sent[seat][s->sent_next[seat]] = (sent_packet_t){.used = true, .number = number, .tick = s->now};
+        s->sent_next[seat] = (s->sent_next[seat] + 1u) % SENT_WINDOW;
     }
 }
 
 uint32_t body_sync_unresolved(const body_sync_t *s, uint8_t seat, uint16_t *numbers, uint32_t max) {
-    (void)s;
-    (void)seat;
-    (void)numbers;
-    (void)max;
-    return 0;
+    uint32_t n = 0;
+    for (uint32_t i = 0; seat < s->config.seats && numbers && i < SENT_WINDOW && n < max; i++) {
+        if (s->sent[seat][i].used) {
+            numbers[n++] = s->sent[seat][i].number;
+        }
+    }
+    return n;
 }
 
 void body_sync_resolve(body_sync_t *s, uint8_t seat, uint16_t number, bool arrived) {
-    (void)s;
-    (void)seat;
-    (void)number;
-    (void)arrived;
+    for (uint32_t i = 0; seat < s->config.seats && i < SENT_WINDOW; i++) {
+        sent_packet_t *p = &s->sent[seat][i];
+        if (!p->used || p->number != number) {
+            continue;
+        }
+        p->used = false;
+        if (arrived) {
+            float sample = (float)(int32_t)(s->now - p->tick), *rtt = &s->round_trip[seat], *dev = &s->round_trip_dev[seat];
+            if (*rtt <= 0.0f) {
+                *rtt = sample;
+                *dev = sample / 2.0f;
+            } else {
+                *dev += (fabsf(sample - *rtt) - *dev) / 4.0f;
+                *rtt += (sample - *rtt) / 8.0f;
+            }
+        }
+        return;
+    }
 }
 
 bool body_sync_peek_record(const body_sync_t *s, uint8_t seat, uint8_t *buffer, uint32_t capacity, uint32_t *size) {
@@ -676,11 +725,7 @@ bool body_sync_lost_take(const body_sync_t *s, body_sync_id_t id, uint32_t *coun
     return false;
 }
 
-float body_sync_round_trip(const body_sync_t *s, uint8_t seat) {
-    (void)s;
-    (void)seat;
-    return 0.0f;
-}
+float body_sync_round_trip(const body_sync_t *s, uint8_t seat) { return seat < s->config.seats ? s->round_trip[seat] : 0.0f; }
 
 bool body_sync_is_layer_copy(const body_sync_t *s, body_sync_id_t id) {
     (void)s;

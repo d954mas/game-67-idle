@@ -287,6 +287,7 @@ typedef struct stand_metrics {
     stand_hist_t aligned[BODY_SYNC_GUESTS_MAX], prediction[BODY_SYNC_GUESTS_MAX], flight_pause[BODY_SYNC_GUESTS_MAX];
     double local_correction[BODY_SYNC_GUESTS_MAX];
     double local_turn_deg[BODY_SYNC_GUESTS_MAX];
+    uint32_t local_samples[BODY_SYNC_GUESTS_MAX];
     uint32_t lost_takes[BODY_SYNC_GUESTS_MAX];
     double lost_take_max[BODY_SYNC_GUESTS_MAX];
     stand_hist_t response[BODY_SYNC_GUESTS_MAX];

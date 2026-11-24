@@ -74,6 +74,21 @@ body_sync_test(test_body_sync_checks LIBS body_sync_stand body_sync)
 box3d_enable(test_body_sync_checks)
 body_sync_test(test_body_sync_claims LIBS body_sync_stand body_sync)
 box3d_enable(test_body_sync_claims)
+# The claims suite's host-authority cases on the stub, the contract's reference.
+add_executable(test_body_sync_claims_stub test_body_sync_claims.c)
+target_include_directories(test_body_sync_claims_stub PRIVATE "${BODY_SYNC_DIR}/src")
+target_compile_definitions(test_body_sync_claims_stub PRIVATE CLAIMS_STUB=1)
+target_link_libraries(test_body_sync_claims_stub PRIVATE body_sync_stand_stub body_sync_stub unity)
+nt_set_warning_flags(test_body_sync_claims_stub)
+nt_set_sanitizer_flags(test_body_sync_claims_stub)
+# The interaction cases are compiled but not run here.
+target_compile_options(test_body_sync_claims_stub PRIVATE -Wno-unused-function)
+box3d_enable(test_body_sync_claims_stub)
+add_test(NAME test_body_sync_claims_stub COMMAND test_body_sync_claims_stub WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+add_test(NAME test_body_sync_claims_stub_mf_reach_unbounded
+    COMMAND "${CMAKE_COMMAND}" -DEXE=$<TARGET_FILE:test_body_sync_claims_stub> -DARGS=--plant-claim-reach-unbounded
+            "-DCASES=test_forged_far_claim_is_rejected_host|test_flung_far_claim_is_rejected_host"
+            -P "${CMAKE_CURRENT_LIST_DIR}/expect_unity_fail.cmake")
 # The host's limits on impact claims must each fail the cases meant for them when planted: an
 # approach read as 0 refuses every honest throw's claim, an unbounded reach takes a forged one.
 add_test(NAME test_body_sync_claims_mf_approach_scale0
@@ -108,6 +123,12 @@ add_test(NAME test_body_sync_claims_mf_approach_unbounded
     COMMAND "${CMAKE_COMMAND}" -DEXE=$<TARGET_FILE:test_body_sync_claims> -DARGS=--plant-claim-approach-unbounded
             "-DCASES=test_inflated_claim_speed_is_rejected"
             -P "${CMAKE_CURRENT_LIST_DIR}/expect_unity_fail.cmake")
+# A heavy door's claim comes behind the flight's release in both modes: with no grace after an end
+# it is refused.
+add_test(NAME test_body_sync_claims_mf_end_grace_zero
+    COMMAND "${CMAKE_COMMAND}" -DEXE=$<TARGET_FILE:test_body_sync_claims> -DARGS=--plant-end-grace-zero
+            "-DCASES=test_guest_throw_breaks_door_host|test_guest_throw_breaks_door_interaction"
+            -P "${CMAKE_CURRENT_LIST_DIR}/expect_unity_fail.cmake")
 # Honest throws under loss and jitter, over seeds: expensive, so its own slow case.
 add_test(NAME test_body_sync_claims_loss_sweep COMMAND test_body_sync_claims --sweep WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 box3d_enable(test_body_sync_stand)
@@ -133,7 +154,8 @@ set(BODY_SYNC_IMPLS "body_sync_stand_cli|" "body_sync_stand_cli_stub|stub_")
 set(core_tests test_body_sync_logic test_body_sync_playback test_body_sync_soft test_body_sync_policy test_body_sync_wire test_body_sync_stub test_body_sync_seam_real test_body_sync_codec test_body_sync_sender test_body_sync_authority test_body_sync_real
     test_body_sync_stand test_body_sync_checks test_body_sync_authority_mf_revoked_as_arbitrated
     test_body_sync_authority_mf_evidence_grows_over_gaps
-    test_body_sync_claims test_body_sync_claims_mf_approach_scale0 test_body_sync_claims_mf_reach_unbounded
+    test_body_sync_claims test_body_sync_claims_stub test_body_sync_claims_stub_mf_reach_unbounded test_body_sync_claims_mf_end_grace_zero
+    test_body_sync_claims_mf_approach_scale0 test_body_sync_claims_mf_reach_unbounded
     test_body_sync_claims_mf_approach_unbounded test_body_sync_claims_mf_take_reach_unbounded
     test_body_sync_claims_mf_evidence_grows_over_gaps test_body_sync_claims_mf_transform_sleep
     test_body_sync_authority_mf_approach_from_ring test_body_sync_authority_mf_evidence_age_unbounded

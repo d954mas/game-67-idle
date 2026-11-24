@@ -12,7 +12,8 @@ void setUp(void) {}
 void tearDown(void) {}
 
 static const char *const shipped[] = {"two_walk",       "stack_punch", "pile_throw", "cabinet_carry", "mannequin_hits", "grab_dispute",
-                                      "breakables_break", "load_four",  "edge_throw_cut", "edge_stall", "edge_deaf"};
+                                      "breakables_break", "load_four",  "edge_throw_cut", "edge_stall", "edge_deaf",
+                                      "throw_dummy",      "throw_glass_door", "throw_walker"};
 
 static body_sync_scenario_t scenario;
 static body_sync_scene_t scene;
@@ -504,6 +505,37 @@ static void test_unseen_delays_are_unbounded(void) {
     free(r);
 }
 
+/* A throw is a thrower's own: one never drawn moving on it, none at all, or a thrower with no
+   body it simulates measured reads unbounded, never 0. */
+static void test_a_throw_unseen_by_its_thrower_is_unbounded(void) {
+    body_sync_report_t *r = calloc(1, sizeof(*r));
+    r->guest_count = 1;
+    r->guests[0].seat = 1;
+    double v = 0.0;
+    char why[128];
+    TEST_ASSERT_TRUE(stand_metric_value(r, NULL, "own_ticks.max", &v, why, sizeof(why)));
+    TEST_ASSERT_TRUE(isinf(v));
+    TEST_ASSERT_NOT_NULL(strstr(why, "no throw"));
+    TEST_ASSERT_TRUE(stand_metric_value(r, NULL, "local_correction.max", &v, why, sizeof(why)));
+    TEST_ASSERT_TRUE(v < 0.5); /* nothing thrown: no body to simulate is no defect */
+    r->action_count = 1;
+    r->actions[0] = (body_sync_action_metrics_t){.line = 3, .player = 1, .verb = BODY_SYNC_VERB_THROW, .start_tick = 5, .outcome = BODY_SYNC_OUTCOME_DONE,
+                                                 .host_ticks = -1, .echo_ticks = -1, .seen_ticks = -1, .own_ticks = -1};
+    TEST_ASSERT_TRUE(stand_metric_value(r, NULL, "own_ticks.max", &v, why, sizeof(why)));
+    TEST_ASSERT_TRUE(isinf(v));
+    TEST_ASSERT_NOT_NULL(strstr(why, "line 3"));
+    TEST_ASSERT_TRUE(stand_metric_value(r, NULL, "local_turn.max", &v, why, sizeof(why)));
+    TEST_ASSERT_TRUE(isinf(v));
+    TEST_ASSERT_NOT_NULL(strstr(why, "g1 threw"));
+    r->actions[0].own_ticks = 1;
+    r->guests[0].local_samples = 3;
+    TEST_ASSERT_TRUE(stand_metric_value(r, NULL, "own_ticks.max", &v, why, sizeof(why)));
+    TEST_ASSERT_TRUE(v > 0.9 && v < 1.1);
+    TEST_ASSERT_TRUE(stand_metric_value(r, NULL, "local_correction.max", &v, why, sizeof(why)));
+    TEST_ASSERT_TRUE(v < 0.5);
+    free(r);
+}
+
 /* A driven body's rest by its window: a copy-grid step a quarter second (closed in one tick at
    0.2 m/s) rests; a drive kept at 6 cm/s, a centimetre's snap in one tick and a turn past a step
    in one tick do not. */
@@ -606,8 +638,14 @@ static void test_json_is_complete_and_repeatable(void) {
 static void test_catalog_validates_and_broken_scenes_are_refused(void) {
     uint32_t count = 0;
     const body_sync_scene_entry_t *catalog = body_sync_scene_catalog(&count);
-    TEST_ASSERT_EQUAL_UINT32(14, count);
     body_sync_error_t error;
+    /* Every scene a shipped scenario names is in the catalog. */
+    for (size_t i = 0; i < sizeof(shipped) / sizeof(shipped[0]); i++) {
+        char path[512];
+        snprintf(path, sizeof(path), "%s/%s.scn", BODY_SYNC_SCENARIOS_DIR, shipped[i]);
+        TEST_ASSERT_TRUE_MESSAGE(body_sync_scenario_load(path, &scenario, &error), shipped[i]);
+        TEST_ASSERT_NOT_NULL_MESSAGE(body_sync_scene_lookup(catalog, count, scenario.scene), shipped[i]);
+    }
     for (uint32_t i = 0; i < count; i++) {
         catalog[i].build(&scene);
         TEST_ASSERT_TRUE_MESSAGE(body_sync_scene_validate(&scene, &error), error.text);
@@ -744,6 +782,7 @@ int main(void) {
     RUN_TEST(test_impact_record_refusals);
     RUN_TEST(test_new_forms_are_read);
     RUN_TEST(test_unseen_delays_are_unbounded);
+    RUN_TEST(test_a_throw_unseen_by_its_thrower_is_unbounded);
     RUN_TEST(test_a_driven_body_rests_by_its_window);
     RUN_TEST(test_histogram_quantiles);
     RUN_TEST(test_json_is_complete_and_repeatable);

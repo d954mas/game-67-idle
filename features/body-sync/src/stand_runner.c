@@ -194,6 +194,7 @@ typedef struct action_track {
     uint8_t seen_mask;
     body_sync_outcome_t outcome;
     int32_t host_ticks, echo_ticks, seen_ticks;
+    int32_t own_ticks; /* a throw: until the actor's own world draws the body moved */
 } action_track_t;
 
 struct body_sync_stand {
@@ -202,6 +203,7 @@ struct body_sync_stand {
     bool series;
     float light_mass;
     uint32_t plant_shift; /* stand_testing_plant_shift */
+    uint8_t plant_keep_broken; /* stand_testing_plant_keep_broken: the endpoint, 0 none */
     float plant_drift;    /* stand_testing_plant_drift */
     float plant_lead;     /* stand_testing_plant_lead */
     uint32_t plant_jolt_tick; /* stand_testing_plant_jolt; 0 none */
@@ -239,6 +241,7 @@ struct body_sync_stand {
     uint32_t claims_in[BODY_SYNC_ENDPOINTS_MAX], claims_overflow[BODY_SYNC_ENDPOINTS_MAX], claims_repeat[BODY_SYNC_ENDPOINTS_MAX];
     uint32_t claims_rejected[BODY_SYNC_ENDPOINTS_MAX], claims_idle[BODY_SYNC_ENDPOINTS_MAX], claim_effects[BODY_SYNC_ENDPOINTS_MAX];
     uint32_t claims_format[BODY_SYNC_ENDPOINTS_MAX];
+    uint32_t claims_ended[BODY_SYNC_ENDPOINTS_MAX];
     float claim_reach_scale, claim_approach_scale; /* 1 and 1; stand_testing_plant_claim_limits */
     uint32_t plant_declared_endpoint, plant_declared_ticks; /* stand_testing_plant_declared_velocity; 0 ticks none */
     body_sync_id_t plant_declared_body;
@@ -522,7 +525,7 @@ static void begin_measure(body_sync_stand_t *st, int32_t index, body_sync_id_t r
     a->ref_id = ref;
     a->ref_set = false;
     a->seen_mask = 0;
-    a->host_ticks = a->echo_ticks = a->seen_ticks = -1;
+    a->host_ticks = a->echo_ticks = a->seen_ticks = a->own_ticks = -1;
     if (st->scenario.actions[index].player == BODY_SYNC_ENDPOINT_HOST) {
         a->host_ticks = 0;
         a->echo_ticks = 0;
@@ -822,6 +825,9 @@ static void judge_impact(body_sync_stand_t *st, uint8_t seat, const stand_record
     }
     body_sync_contact_t c;
     body_sync_contact_verdict_t verdict = body_sync_check_contact(host->sync, seat, r->body, r->number, r->target, r->tick, &c);
+    if (verdict == BODY_SYNC_CONTACT_OK && c.ended) {
+        st->claims_ended[seat]++;
+    }
     if (verdict != BODY_SYNC_CONTACT_OK || !stand_impact_accepts(c.gap, c.reach * st->claim_reach_scale, c.approach_max * st->claim_approach_scale, r->speed)) {
         st->claims_rejected[seat]++;
         return;
@@ -991,6 +997,9 @@ static void stand_record_in(body_sync_stand_t *st, endpoint_t *ep, uint8_t seat,
         break;
     }
     case STAND_REC_REMOVE:
+        if (st->plant_keep_broken != 0 && st->plant_keep_broken == ep->index) {
+            break;
+        }
         drop_if_held(ep, r->target);
         body_sync_unbind(ep->sync, r->target);
         stand_world_remove(ep->world, r->target);
@@ -1517,6 +1526,13 @@ static void track_actions(body_sync_stand_t *st) {
             continue;
         }
         int32_t elapsed = (int32_t)(st->now - a->start_tick);
+        if (act_desc->verb == BODY_SYNC_VERB_THROW && a->own_ticks < 0 && actor_ep->built && stand_world_slot(actor_ep->world, a->ref_id)) {
+            float at[3], rot[4];
+            drawn_pose(actor_ep, body_sync_id_slot(a->ref_id), at, rot);
+            if (moved(at, a->ref_pos[actor], MOVED_M)) {
+                a->own_ticks = elapsed;
+            }
+        }
         /* A walk counts for the delays only once its own character has moved. */
         if (act_desc->verb == BODY_SYNC_VERB_WALK && !a->shows && actor_ep->built && stand_world_slot(actor_ep->world, a->ref_id)) {
             float at[3], rot[4];
@@ -3019,6 +3035,7 @@ static void evaluate(body_sync_stand_t *st) {
         gm->claims_idle = st->claims_idle[g];
         gm->claim_effects = st->claim_effects[g];
         gm->claims_format = st->claims_format[g];
+        gm->claims_ended = st->claims_ended[g];
     }
     r->action_count = st->scenario.action_count;
     for (uint32_t i = 0; i < st->scenario.action_count; i++) {
@@ -3034,6 +3051,7 @@ static void evaluate(body_sync_stand_t *st) {
         m->host_ticks = t->started ? t->host_ticks : -1;
         m->echo_ticks = t->started ? t->echo_ticks : -1;
         m->seen_ticks = t->started ? t->seen_ticks : -1;
+        m->own_ticks = t->started ? t->own_ticks : -1;
         m->shows = t->started && t->shows;
         m->answered = t->started && t->answered;
         if (a->verb == BODY_SYNC_VERB_WAIT) {
@@ -3239,7 +3257,7 @@ static body_sync_stand_t *create_stand(const body_sync_stand_config_t *config, b
     stand_schedule_init(&st->schedule, &st->scenario);
     stand_metrics_reset(&st->metrics, st->scenario.guests);
     for (uint32_t i = 0; i < st->scenario.action_count; i++) {
-        st->actions[i].host_ticks = st->actions[i].echo_ticks = st->actions[i].seen_ticks = -1;
+        st->actions[i].host_ticks = st->actions[i].echo_ticks = st->actions[i].seen_ticks = st->actions[i].own_ticks = -1;
     }
     for (uint32_t i = 0; i < st->scenario.expect_count; i++) {
         if (st->scenario.expects[i].kind == BODY_SYNC_EXPECT_PACE && !(st->pace[i] = calloc(BODY_SYNC_STAND_TICKS_MAX, sizeof(float)))) {
@@ -3504,6 +3522,7 @@ void stand_testing_plant_claim_limits(body_sync_stand_t *st, float reach_scale, 
 }
 
 void stand_testing_plant_shift(body_sync_stand_t *st, uint32_t ticks) { st->plant_shift = ticks; }
+void stand_testing_plant_keep_broken(body_sync_stand_t *st, uint8_t endpoint) { st->plant_keep_broken = endpoint; }
 void stand_testing_plant_drift(body_sync_stand_t *st, float metres) { st->plant_drift = metres; }
 void stand_testing_plant_lead(body_sync_stand_t *st, float metres) { st->plant_lead = metres; }
 void stand_testing_plant_pace_on_time(body_sync_stand_t *st) { st->plant_pace_on_time = true; }

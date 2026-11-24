@@ -81,13 +81,16 @@ extern "C" {
      aligned_gap.max aligned_gap.p95 local_correction.max [m]   local_turn.max [deg]
      takes.count take_refusals.count reclaims.count returns.count [bodies]
      claims.count claims_overflow.count claims_repeat.count claims_rejected.count claims_idle.count
-     claim_effects.count claims_format.count [claims]
+     claim_effects.count claims_format.count claims_ended.count [claims]
+     own_ticks.max [ticks]: the worst throw's ticks from its start until the thrower's own world
+       draws the body 5 cm from where it was (a throw never drawn so fails a check)
    - claims: a guest's hit and impact claims the host parsed. Each lands in exactly one of
      overflow (its seat's queue for the tick was full), repeat (an impact key judged before),
      rejected (the seam's gate said STALE or REVOKED, or the stand's limits or rules refused it:
      a gap past the reach, a claimed speed past the approach the host saw, a hit out of range),
      idle (accepted, nothing left to do: a target already broken or felled) and effects.
-     claims_format counts the guest's stand records the parser refused (dropped).
+     claims_format counts the guest's stand records the parser refused (dropped). claims_ended
+     counts the claims the seam's gate passed after the agent's ownership ended, within its grace.
    - lag-aligned gap: two pictures of one moment, while the body moves. A copy an endpoint plays
      (a guest the host's bodies, the host a guest's) against what its owner drew at the owner tick
      the copy shows, a body a guest predicts (the second layer) too once its pull runs: the snap
@@ -192,6 +195,7 @@ typedef struct body_sync_guest_metrics {
     double flight_pause_gap_max_m, flight_pause_gap_p95_m;
     double local_correction_max_m;
     double local_turn_max_deg; /* its turn: the same correction of the body's rotation */
+    uint32_t local_samples;    /* body-ticks those two measured: none, for a guest that threw, fails a check of them */
     /* Authority following interaction: the guest's takes the host granted and refused, its bodies
        the host's agents took back, and those it returned at rest. */
     uint32_t takes, take_refusals, reclaims, returns;
@@ -233,6 +237,9 @@ typedef struct body_sync_guest_metrics {
     /* This seat's claims on the host (see "claims" above): claims = overflow + repeat + rejected
        + idle + effects. */
     uint32_t claims, claims_overflow, claims_repeat, claims_rejected, claims_idle, claim_effects, claims_format;
+    /* Of the claims the seam's gate let through, those it judged after the agent's ownership had
+       ended (the release before the claim of a flight a heavy body ends). */
+    uint32_t claims_ended;
 } body_sync_guest_metrics_t;
 
 typedef struct body_sync_action_metrics {
@@ -243,6 +250,7 @@ typedef struct body_sync_action_metrics {
     uint32_t start_tick;          /* UINT32_MAX when it never started */
     body_sync_outcome_t outcome;
     int32_t host_ticks, echo_ticks, seen_ticks; /* -1: never seen */
+    int32_t own_ticks; /* a throw: until the actor's own world shows the body move; -1 never or not a throw */
     bool shows;    /* counts for host_ticks and seen_ticks */
     bool answered; /* counts for echo_ticks */
 } body_sync_action_metrics_t;

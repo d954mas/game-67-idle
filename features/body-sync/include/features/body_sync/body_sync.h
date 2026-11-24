@@ -256,7 +256,8 @@ bool body_sync_contact_number(const body_sync_t *sync, body_sync_id_t id, uint16
    - OK within the grace after that ownership ended by the seat's own release, or by the host
      settling a contest (its take-back or claim, a grant or take to another seat); STALE after.
      The grace is the evidence's span: a round trip, a playback delay and a tick, capped at
-     SYNC_POLICY_EVIDENCE_AGE_MAX_S (the stub: one tick).
+     SYNC_POLICY_EVIDENCE_AGE_MAX_S (the stub, which plays no delay: its round trip plus four
+     mean deviations of it, and a tick).
    - REVOKED, for good, when the host recalled it (body_sync_assign to any seat, the seat
      leaving): the recall drops the seat's late claims.
    - STALE otherwise: a number the seat never held, a claim older than the seat's newest ended
@@ -316,7 +317,8 @@ bool body_sync_write_state(body_sync_t *sync, uint8_t seat, uint8_t *buffer, uin
 void body_sync_state_sent(body_sync_t *sync, uint8_t seat, uint16_t number);
 
 /* Packet numbers sent to `seat` whose fate the seam still wants; the caller answers each with
-   body_sync_resolve from coop_session_packet_fate once it is final. The stub wants none. */
+   body_sync_resolve from coop_session_packet_fate once it is final. The stub wants them only for
+   the round trip its contact claims' grace is built from. */
 uint32_t body_sync_unresolved(const body_sync_t *sync, uint8_t seat, uint16_t *numbers, uint32_t max);
 void body_sync_resolve(body_sync_t *sync, uint8_t seat, uint16_t number, bool arrived);
 
@@ -367,8 +369,8 @@ bool body_sync_lost_take(const body_sync_t *sync, body_sync_id_t id, uint32_t *c
 bool body_sync_is_layer_copy(const body_sync_t *sync, body_sync_id_t id);
 
 /* Measurement: the round trip to a seat in ticks, from a state packet's send to its arrival fate
-   (body_sync_resolve), smoothed; 0 before the first fate and for the stub. The second layer's
-   pause is built from it. */
+   (body_sync_resolve), smoothed; 0 before the first fate. The second layer's pause is built from
+   it, and the stub's contact claim grace. */
 float body_sync_round_trip(const body_sync_t *sync, uint8_t seat);
 
 /* ---- measurements ---- */

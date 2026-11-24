@@ -33,6 +33,8 @@ void stand_testing_plant_claim_limits(body_sync_stand_t *stand, float reach_scal
    names), and what a guest draws of the bodies it simulates is moved `metres` along x from what it
    simulates and sends (a render offset that never decays on a local body). */
 void stand_testing_plant_shift(body_sync_stand_t *st, uint32_t ticks);
+/* Guest `endpoint` ignores the host's removals: a body the host broke stays on its world. */
+void stand_testing_plant_keep_broken(body_sync_stand_t *st, uint8_t endpoint);
 void stand_testing_plant_drift(body_sync_stand_t *st, float metres);
 /* What a guest draws of a predicted copy in its pause is moved `metres` along x: a lead on the
    playback tick, as this guest's own answer to its touch draws ahead of it. */
