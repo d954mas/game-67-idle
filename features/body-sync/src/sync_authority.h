@@ -187,6 +187,9 @@ typedef struct sync_authority {
     bool plant_evidence_age_unbounded;
     bool plant_teleport_keeps_ring;
     bool plant_target_any_ownership;
+    /* A planted defect: a contact's target is judged where the host has it now, credited its
+       travel in any direction. Never set outside tests. */
+    bool plant_target_rewind_off;
     /* Host: the shell's measure of a take's evidence (sync_policy_grant_in_t agent_gap, *reach).
        None: every take counts as touching, for the parts tested without a world. */
     float (*take_gap)(void *context, uint8_t seat, uint32_t slot, uint32_t tick, float *reach);
@@ -326,6 +329,10 @@ typedef struct sync_contact_scene {
     float target_lo[3], target_hi[3];
     float agent_lo[3], agent_hi[3];
     float target_speed;
+    /* A contact claim of a body the host shows now (`rewind`): its velocity, m/s. The fit puts it
+       back along it by the time since the contact, so only a bend off that path is slack. */
+    float target_velocity[3];
+    bool rewind;
     uint32_t tick_hz;
     float max_speed;
     /* The contact's tick on the claimant's clock, the one its states are stamped with: a contact

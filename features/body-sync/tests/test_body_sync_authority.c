@@ -291,6 +291,7 @@ static bool plant_grows; /* --plant-evidence-grows-over-gaps: the gap cases must
 /* --plant-approach-from-ring, --plant-evidence-age-unbounded, --plant-teleport-keeps-ring: the
    approach, lag and teleport cases must fail. */
 static bool plant_ring_approach, plant_age, plant_teleport;
+static bool plant_rewind_off; /* --plant-target-rewind-off: the flying target case must fail */
 static sync_authority_t *path_host;
 
 /* The host's `now`, then a state of `b` from seat 1 (2 ticks of jitter granted, the box's speed
@@ -341,6 +342,7 @@ static void path_start(void) {
     path_host->plant_approach_from_ring = plant_ring_approach;
     path_host->plant_evidence_age_unbounded = plant_age;
     path_host->plant_teleport_keeps_ring = plant_teleport;
+    path_host->plant_target_rewind_off = plant_rewind_off;
     path_body->seat = path_other->seat = 1;
     path_body->number = path_other->number = 3;
     path_push = 0.0f;
@@ -583,6 +585,39 @@ static void test_a_contact_named_long_after_has_no_evidence(void) {
     for (int k = 0; k < 3; k++) {
         take_pose(path_other, 900 + late[k], 502 + late[k], elsewhere);
         TEST_ASSERT_FALSE_MESSAGE(measure_box(0.6f, 0.0f, 0.0f, 0.05f).any, "a contact named long after had evidence");
+    }
+    path_end();
+}
+
+/* A host body flying at 10 m/s, judged against an agent resting at the origin 12 host ticks after
+   the agent's state: it is put back 2 m along its own path. Flown into the agent's place since, it
+   never met it; 2 m on, its path ran through the agent then. */
+static void test_a_flying_target_is_judged_where_its_path_had_it(void) {
+    path_start();
+    const float rest[3] = {0.0f, 0.0f, 0.0f};
+    for (uint32_t i = 0; i < 3; i++) {
+        take_pose(path_body, 100 + i, 500 + i, rest);
+    }
+    path_host->now = 514;
+    path_contact = 102;
+    sync_contact_scene_t in = {.tick_hz = 60, .max_speed = 50.0f, .contact_tick = path_contact, .window_ticks = 20,
+                               .target_speed = 10.0f, .target_velocity = {10.0f, 0.0f, 0.0f}, .rewind = true};
+    float gap, reach, approach;
+    for (int k = 0; k < 2; k++) {
+        const float x = k == 0 ? 0.0f : 2.0f;
+        for (int i = 0; i < 3; i++) {
+            in.agent_lo[i] = -0.12f;
+            in.agent_hi[i] = 0.12f;
+            in.target_lo[i] = (i == 0 ? x : 0.0f) - 0.3f;
+            in.target_hi[i] = (i == 0 ? x : 0.0f) + 0.3f;
+        }
+        TEST_ASSERT_TRUE(sync_authority_path_measure(path_host, path_body, 1, NULL, &in, &gap, &reach, &approach));
+        if (k == 0) {
+            TEST_ASSERT_TRUE_MESSAGE(gap > reach, "a target that flew into the agent's place was judged there");
+        } else {
+            TEST_ASSERT_TRUE_MESSAGE(gap <= reach, "a target whose path ran through the agent was not judged on it");
+            TEST_ASSERT_TRUE_MESSAGE(reach < 1.0f, "the rewound target's slack is its whole travel");
+        }
     }
     path_end();
 }
@@ -953,6 +988,7 @@ int main(int argc, char **argv) {
         plant_age = plant_age || strcmp(argv[i], "--plant-evidence-age-unbounded") == 0;
         plant_teleport = plant_teleport || strcmp(argv[i], "--plant-teleport-keeps-ring") == 0;
         plant_target_any = plant_target_any || strcmp(argv[i], "--plant-target-any-ownership") == 0;
+        plant_rewind_off = plant_rewind_off || strcmp(argv[i], "--plant-target-rewind-off") == 0;
     }
     UNITY_BEGIN();
     RUN_TEST(test_routes_and_record_kinds);
@@ -972,6 +1008,7 @@ int main(int argc, char **argv) {
     RUN_TEST(test_a_teleport_starts_the_evidence_over);
     RUN_TEST(test_approach_is_the_step_at_the_contact);
     RUN_TEST(test_a_contact_named_long_after_has_no_evidence);
+    RUN_TEST(test_a_flying_target_is_judged_where_its_path_had_it);
     RUN_TEST(test_compressed_stamps_buy_no_speed_and_no_chord);
     RUN_TEST(test_contact_after_a_take_by_another_seat);
     RUN_TEST(test_contact_after_a_flight_returns);

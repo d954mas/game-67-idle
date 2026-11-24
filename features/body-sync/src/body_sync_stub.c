@@ -229,6 +229,8 @@ body_sync_contact_verdict_t body_sync_check_contact(const body_sync_t *s, uint8_
                                   .agent_lo = {box.lowerBound.x - at.x, box.lowerBound.y - at.y, box.lowerBound.z - at.z},
                                   .agent_hi = {box.upperBound.x - at.x, box.upperBound.y - at.y, box.upperBound.z - at.z},
                                   .target_speed = length3((const float[3]){vb.x, vb.y, vb.z}),
+                                  .target_velocity = {vb.x, vb.y, vb.z},
+                                  .rewind = true,
                                   .tick_hz = s->config.tick_hz,
                                   .max_speed = s->limits.max_speed,
                                   .contact_tick = contact_tick,

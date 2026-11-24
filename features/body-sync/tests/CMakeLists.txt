@@ -56,6 +56,10 @@ add_test(NAME test_body_sync_authority_mf_teleport_keeps_ring
     COMMAND "${CMAKE_COMMAND}" -DEXE=$<TARGET_FILE:test_body_sync_authority> -DARGS=--plant-teleport-keeps-ring
             "-DCASES=test_a_teleport_starts_the_evidence_over|test_a_teleport_step_is_refused"
             -P "${CMAKE_CURRENT_LIST_DIR}/expect_unity_fail.cmake")
+add_test(NAME test_body_sync_authority_mf_target_rewind_off
+    COMMAND "${CMAKE_COMMAND}" -DEXE=$<TARGET_FILE:test_body_sync_authority> -DARGS=--plant-target-rewind-off
+            "-DCASES=test_a_flying_target_is_judged_where_its_path_had_it"
+            -P "${CMAKE_CURRENT_LIST_DIR}/expect_unity_fail.cmake")
 add_test(NAME test_body_sync_authority_mf_target_any_ownership
     COMMAND "${CMAKE_COMMAND}" -DEXE=$<TARGET_FILE:test_body_sync_authority> -DARGS=--plant-target-any-ownership
             "-DCASES=test_target_states_count_only_under_a_claimable_ownership"
@@ -133,6 +137,7 @@ set(core_tests test_body_sync_logic test_body_sync_playback test_body_sync_soft 
     test_body_sync_claims_mf_evidence_grows_over_gaps test_body_sync_claims_mf_transform_sleep
     test_body_sync_authority_mf_approach_from_ring test_body_sync_authority_mf_evidence_age_unbounded
     test_body_sync_authority_mf_teleport_keeps_ring test_body_sync_authority_mf_target_any_ownership
+    test_body_sync_authority_mf_target_rewind_off
     test_body_sync_claims_mf_approach_from_ring test_body_sync_claims_mf_evidence_age_unbounded)
 set(slow_tests test_body_sync_free_step test_body_sync_claims_loss_sweep)
 foreach(impl IN LISTS BODY_SYNC_IMPLS)

@@ -890,6 +890,7 @@ typedef struct contact_fit {
     const sync_contact_scene_t *in;
     float margin, gap, reach;
     float since; /* ticks the host's target may have moved since the contact, its speed now its pace */
+    bool rewind; /* the target goes back along its velocity over them (sync_contact_scene_t) */
 } contact_fit_t;
 
 /* One path the contact may lie on, `ticks` long: the fit keeps the one whose gap comes nearest
@@ -900,8 +901,16 @@ static void fit_path(contact_fit_t *f, const float from[3], const float along[3]
     float moved = ticks > f->in->target_ticks ? ticks : f->in->target_ticks;
     moved = f->since > moved ? f->since : moved;
     float t = (moved < cap ? moved : cap) / (float)f->in->tick_hz;
-    float gap = segment_gap(f->lo, f->hi, from, along);
-    float reach = SYNC_POLICY_TAKE_SLOP_M + f->in->target_speed * t + 0.5f * SYNC_POLICY_CONTACT_BEND_MS2 * s * s;
+    /* Rewound, the target is off where its path had it only by a bend of that path, sized as the
+       agent's; never more than the travel credit without the rewind, so a resting body gets none. */
+    float lo[3], hi[3], travel = f->in->target_speed * t, bent = 0.5f * SYNC_POLICY_CONTACT_BEND_MS2 * t * t;
+    for (int i = 0; i < 3; i++) {
+        float back = f->rewind ? f->in->target_velocity[i] * t : 0.0f;
+        lo[i] = f->lo[i] - back;
+        hi[i] = f->hi[i] - back;
+    }
+    float gap = segment_gap(lo, hi, from, along);
+    float reach = SYNC_POLICY_TAKE_SLOP_M + (f->rewind && bent < travel ? bent : travel) + 0.5f * SYNC_POLICY_CONTACT_BEND_MS2 * s * s;
     if (gap - reach < f->margin) {
         f->margin = gap - reach;
         f->gap = gap;
@@ -935,7 +944,8 @@ bool sync_authority_path_measure(const sync_authority_t *a, const sync_authority
     if (in->tick_hz == 0 || seat >= BODY_SYNC_SEATS_MAX) {
         return false;
     }
-    contact_fit_t f = {.in = in, .margin = INFINITY, .gap = INFINITY, .reach = SYNC_POLICY_TAKE_SLOP_M};
+    contact_fit_t f = {.in = in, .margin = INFINITY, .gap = INFINITY, .reach = SYNC_POLICY_TAKE_SLOP_M,
+                       .rewind = in->rewind && !a->plant_target_rewind_off};
     for (int i = 0; i < 3; i++) {
         f.lo[i] = in->target_lo[i] - in->agent_hi[i];
         f.hi[i] = in->target_hi[i] - in->agent_lo[i];

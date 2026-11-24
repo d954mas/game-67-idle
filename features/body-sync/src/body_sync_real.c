@@ -413,6 +413,12 @@ body_sync_contact_verdict_t body_sync_check_contact(const body_sync_t *s, uint8_
     /* Before its first state, the claimant took it at the contact: where the host had it then. */
     bool taken_then = !then && tb && tb->seat == seat && t->take_pose_known &&
                       (contact_tick - t->take_tick <= SYNC_POLICY_CHORD_TICKS_MAX || t->take_tick - contact_tick <= SYNC_POLICY_CHORD_TICKS_MAX);
+    /* Otherwise it is the host's body as it is now, put back along its own velocity. */
+    b3Vec3 v = b3Body_GetLinearVelocity(t->body);
+    scene.target_velocity[0] = v.x;
+    scene.target_velocity[1] = v.y;
+    scene.target_velocity[2] = v.z;
+    scene.rewind = !then && !taken_then;
     if (then || taken_then) {
         const float *at = then ? then->position : t->take_at;
         b3Vec3 now = b3Body_GetPosition(t->body), d = {at[0] - now.x, at[1] - now.y, at[2] - now.z};

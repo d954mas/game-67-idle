@@ -664,9 +664,14 @@ ignores the mode.
   of these, the target where the claimant's own states, or the host at its take
   of it, put it at the contact (its states only under an ownership of it whose
   claims the seat may still make: never once the host took it back and the
-  grace ran out, or recalled it); the reach is the take slop, the target's travel
-  at its speed now since the contact (at most the grace) and a bend of the path
-  of `SYNC_POLICY_CONTACT_BEND_MS2` (20 m/s^2): 4.4 cm over 4 ticks. The
+  grace ran out, or recalled it). A target the host shows as it is now is put
+  back along its own velocity by the time since the contact (at most the grace),
+  so a body that flew into the agent's old place is judged where its path had
+  it. The reach is the take slop, the target's bend off that path (sized as the
+  agent's, never more than its travel at its speed now over that time, so a
+  resting target gets none; a target at a claimant's own state gets that
+  travel) and a bend of the agent's path of `SYNC_POLICY_CONTACT_BEND_MS2`
+  (20 m/s^2): 4.4 cm over 4 ticks. The
   approach is the fastest step of those very states (the step into each, and
   the chord's) plus the target's speed, never a step elsewhere in the ring: a
   fast throw that rolls on to a slow touch claims the touch's speed. A step
