@@ -38,6 +38,7 @@ from . import sidecar as sc
 from . import sim
 from .sheet import simplify
 from .sim import geodesic_depth
+from . import model as Mo
 from .model import RenderModel, Surface
 
 PACKAGE = Path(__file__).resolve().parent
@@ -589,7 +590,8 @@ class Outfit:
 
     instances = []
 
-    def __init__(self, script, root, model, body, fabrics, colliders=None, clips=None, looks=(), seats=None):
+    def __init__(self, script, root, model, body, fabrics, colliders=None, clips=None, looks=(), seats=None,
+                 seated=None):
         self.root = Path(root).resolve()
         self.script = None if script is None else Path(script).resolve()
         self.inputs = {}
@@ -599,6 +601,10 @@ class Outfit:
                 raise ValueError(f"{self.declaration.name} declares colliders {declared.get('colliders')}, the script passes "
                                  f"{colliders}: the declaration is the one source of the outfit's body shapes")
             colliders = declared.get("colliders")
+            if seated is not None and sorted(seated) != sorted(declared.get("seated", [])):
+                raise ValueError(f"{self.declaration.name} clears the seated clips {declared.get('seated', [])}, the "
+                                 f"script passes {list(seated)}: the declaration is the one source of them")
+            seated = declared.get("seated", [])
         self.model_path = self._input(model)
         if declared is not None and declared.get("sidecar") not in (None, self._committed_path().relative_to(
                 self.root).as_posix()):
@@ -613,8 +619,18 @@ class Outfit:
         self.body = load_body(self.model, body, self._input)
         self.colliders = None if colliders is None else self.root / colliders
         self.clips = None if clips is None else self.root / clips
+        self.seated = sorted(seated or [])
+        if self.seated:
+            known = set() if self.clips is None else Mo.seated(self.clips)
+            if set(self.seated) - known:
+                raise ValueError(f"the outfit is cleared for {sorted(set(self.seated) - known)}, which the clip manifest "
+                                 f"does not mark seated (its seated clips: {sorted(known)})")
         self.looks = [self.root / look for look in looks]
         given = dict((seats(self._input) if callable(seats) else seats) or {})
+        if self.clips is not None:
+            # A seat of a seated clip the outfit is not cleared for is no input of it: nothing it shows sits there.
+            hidden = Mo.seated(self.clips) - set(self.seated)
+            given = {clip: s for clip, s in given.items() if clip not in hidden}
         self.seats = {clip: (s["planes"] if isinstance(s, dict) else s) for clip, s in given.items()}
         self.seat_sources = {clip: s.get("source") for clip, s in given.items() if isinstance(s, dict)}
         self.pieces = []
@@ -658,12 +674,12 @@ class Outfit:
         return self._input(path)
 
     def clip_paths(self):
-        """{name: path} of the outfit's clip manifest, read as a build input."""
-        from . import model as Mo
+        """{name: path} of the clips the outfit is shown in (its manifest, read as a build input, without the seated
+        clips it is not cleared for)."""
         if self.clips is None:
             return {}
         self._input(self.clips)
-        return dict(Mo.clips(self.clips))
+        return dict(Mo.shown(self.clips, self.seated))
 
     def clip_entries(self):
         if self.clips is None:
@@ -697,6 +713,9 @@ class Outfit:
             if clip not in entries:
                 raise ValueError(f"corrective {name!r}: no clip {clip!r} in {self.clips}")
             seated = entries[clip].get("game", {}).get("state") == "seated"
+            if seated and clip not in self.seated:
+                raise ValueError(f"corrective {name!r}: the outfit is not cleared for the seated clip {clip!r}; clear "
+                                 "it in the declaration's seated")
             if convexes is None:
                 if seated and clip not in self.seats:
                     raise ValueError(f"corrective {name!r}: {clip!r} is a seated clip and the outfit declares no seat "
@@ -878,21 +897,42 @@ class Outfit:
         t = o.thickness + i.thickness
         deficit = np.inf
         while True:
-            o_b = body_maps.directions(o.x, o.faces, self.body)
-            i_b = body_maps.directions(i.x, i.faces, self.body)
-            g, _ = overlap(o.x, o.faces, o_b, i.x, i.faces, i_b, self.body.closest(o.x)[2], np.inf)
-            thin = np.isfinite(g) & (g < t - SEPARATE_RESOLUTION) & ~o.pins
+            o_b, g, (g_in, face_in) = self._layer_gaps(o, i)
+            # The rule `layer` applies, from both sides: thinner than the two fabrics in any frame leaves no room. An
+            # inner vertex's gap is opened by moving the free corners of the outer triangle its ray meets.
+            want = np.where(np.isfinite(g) & ~o.pins, t - g, 0.0)
+            short = np.flatnonzero(np.isfinite(g_in) & ~i.pins & (g_in < t))
+            for v in short:
+                corners = o.faces[face_in[v]]
+                want[corners] = np.maximum(want[corners], np.where(o.pins[corners], 0.0, t - g_in[v]))
+            thin = want > 0
             if not thin.any():
                 break
-            # The gap is measured along the body direction and the offset goes along the normal, so a tilted vertex
-            # needs another pass; each pass must shrink what is missing, or the offset cannot open the gap.
-            missing = float(np.sum(t - g[thin]))
-            if missing >= deficit:
-                raise ValueError(f"separate {o.id} over {i.id}: offsets along the normal do not open the gap at vertices "
-                                 f"{np.flatnonzero(thin)[:12].tolist()} ({missing * 1000:.1f} mm missing in all)")
+            # The move goes outward along the body direction, the line the gap is measured on, so neither the mesh's
+            # winding nor a fold of a coarse sheet decides it; the direction is measured again from the moved mesh, so
+            # a pass may leave a remainder, and each pass must shrink what is missing.
+            missing = float(np.sum(want[thin]))
+            if missing >= deficit or (short.size and not thin[o.faces[face_in[short]]].any()):
+                raise ValueError(f"separate {o.id} over {i.id}: moving out along the body direction does not open the gap "
+                                 f"at vertices {np.flatnonzero(thin)[:12].tolist()} ({missing * 1000:.1f} mm missing in all)")
             deficit = missing
-            o.x = sim.offset(o.x, o.faces, thin, np.where(thin, t - np.where(np.isfinite(g), g, t), 0))
+            o.x = o.x - np.where(thin, want + SEPARATE_RESOLUTION, 0)[:, None] * o_b
             o._mark("mesh", thin, "build: separate the layers")
+
+    def _layer_gaps(self, o, i):
+        """(outer body direction, per outer vertex the gap `layer` will read, (per inner vertex the gap it reads
+        outward, the outer triangle that ray meets)): along each piece's body direction to the other mesh, the
+        narrowest over the rest pose and the clips with both pieces on the skinning the rule gives them (inf where the
+        ray misses). Measured on copies, so nothing of the pieces changes."""
+        a, b = copy.copy(o), copy.copy(i)
+        for p in (a, b):
+            p.w = p.w.copy()
+            p.b = body_maps.directions(p.x, p.faces, self.body)
+            p.origin = {k: v.copy() for k, v in p.origin.items()}
+            p.sites = list(p.sites)
+        (gap_o, face_o, bary_o), (gap_i, face_i, bary_i) = self._share_weights(a, b)
+        return (a.b, self._narrowest(a, b, gap_o, face_o, bary_o),
+                (self._narrowest(b, a, gap_i, face_i, bary_i, sign=-1.0), face_i))
 
     def _layer(self, o, i):
         t = o.thickness + i.thickness
@@ -965,7 +1005,8 @@ class Outfit:
         for piece in (a, b):
             order, values = top_influences(piece.w)
             w = np.zeros_like(piece.w)
-            np.put_along_axis(w, order, values, axis=1)
+            # Summed, as the runtime skins: an empty lane names the strongest joint with weight 0 and adds nothing.
+            np.add.at(w, (np.arange(len(w))[:, None], order), values)
             dense.append(w)
         glb, joints = self.model.glb, self.model.joints
         ibm = glb.inverse_binds()
@@ -999,7 +1040,7 @@ class Outfit:
         relative = lambda p: None if p is None else Path(p).resolve().relative_to(self.root).as_posix()  # noqa: E731
         return {"colliders": relative(self.colliders), "clips": relative(self.clips),
                 "fabrics": {p.id: self.fabrics[p.fabric] for p in self.pieces},
-                "looks": [relative(p) for p in self.looks],
+                "looks": [relative(p) for p in self.looks], "seated": list(self.seated),
                 "seats": {clip: np.asarray(planes, float).reshape(-1, 4).tolist() for clip, planes in sorted(self.seats.items())}}
 
     def sidecar(self, pieces, records, findings=()):

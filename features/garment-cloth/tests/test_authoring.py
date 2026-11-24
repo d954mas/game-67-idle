@@ -20,7 +20,7 @@ from garment import gates  # noqa: E402
 from garment import sidecar as sc  # noqa: E402
 from garment import sim  # noqa: E402
 from garment.model import Surface  # noqa: E402
-from garment.outfit import Outfit  # noqa: E402
+from garment.outfit import Outfit, overlap  # noqa: E402
 
 FABRIC = dict(density=0.3, stretch=1e-5, bend=200.0, drag=0.4, thickness=0.004, iterations=1, max_edge_strain=0.12,
               strain_passes=2, aero_drag=0.7, weft_stretch_scale=2.0, diag_stretch_scale=2.5, weft_bend_scale=1.3,
@@ -680,6 +680,73 @@ class TestCook(unittest.TestCase):
         after = gates.g2_g3(self.o.model, sc.read(sc.write(self.o.built())))
         self.assertTrue(all(not f["failed"] for f in after if f["gate"] in ("G2", "G3")))
 
+    def test_separate_opens_the_gap_where_the_outer_normal_does_not_face_away_from_the_body(self):
+        # An outer layer 2 mm over the skirt whose triangles face the body (a fold of a coarse sheet turns them so):
+        # the gap is measured along the body direction, so the separation must open it along that line whatever way
+        # the mesh is wound.
+        inner = skirt(self.o)
+        outer = self.o.piece("over", 2, "plain")
+        x, f = tube(0.0, CLOTH_R + 0.002, 0.55, 0.88, around=24, rows=8)
+        outer.set_mesh(x, f[:, ::-1])
+        outer.pin(outer.f.y > 0.879)
+        outer.weights_transfer(Surface(inner.x, inner.faces, inner.w, inner.joints))
+        outer.gradient(rate=0.5, cap=0.2)
+        self.o.separate("over", "skirt")
+        pieces = {p.id: p for p in self.o.resolve()[0]}
+        o, i = pieces["over"], pieces["skirt"]
+        g, _ = overlap(o.x, o.faces, o.b, i.x, i.faces, i.b)
+        free = np.isfinite(g) & (o.r > 0)
+        self.assertTrue(free.any())
+        self.assertGreaterEqual(g[free].min(), 2 * FABRIC["thickness"] - B.RESOLUTION)
+
+    def test_separate_leaves_the_layer_rule_room_in_every_frame(self):
+        # An outer layer 2 mm over the skirt, separated, then layered over a clip that moves the skirt's lower half: the
+        # gap the layer rule reads is the narrowest over the frames, so the separation must open that one, or every
+        # vertex it moved to exactly the two fabrics at rest has no room once any frame narrows it.
+        from synthetic import glb as write_glb
+        cloth_p, cloth_f = tube(0.0, CLOTH_R, 0.40, 0.90, around=24, rows=12)
+        (self.scene.root / "moved.glb").write_bytes(write_glb(
+            [("cloth", cloth_p, cloth_f, *lanes(len(cloth_p), 0), {})], JOINTS,
+            animation={"left": ([0.0, 0.5, 1.0], np.array([[0, 0, 0], [0.02, 0, 0], [0, 0, 0.02]]))}))
+        (self.scene.root / "clips.json").write_text(json.dumps({"animations": [
+            {"name": "moved", "resource": "moved.glb"}]}), encoding="utf-8")
+        o = self.scene.outfit(clips="clips.json")
+        inner = skirt(o)
+        outer = o.piece("over", 2, "plain")
+        x, f = tube(0.0, CLOTH_R + 0.002, 0.55, 0.88, around=24, rows=8)
+        outer.set_mesh(x, f)
+        outer.pin(outer.f.y > 0.879)
+        outer.weights_transfer(Surface(inner.x, inner.faces, inner.w, inner.joints))
+        outer.gradient(rate=0.5, cap=0.2)
+        o.separate("over", "skirt")
+        o.layer("over", "skirt")
+        self.assertEqual([f for f in o.resolve()[1] if f["kind"] == "layer_too_thin"], [])
+
+    def test_the_layer_rule_reads_a_still_clip_as_the_rest_pose(self):
+        # Weights with fewer than four joints leave empty lanes in the stored form; posed by a clip that does not move,
+        # the narrowest gap the layer rule reads must be the rest gap, so the maps are the ones built without clips.
+        from synthetic import glb as write_glb
+        cloth_p, cloth_f = tube(0.0, CLOTH_R, 0.40, 0.90, around=24, rows=12)
+        (self.scene.root / "held.glb").write_bytes(write_glb(
+            [("cloth", cloth_p, cloth_f, *lanes(len(cloth_p), 0), {})], JOINTS,
+            animation={"left": ([0.0, 0.5, 1.0], np.zeros((3, 3)))}))
+        (self.scene.root / "clips.json").write_text(json.dumps({"animations": [
+            {"name": "held", "resource": "held.glb"}]}), encoding="utf-8")
+        built = []
+        for o in (self.o, self.scene.outfit(clips="clips.json")):
+            inner = skirt(o)
+            outer = o.piece("over", 2, "plain")
+            x, f = tube(0.0, 0.16, 0.55, 0.88, around=24, rows=8)
+            outer.set_mesh(x, f)
+            outer.pin(outer.f.y > 0.879)
+            outer.weights_transfer(Surface(inner.x, inner.faces, inner.w, inner.joints))
+            outer.gradient(rate=0.5, cap=0.2)
+            o.layer("over", "skirt")
+            built.append({p.id: p for p in o.resolve()[0]})
+        for piece in ("over", "skirt"):
+            np.testing.assert_allclose(built[1][piece].d, built[0][piece].d, atol=1e-6)
+            np.testing.assert_allclose(built[1][piece].r, built[0][piece].r, atol=1e-6)
+
     def test_layer_keeps_the_order_at_rest(self):
         inner = skirt(self.o)
         outer = self.o.piece("over", 2, "plain")
@@ -864,7 +931,7 @@ class TestCook(unittest.TestCase):
             {"name": "sit", "resource": "model.glb", "game": {"state": "seated"}},
             {"name": "walk", "resource": "model.glb"}]}), encoding="utf-8")
         (self.scene.root / "colliders.json").write_text("{}", encoding="utf-8")
-        o = self.scene.outfit(colliders="colliders.json", clips="clips.json")
+        o = self.scene.outfit(colliders="colliders.json", clips="clips.json", seated=["sit"])
         skirt(o)
         with self.assertRaisesRegex(ValueError, "seated clip"):
             o.corrective("sit", clip="sit", t=1.0)
@@ -873,6 +940,39 @@ class TestCook(unittest.TestCase):
         o.corrective("sit", clip="sit", t=1.0, convexes=[])
         o.corrective("walk", clip="walk", t=0.5)
         self.assertEqual([r["convexes"] for r in o.corrective_requests], [[], []])
+
+    def test_an_outfit_is_built_and_gated_only_on_the_seated_clips_it_is_cleared_for(self):
+        (self.scene.root / "clips.json").write_text(json.dumps({"animations": [
+            {"name": "sit", "resource": "model.glb", "game": {"state": "seated"}},
+            {"name": "perch", "resource": "model.glb", "game": {"state": "seated", "corrective": "perch"}},
+            {"name": "walk", "resource": "model.glb"}]}), encoding="utf-8")
+        (self.scene.root / "colliders.json").write_text(json.dumps(COLLIDERS), encoding="utf-8")
+        seat = [[0.0, 1.0, 0.0, -0.2]]
+        with self.assertRaisesRegex(ValueError, "does not mark seated"):
+            self.scene.outfit(clips="clips.json", seated=["walk"])
+        o = self.scene.outfit(colliders="colliders.json", clips="clips.json", seats={"sit": seat, "perch": seat},
+                              seated=["sit"])
+        skirt(o)
+        self.assertEqual(sorted(o.clip_paths()), ["sit", "walk"])
+        self.assertEqual(sorted(o.seats), ["sit"])
+        with self.assertRaisesRegex(ValueError, "not cleared"):
+            o.corrective("perch", clip="perch", t=0.0, convexes=[])
+        data = sc.write(o.built())
+        gd = gates.gate_data(data, self.scene.root)[0]
+        self.assertEqual([c[0] for c in gd.clips], [gates.REST, "sit", "walk"])
+        self.assertEqual(sorted(gd.seats), ["sit"])
+        # The perch clip names a corrective the outfit lacks, but the outfit is not shown in it: nothing to report.
+        self.assertEqual(gates.corrective_coverage(sc.read(data), self.scene.root / "clips.json"), [])
+
+    def test_a_game_place_that_seats_an_outfit_in_a_clip_it_is_not_cleared_for_fails_from_stage_2(self):
+        uses = [("shot a", "sit"), ("shot b", "perch"), ("shot b", "walk")]
+        for stage, blocks in ((1, False), (2, True)):
+            finding = gates.seated_uses("office", ["sit"], uses, {"sit", "perch"}, stage)
+            self.assertTrue(finding["failed"])
+            self.assertEqual(finding["clips"], {"perch": ["shot b"]})
+            self.assertEqual(bool(gates.blocking([finding], stage)), blocks)
+        cleared = gates.seated_uses("office", ["sit", "perch"], uses, {"sit", "perch"}, 2)
+        self.assertFalse(gates.blocking([cleared], 2))
 
 
 COLLIDERS = dict(schema="garment.colliders.v1", body_sha256="", cones=[[0, 1]],

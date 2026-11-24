@@ -48,7 +48,8 @@ PER_FRAME = ("G4", "G5", "G6", "G7", "G8", "G10")
 ALL_GATES = ("G1", "G2", "G3", "bind") + PER_FRAME + ("G9", "crossfade")
 # The first declared stage at which a finding fails the check and the cook; absent: a report.
 ENFORCED_FROM = {"rebuild": 1, "stale": 1, "G1": 1, "G3": 1, "G9": 1, "bake": 1,
-                 "G2": 2, "bind": 2, "G4": 2, "G5": 2, "G6": 2, "G7": 2, "G8": 2, "G10": 2, "derive": 2}
+                 "G2": 2, "bind": 2, "G4": 2, "G5": 2, "G6": 2, "G7": 2, "G8": 2, "G10": 2, "derive": 2,
+                 "seated": 2}
 # Gates decided against the body surface itself: on the fallback body (with holes) they cannot be decided.
 NEEDS_COMPLETE_BODY = ("G4", "G10")
 # Gates the cook runs from the sidecar and the models alone; the per-frame gates need the body and the clips.
@@ -63,6 +64,20 @@ def enforced(gate, stage):
 
 def enforced_gates(stage):
     return {g for g in ALL_GATES if enforced(g, stage)}
+
+
+def seated_uses(outfit, cleared, uses, seated, stage):
+    """The finding `seated` of an outfit on the places a game shows it (`uses`: [(where, clip)]): failed where one seats
+    it in a seated clip (`seated`: the manifest's) its declaration does not clear, decided for `stage`. The outfit's
+    gates never read such a clip, so nothing vouches for the cloth there."""
+    bad = {}
+    for where, clip in uses:
+        if clip in seated and clip not in cleared:
+            bad.setdefault(clip, []).append(where)
+    used = sorted({clip for _, clip in uses if clip in seated})
+    return decide([dict(gate="seated", piece=outfit, enforced=False, failed=bool(bad), frames=1, samples=len(uses),
+                        frames_failed=int(bool(bad)), clips={clip: sorted(set(w)) for clip, w in sorted(bad.items())},
+                        counts=dict(cleared=sorted(cleared), seated_in=used), worst=None)], stage, True)[0]
 
 
 def blocking(findings, stage):
@@ -173,13 +188,15 @@ def _frame(record, clip, t, violation, vertices=None):
 
 def clip_correctives(sc, manifest):
     """{clip: corrective} of a clip manifest for the correctives the sidecar has: the clips the game plays on the
-    corrected reference (manifest `game.corrective`)."""
+    corrected reference (manifest `game.corrective`), among those the outfit is shown in."""
     import json
     if manifest is None:
         return {}
     have = set(sc.corrective_names)
+    shown = {name for name, _ in M.shown(manifest, sc.check.get("seated", []))}
     clips = json.loads(Path(manifest).read_text(encoding="utf-8"))["animations"]
-    return {c["name"]: c["game"]["corrective"] for c in clips if c.get("game", {}).get("corrective") in have}
+    return {c["name"]: c["game"]["corrective"] for c in clips
+            if c.get("game", {}).get("corrective") in have and c["name"] in shown}
 
 
 def configuration(piece, corrective):
@@ -469,15 +486,18 @@ def derive_findings(sc):
 
 
 def corrective_coverage(sc, manifest):
-    """The clips of the manifest whose `game.corrective` names a corrective the sidecar lacks (reported): the game
-    then plays that clip on the plain reference."""
+    """The clips the outfit is shown in whose manifest `game.corrective` names a corrective the sidecar lacks
+    (reported): the game then plays that clip on the plain reference."""
     import json
     if manifest is None:
         return []
     have = set(sc.corrective_names)
+    shown = {name for name, _ in M.shown(manifest, sc.check.get("seated", []))}
     clips = json.loads(Path(manifest).read_text(encoding="utf-8"))["animations"]
     missing = {}
     for c in clips:
+        if c["name"] not in shown:
+            continue
         wanted = c.get("game", {}).get("corrective")
         if wanted and wanted not in have:
             missing.setdefault(wanted, []).append(c["name"])
@@ -748,7 +768,8 @@ def gate_data(data, root, body=None):
         body = load_body(model, spec, lambda p: root / p)
     check = sc.check
     colliders = json.loads((root / check["colliders"]).read_text(encoding="utf-8")) if check.get("colliders") else None
-    clips = [(REST, None)] + (M.clips(root / check["clips"]) if check.get("clips") else [])
+    # The clips the outfit is shown in: a seated clip it is not cleared for is no clip of its gates.
+    clips = [(REST, None)] + (M.shown(root / check["clips"], check.get("seated", [])) if check.get("clips") else [])
     fabrics = check["fabrics"]
     gd = GateData(sidecar=bytes(data), model=str(model.path), body=(body.points, body.faces, body.weights, body.complete,
                                                                    body.rim_faces),

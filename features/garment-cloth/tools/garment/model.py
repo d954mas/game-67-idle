@@ -208,6 +208,21 @@ def clips(manifest):
     return [(a["name"], root / a["resource"]) for a in doc["animations"]]
 
 
+def seated(manifest):
+    """Names of the seated clips of an animation manifest (`game.state` "seated"). An outfit is shown seated only in
+    those its declaration clears (`seated`), so they are the only seated clips its build and gates read."""
+    import json
+    doc = json.loads(Path(manifest).read_text(encoding="utf-8"))
+    return {a["name"] for a in doc["animations"] if a.get("game", {}).get("state") == "seated"}
+
+
+def shown(manifest, cleared):
+    """[(name, path)] of the clips an outfit is shown in: every clip of the manifest but the seated ones not in
+    `cleared`."""
+    drop = seated(manifest) - set(cleared)
+    return [(name, path) for name, path in clips(manifest) if name not in drop]
+
+
 def skin_points(points, weights, matrices):
     """Linear blend skinning of rest points (V, 3) with dense weights (V, J) by matrices (frames, J, 4, 4):
     (frames, V, 3)."""

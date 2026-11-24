@@ -37,7 +37,8 @@ def main(argv=None):
         w = np.zeros((len(p.points), len(rig.joints)))
         np.add.at(w, (np.arange(len(w))[:, None], p.joints.astype(int)), p.weights.astype(float))
         pieces.append(C.Piece(p.id, p.points.astype(float), p.faces, p.r.astype(float), w, authored.thickness))
-    clips = C.clip_poses(outfit.model.glb, rig.joints, M.clips(outfit.clips))
+    # The clips the outfit is shown in: a seated clip it is not cleared for is none of them.
+    clips = C.clip_poses(outfit.model.glb, rig.joints, M.shown(outfit.clips, outfit.seated))
     segments = C.segments_from(json.loads(segments_path.read_text(encoding="utf-8")))
     g4 = C.g4_failing(outfit.body, pieces, clips)
     shapes = C.fit(outfit.body, rig, segments, pieces, clips, g4)
