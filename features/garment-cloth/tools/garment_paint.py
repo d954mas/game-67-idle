@@ -6,9 +6,8 @@ seam: the sheet holds every triangle with a corner on the piece, so its top is t
 The drive weight falls along the surface distance from the pins. A drive weight w is a frequency ratio of sqrt(w), so
 _CLOTH = 1 - sqrt(w).
 A piece's seam is its not-cloth side: an unlabelled vertex is skinned and holds the border, so the labelled row next
-to it stays free. Two kinds of vertex are pins besides the band: one covered by an outer layer (an inner piece
-follows skinning there, since nothing keeps two simulated layers apart) and one split from an unlabelled vertex at
-the same position (`coincident`), which would open a crack if it moved.
+to it stays free. One more kind of vertex is a pin besides the band: one split from an unlabelled vertex at the
+same position (`coincident`), which would open a crack if it moved.
 """
 import heapq
 
@@ -84,7 +83,7 @@ def baseline_freedom(points, faces, seam_fraction, curve=None, pinned=None):
 
     faces: the piece's sheet, every triangle with a corner on the piece, so the seam side is part of it.
     seam_fraction: share of the sheet's height, measured from its top, that is pinned.
-    pinned: further pins, such as covered or coincident vertices.
+    pinned: further pins, such as coincident vertices.
     curve: (start, end, reach) drive weights at surface distance 0 and at `reach` of the largest distance,
     linear between and clamped; None means an undriven piece (freedom 1).
     """
