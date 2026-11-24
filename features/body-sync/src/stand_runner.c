@@ -160,6 +160,7 @@ typedef struct endpoint {
     uint32_t lost_seen[STAND_BODIES_MAX]; /* body_sync_lost_take's count already measured */
     uint32_t host_flip[STAND_BODIES_MAX]; /* tick its host body last fell asleep or woke */
     float layer_prev[STAND_BODIES_MAX][3]; /* drawn at the last sample, for the rest measures */
+    float rest_here[STAND_BODIES_MAX][3];  /* ...and where its physics lay */
     stand_drive_t drives[STAND_BODIES_MAX]; /* every body's last speeds: a driven body's rest */
     uint32_t drive_id[STAND_BODIES_MAX];
     uint8_t spawn_count[STAND_BODIES_MAX];
@@ -1678,6 +1679,27 @@ static bool host_moved_at_play(const endpoint_t *host, const endpoint_t *ep, uin
     return stand_path_moved((const float (*)[3])path, count, SYNC_SOFT_HOLD_M, SYNC_SOFT_CREEP_TICKS);
 }
 
+/* An awake host body (a pile against a character, which never sleeps) still enough that its copy
+   at `at` has nothing to follow: over the window host_moved_at_play reads, ending at the copy's
+   playback, the host body never left half a copy-grid step of `at`. A record rounds each axis by
+   at most half a cell, so every record of that window decodes within a step (SYNC_SOFT_HOLD_M) of
+   `at`, and the rest hold keeps the copy where it is: any move of it is the seam's, not the host's. */
+static bool host_held_at_play(const endpoint_t *host, const endpoint_t *ep, uint32_t slot, body_sync_id_t id, const float at[3]) {
+    double played = 0.0;
+    const owner_ring_t *r = host->drawn_rings ? &host->drawn_rings[slot] : NULL;
+    if (!r || r->id != id || !body_sync_playback(ep->sync, id, &played)) {
+        return false;
+    }
+    int64_t newest = (int64_t)ceil(played);
+    for (int64_t k = newest - (int64_t)(REST_TICKS + SYNC_SOFT_CREEP_TICKS) + 1; k <= newest; k++) {
+        float p[3];
+        if (!ring_at(r, k, p) || stand_distance3(p, at) > 0.5f * SYNC_SOFT_HOLD_M) {
+            return false;
+        }
+    }
+    return true;
+}
+
 static void sample_layer(body_sync_stand_t *st) {
     endpoint_t *host = &st->ep[0];
     for (uint32_t g = 1; g < st->endpoints; g++) {
@@ -1793,15 +1815,17 @@ static void sample_layer(body_sync_stand_t *st) {
             if (was_rest && host_asleep && b3Body_IsAwake(hs->body)) {
                 stand_metrics_creep(&st->metrics, gi, (double)rest_speed(host, slot));
             }
-            /* Only a body asleep on the host has an exact pose to hold; one kept awake (against a
-               character) is followed on the copy grid, its steps the host's own creep. */
-            if (was_rest && (!touched || ep->standing) && !b3Body_IsAwake(hs->body)) {
+            /* A body asleep on the host has an exact pose to hold, and so has one kept awake (against
+               a character) that stays within half a step of its copy (host_held_at_play); one that
+               creeps further is followed on the copy grid, its steps the host's own creep. */
+            if (was_rest && (!touched || ep->standing) && (!b3Body_IsAwake(hs->body) || host_held_at_play(host, ep, slot, id, ep->rest_here[slot]))) {
                 double move = (double)stand_distance3(drawn, ep->layer_prev[slot]);
                 move = move > REST_MOVE_M ? move : 0.0; /* float noise of a pose read back */
                 stand_metrics_rest(&st->metrics, gi, move, ep->was_resting[slot] && !asleep && host_asleep);
             }
             ep->was_resting[slot] = asleep;
             memcpy(ep->layer_prev[slot], drawn, sizeof(drawn));
+            memcpy(ep->rest_here[slot], here, sizeof(here));
         }
         if (st->items_done && ep->world_rest_run >= REST_TICKS && !now_rest) {
             stand_metrics_rest_break(&st->metrics, gi, !guest_moved);

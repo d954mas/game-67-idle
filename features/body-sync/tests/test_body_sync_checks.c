@@ -1,3 +1,4 @@
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -437,6 +438,39 @@ static void test_rest_breaks_fails_on_a_held_copy_churned_in_steps(void) {
     body_sync_stand_destroy(runs[1]);
 }
 
+/* The heroine stands in the pile, so the host's boxes touching her never sleep: the rest measures
+   must still watch their copies. A copy of one of those moved 1 mm once is inside half a step of
+   where it rested (1.7 mm), so the rest hold keeps it there: a held move, which rest_jitter sees. */
+static const char *awake_pile_text = "scenario planted\nscene pile60\nseed 53\nguests 1\nend 14s\nlight_mass 20kg\n"
+                                     "net g1 rtt 100ms jitter 20ms loss 2%\np1 walk 0.5 0\np1 walk 3.6 0 speed 2.5\n"
+                                     "expect agree_at_rest 1cm 2deg\nexpect rest_wakes.count <= 0\nexpect rest_jitter.max <= 0m\n";
+static void test_rest_jitter_fails_on_a_copy_of_an_awake_still_host_body(void) {
+    body_sync_error_t error;
+    body_sync_stand_t *runs[2];
+    for (int k = 0; k < 2; k++) {
+        TEST_ASSERT_TRUE_MESSAGE(body_sync_scenario_parse(awake_pile_text, strlen(awake_pile_text), &scenario, &error), error.text);
+        scene_named(scenario.scene)->build(&scene);
+        body_sync_stand_config_t config = {.scene = &scene, .scenario = &scenario};
+        runs[k] = body_sync_stand_create(&config, &error);
+        TEST_ASSERT_NOT_NULL_MESSAGE(runs[k], error.text);
+        if (k == 1) {
+            stand_testing_plant_jitter(runs[k], 700, 0.001f, 2, 1u); /* the jitter's copy: one on an awake owner */
+        }
+        body_sync_stand_run(runs[k]);
+    }
+    const body_sync_report_t *clean = body_sync_stand_report(runs[0]), *jittered = body_sync_stand_report(runs[1]);
+    for (uint32_t i = 0; i < clean->check_count; i++) {
+        TEST_ASSERT_TRUE_MESSAGE(clean->checks[i].passed, clean->checks[i].detail);
+    }
+    TEST_ASSERT_TRUE(clean->guests[0].rest_ticks > 0);
+    const body_sync_check_metrics_t *jitter = &jittered->checks[jittered->check_count - 1];
+    TEST_ASSERT_FALSE_MESSAGE(jitter->passed, "a held move of an awake owner's copy went unseen");
+    /* The planted 1 mm, measured: above half of it, below the half step that bounds a held move. */
+    TEST_ASSERT_TRUE_MESSAGE(isfinite(jitter->value) && jitter->value > 0.0005 && jitter->value < 0.0017, jitter->detail);
+    body_sync_stand_destroy(runs[0]);
+    body_sync_stand_destroy(runs[1]);
+}
+
 /* A guest walks through the pile, its boxes the host's copies under the second layer; her copy of
    a box in her path held kinematic is a stall the sync added (the local reference pushes it
    aside), and the pace check must see it. */
@@ -507,6 +541,7 @@ int main(void) {
     RUN_TEST(test_local_turn_fails_on_a_turn_of_a_local_body);
     RUN_TEST(test_rest_breaks_fails_on_a_copy_knocked_after_rest);
     RUN_TEST(test_rest_breaks_fails_on_a_held_copy_churned_in_steps);
+    RUN_TEST(test_rest_jitter_fails_on_a_copy_of_an_awake_still_host_body);
     RUN_TEST(test_aligned_gap_fails_on_states_shown_a_tick_early);
     RUN_TEST(test_aligned_gap_fails_on_a_guest_drawing_its_bodies_off_what_it_sends);
     RUN_TEST(test_a_paused_predictions_lead_stays_out_of_aligned_gap);
