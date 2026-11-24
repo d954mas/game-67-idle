@@ -32,8 +32,8 @@ typedef struct sync_authority_pose {
     float step[3]; /* metres a tick from the state before it in the ring; 0 without a span */
     uint32_t tick, host_tick;
     /* Ticks from the state before it: the sender's span, within the jitter granted of the host's
-       own, at least one. 0 for the first state of the ring and for a step faster than the box's
-       speed: no evidence of a path into it. */
+       own, at least one. 0 for the first state of the ring: a step faster than the box's speed
+       starts the ring over at its state, no evidence of a path into it. */
     uint32_t span;
 } sync_authority_pose_t;
 
@@ -180,6 +180,13 @@ typedef struct sync_authority {
        the contact, a chord of any spacing on the sender's span, a silent seat's states for
        ever). Never set outside tests. */
     bool plant_evidence_grows_over_gaps;
+    /* Planted defects, never set outside tests: a contact's approach is the fastest step of the
+       whole ring; a state stands however long ago the host took it; a teleport keeps the states
+       before it; a target is judged at the claimant's states of it under any ownership. */
+    bool plant_approach_from_ring;
+    bool plant_evidence_age_unbounded;
+    bool plant_teleport_keeps_ring;
+    bool plant_target_any_ownership;
     /* Host: the shell's measure of a take's evidence (sync_policy_grant_in_t agent_gap, *reach).
        None: every take counts as touching, for the parts tested without a world. */
     float (*take_gap)(void *context, uint8_t seat, uint32_t slot, uint32_t tick, float *reach);
@@ -337,27 +344,34 @@ typedef struct sync_contact_scene {
     float push_ticks;
 } sync_contact_scene_t;
 
-/* Host: a contact claim measured on what the host itself took of `seat`'s ownership of the
+/* The gate keeps a claim consistent with what the host saw of the claimant's agent at the named
+   contact (position, step, time); an owner really moving its bodies into a target is out of its
+   scope, and a gap in the evidence is a missed effect, never a false one (README "Contact claims").
+   Host: a contact claim measured on what the host itself took of `seat`'s ownership of the
    agent (`ended` from sync_authority_check_contact, NULL for a current one), never on the
    velocity the owner declares. A gap in the host's evidence is no evidence, never a wider bound.
-   Nothing stands once the seat is not heard within the window. The contact lies on from a taken
-   state stamped at most SYNC_POLICY_CHORD_TICKS_MAX ticks before scene->contact_tick, for the
-   ticks between (along the step that led to it when that step's span is as short: a contact turns
-   a body only at the contact), or on the chord to the next state when the contact comes before it
-   and their span is as short. *gap is the agent's box from the target's at the nearest of those;
-   *reach is SYNC_POLICY_TAKE_SLOP_M, the target's travel over that path's time,
-   SYNC_POLICY_CONTACT_BEND_MS2's bend of it and the agent's fastest step of the window over
-   push_ticks; *approach_max the ownership's fastest step plus the target's speed. False when no
-   state is that close before the contact: the host has no evidence of it, and the claim is a
-   missed effect. */
+   Nothing stands once the seat is not heard within the window, and no state the host took more
+   than SYNC_POLICY_CLAIM_LAG_GRACES windows ago (its own ticks: the claim names its tick). The
+   contact lies on from a taken state stamped at most SYNC_POLICY_CHORD_TICKS_MAX ticks before
+   scene->contact_tick, for the ticks between (along the step that led to it when that step's span
+   is as short: a contact turns a body only at the contact), or on the chord to the next state when
+   the contact comes before it and their span is as short. *gap is the agent's box from the
+   target's at the nearest of those; *reach is SYNC_POLICY_TAKE_SLOP_M, the target's travel over
+   that path's time, SYNC_POLICY_CONTACT_BEND_MS2's bend of it and the agent's fastest step of the
+   window over push_ticks; *approach_max the fastest step of the states the contact lies on from
+   plus the target's speed. False when no state is that close before the contact: the host has no
+   evidence of it, and the claim is a missed effect. */
 bool sync_authority_contact_measure(const sync_authority_t *a, body_sync_id_t agent, uint8_t seat, const sync_authority_ended_t *ended,
                                     const sync_contact_scene_t *scene, float *gap, float *reach, float *approach_max);
 /* The same of the body `b` itself: a take's evidence asks it of each of the claimant's agents. */
 bool sync_authority_path_measure(const sync_authority_t *a, const sync_authority_body_t *b, uint8_t seat, const sync_authority_ended_t *ended,
                                  const sync_contact_scene_t *scene, float *gap, float *reach, float *approach_max);
 /* Host: the newest state of `b` taken from `seat` stamped at most SYNC_POLICY_CHORD_TICKS_MAX
-   ticks before `tick` on that seat's clock, NULL when none. */
-const sync_authority_pose_t *sync_authority_pose_at(const sync_authority_body_t *b, uint8_t seat, uint32_t tick);
+   ticks before `tick` on that seat's clock, NULL when none. The states count only under an
+   ownership of `b` whose contacts the seat may still claim (sync_authority_check_contact within
+   `grace_ticks`): once the host took `b` back and the grace ran out, they are another time's. */
+const sync_authority_pose_t *sync_authority_pose_at(const sync_authority_t *a, const sync_authority_body_t *b, uint8_t seat, uint32_t tick,
+                                                    uint32_t grace_ticks);
 /* The number a contact claim of a local body names (body_sync_contact_number). */
 bool sync_authority_contact_number(const sync_authority_t *a, const sync_authority_body_t *b, uint16_t *number);
 

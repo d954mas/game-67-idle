@@ -209,6 +209,8 @@ static float take_gap(void *context, uint8_t seat, uint32_t slot, uint32_t tick,
 
 void body_sync_plant_take_reach_unbounded(body_sync_t *s) { s->authority.plant_take_reach_unbounded = true; }
 void body_sync_plant_evidence_grows_over_gaps(body_sync_t *s) { s->authority.plant_evidence_grows_over_gaps = true; }
+void body_sync_plant_approach_from_ring(body_sync_t *s) { s->authority.plant_approach_from_ring = true; }
+void body_sync_plant_evidence_age_unbounded(body_sync_t *s) { s->authority.plant_evidence_age_unbounded = true; }
 void body_sync_plant_transform_sleep(body_sync_t *s) { s->plant_transform_sleep = true; }
 
 body_sync_t *body_sync_create(const body_sync_config_t *config) {
@@ -407,7 +409,7 @@ body_sync_contact_verdict_t body_sync_check_contact(const body_sync_t *s, uint8_
     /* A target the claimant's seat moves itself (one it took at the contact) is judged where its
        own taken states put it at the contact, not where it went since. */
     const sync_authority_body_t *tb = sync_authority_body_const(&s->authority, target);
-    const sync_authority_pose_t *then = tb ? sync_authority_pose_at(tb, seat, contact_tick) : NULL;
+    const sync_authority_pose_t *then = tb ? sync_authority_pose_at(&s->authority, tb, seat, contact_tick, (uint32_t)ceilf(ticks)) : NULL;
     /* Before its first state, the claimant took it at the contact: where the host had it then. */
     bool taken_then = !then && tb && tb->seat == seat && t->take_pose_known &&
                       (contact_tick - t->take_tick <= SYNC_POLICY_CHORD_TICKS_MAX || t->take_tick - contact_tick <= SYNC_POLICY_CHORD_TICKS_MAX);

@@ -145,6 +145,12 @@ float sync_policy_evidence_ticks(float round_trip_ticks, float delay_ticks, uint
    slower than SYNC_FAST_SPEED goes out every 1-4 ticks and moves at most 3.4 cm between two of its
    states (sync_sender.h), inside the slop of its points. */
 #define SYNC_POLICY_CHORD_TICKS_MAX 4u
+/* How late a contact claim or a take may reach the host after a state it rests on, in the
+   claim's graces (a round trip, a playback delay and a tick; at most
+   SYNC_POLICY_EVIDENCE_AGE_MAX_S): one for its own trip, one for the record lane resending it.
+   The host's own ticks measure it, never the claim's stamp. Over the claims sweep the latest
+   honest claim came 1.33 graces after its state (two resends at 25 % loss); a take 8 ticks. */
+#define SYNC_POLICY_CLAIM_LAG_GRACES 2u
 /* The distance between two axis-aligned boxes given by their low and high corners, 0 where
    they overlap: the evidence's gap. INFINITY for a corner that is not finite, so a broken pose
    never reads as touching. */

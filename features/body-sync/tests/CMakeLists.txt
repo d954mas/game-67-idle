@@ -42,6 +42,24 @@ add_test(NAME test_body_sync_authority_mf_evidence_grows_over_gaps
     COMMAND "${CMAKE_COMMAND}" -DEXE=$<TARGET_FILE:test_body_sync_authority> -DARGS=--plant-evidence-grows-over-gaps
             "-DCASES=test_evidence_of_a_silent_agent_does_not_grow|test_evidence_of_a_body_that_slept_has_no_long_chord|test_a_stamp_jump_buys_no_long_ray"
             -P "${CMAKE_CURRENT_LIST_DIR}/expect_unity_fail.cmake")
+# The contact's approach is the step at it, a state stands only within the claim's lag, a teleport
+# starts the evidence over, and a target's states count only under an ownership the seat may claim.
+add_test(NAME test_body_sync_authority_mf_approach_from_ring
+    COMMAND "${CMAKE_COMMAND}" -DEXE=$<TARGET_FILE:test_body_sync_authority> -DARGS=--plant-approach-from-ring
+            "-DCASES=test_approach_is_the_step_at_the_contact"
+            -P "${CMAKE_CURRENT_LIST_DIR}/expect_unity_fail.cmake")
+add_test(NAME test_body_sync_authority_mf_evidence_age_unbounded
+    COMMAND "${CMAKE_COMMAND}" -DEXE=$<TARGET_FILE:test_body_sync_authority> -DARGS=--plant-evidence-age-unbounded
+            "-DCASES=test_a_contact_named_long_after_has_no_evidence|test_evidence_of_a_silent_agent_does_not_grow"
+            -P "${CMAKE_CURRENT_LIST_DIR}/expect_unity_fail.cmake")
+add_test(NAME test_body_sync_authority_mf_teleport_keeps_ring
+    COMMAND "${CMAKE_COMMAND}" -DEXE=$<TARGET_FILE:test_body_sync_authority> -DARGS=--plant-teleport-keeps-ring
+            "-DCASES=test_a_teleport_starts_the_evidence_over|test_a_teleport_step_is_refused"
+            -P "${CMAKE_CURRENT_LIST_DIR}/expect_unity_fail.cmake")
+add_test(NAME test_body_sync_authority_mf_target_any_ownership
+    COMMAND "${CMAKE_COMMAND}" -DEXE=$<TARGET_FILE:test_body_sync_authority> -DARGS=--plant-target-any-ownership
+            "-DCASES=test_target_states_count_only_under_a_claimable_ownership"
+            -P "${CMAKE_CURRENT_LIST_DIR}/expect_unity_fail.cmake")
 body_sync_test(test_body_sync_playback LIBS body_sync_parts)
 body_sync_test(test_body_sync_soft LIBS body_sync_parts)
 body_sync_test(test_body_sync_policy LIBS body_sync_parts)
@@ -69,6 +87,14 @@ add_test(NAME test_body_sync_claims_mf_take_reach_unbounded
 add_test(NAME test_body_sync_claims_mf_evidence_grows_over_gaps
     COMMAND "${CMAKE_COMMAND}" -DEXE=$<TARGET_FILE:test_body_sync_claims> -DARGS=--plant-evidence-grows-over-gaps
             "-DCASES=test_forger_at_600ms_never_fits_host|test_forger_after_a_cut_never_fits_host"
+            -P "${CMAKE_CURRENT_LIST_DIR}/expect_unity_fail.cmake")
+add_test(NAME test_body_sync_claims_mf_approach_from_ring
+    COMMAND "${CMAKE_COMMAND}" -DEXE=$<TARGET_FILE:test_body_sync_claims> -DARGS=--plant-approach-from-ring
+            "-DCASES=test_a_gentle_touch_claims_no_hard_hit_host|test_a_gentle_touch_claims_no_hard_hit_interaction"
+            -P "${CMAKE_CURRENT_LIST_DIR}/expect_unity_fail.cmake")
+add_test(NAME test_body_sync_claims_mf_evidence_age_unbounded
+    COMMAND "${CMAKE_COMMAND}" -DEXE=$<TARGET_FILE:test_body_sync_claims> -DARGS=--plant-evidence-age-unbounded
+            "-DCASES=test_an_old_contact_tick_has_no_evidence_host|test_an_old_contact_tick_has_no_evidence_interaction"
             -P "${CMAKE_CURRENT_LIST_DIR}/expect_unity_fail.cmake")
 add_test(NAME test_body_sync_claims_mf_transform_sleep
     COMMAND "${CMAKE_COMMAND}" -DEXE=$<TARGET_FILE:test_body_sync_claims> -DARGS=--plant-transform-sleep
@@ -104,7 +130,10 @@ set(core_tests test_body_sync_logic test_body_sync_playback test_body_sync_soft 
     test_body_sync_authority_mf_evidence_grows_over_gaps
     test_body_sync_claims test_body_sync_claims_mf_approach_scale0 test_body_sync_claims_mf_reach_unbounded
     test_body_sync_claims_mf_approach_unbounded test_body_sync_claims_mf_take_reach_unbounded
-    test_body_sync_claims_mf_evidence_grows_over_gaps test_body_sync_claims_mf_transform_sleep)
+    test_body_sync_claims_mf_evidence_grows_over_gaps test_body_sync_claims_mf_transform_sleep
+    test_body_sync_authority_mf_approach_from_ring test_body_sync_authority_mf_evidence_age_unbounded
+    test_body_sync_authority_mf_teleport_keeps_ring test_body_sync_authority_mf_target_any_ownership
+    test_body_sync_claims_mf_approach_from_ring test_body_sync_claims_mf_evidence_age_unbounded)
 set(slow_tests test_body_sync_free_step test_body_sync_claims_loss_sweep)
 foreach(impl IN LISTS BODY_SYNC_IMPLS)
     string(REPLACE "|" ";" parts "${impl}")

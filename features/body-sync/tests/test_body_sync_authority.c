@@ -146,6 +146,7 @@ static void test_a_seat_that_left_keeps_the_carrier(void) {
 enum { GRACE = 6 }; /* the shell's grace in ticks, a round trip and a delay */
 static sync_authority_t other;
 static bool plant_revoked_as_arbitrated; /* --plant-revoked-as-arbitrated: the revocation cases must fail */
+static bool plant_target_any;            /* --plant-target-any-ownership: the target's ownership case must fail */
 
 /* Guests 1 and 2 of a host in the interaction mode, all with the host's light body A. */
 static void contact_start(void) {
@@ -161,6 +162,7 @@ static void contact_start(void) {
         sync_authority_seat_joined(sides[i], BODY_SYNC_SEAT_HOST);
     }
     host.plant_revoked_as_arbitrated = plant_revoked_as_arbitrated;
+    host.plant_target_any_ownership = plant_target_any;
     sync_authority_body(&host, A)->takable = true;
 }
 
@@ -286,6 +288,9 @@ static float ring_travel(const sync_authority_body_t *b) {
 }
 
 static bool plant_grows; /* --plant-evidence-grows-over-gaps: the gap cases must fail */
+/* --plant-approach-from-ring, --plant-evidence-age-unbounded, --plant-teleport-keeps-ring: the
+   approach, lag and teleport cases must fail. */
+static bool plant_ring_approach, plant_age, plant_teleport;
 static sync_authority_t *path_host;
 
 /* The host's `now`, then a state of `b` from seat 1 (2 ticks of jitter granted, the box's speed
@@ -333,6 +338,9 @@ static void path_start(void) {
     path_body = calloc(1, sizeof(*path_body));
     path_other = calloc(1, sizeof(*path_other));
     path_host->plant_evidence_grows_over_gaps = plant_grows;
+    path_host->plant_approach_from_ring = plant_ring_approach;
+    path_host->plant_evidence_age_unbounded = plant_age;
+    path_host->plant_teleport_keeps_ring = plant_teleport;
     path_body->seat = path_other->seat = 1;
     path_body->number = path_other->number = 3;
     path_push = 0.0f;
@@ -406,12 +414,20 @@ static void test_evidence_follows_the_path_the_host_saw(void) {
 
 /* A seat that stops sending leaves its agent's last state: after 1 s, 10 s and 100 s it is no
    evidence at all; while the seat is still heard it places only a contact a chord's spacing after
-   it, never one grown by the time since. */
+   it, never one grown by the time since, and only while the claim's lag allows. */
 static void test_evidence_of_a_silent_agent_does_not_grow(void) {
     path_start();
     flying_states();
     const uint32_t after[3] = {60, 600, 6000};
     const float elsewhere[3] = {5.0f, 0.0f, 5.0f};
+    take_pose(path_other, 930, 532, elsewhere); /* the seat heard, past the window, within the lag */
+    path_contact = 102;
+    path_push = 20.0f; /* a take's: the steps before the window push nothing */
+    path_verdict_t late = measure_at(0.3f, 0.0f, 0.5f);
+    TEST_ASSERT_TRUE_MESSAGE(accepts(late), "a resting agent's last state did not stand within the lag");
+    const float chord_s = (float)SYNC_POLICY_CHORD_TICKS_MAX / 60.0f;
+    TEST_ASSERT_TRUE(late.reach <= SYNC_POLICY_TAKE_SLOP_M + 0.5f * SYNC_POLICY_CONTACT_BEND_MS2 * chord_s * chord_s + 1e-4f);
+    path_push = 0.0f;
     for (int k = 0; k < 3; k++) {
         path_host->now = 502 + after[k];
         path_contact = 102 + after[k]; /* the claimant's clock went on with the host's */
@@ -425,12 +441,7 @@ static void test_evidence_of_a_silent_agent_does_not_grow(void) {
         TEST_ASSERT_FALSE_MESSAGE(accepts(measure_at(2.3f, 0.0f, 0.0f)), "a resting agent took a target 2 m ahead");
         TEST_ASSERT_FALSE_MESSAGE(accepts(measure_at(0.3f, 0.0f, 0.5f)), "a resting agent placed a contact long after its last state");
         path_contact = 102;
-        path_push = 20.0f; /* a take's: the steps before the window push nothing */
-        v = measure_at(0.3f, 0.0f, 0.5f);
-        TEST_ASSERT_TRUE_MESSAGE(accepts(v), "a resting agent's last state did not stand");
-        const float chord_s = (float)SYNC_POLICY_CHORD_TICKS_MAX / 60.0f;
-        TEST_ASSERT_TRUE(v.reach <= SYNC_POLICY_TAKE_SLOP_M + 0.5f * SYNC_POLICY_CONTACT_BEND_MS2 * chord_s * chord_s + 1e-4f);
-        path_push = 0.0f;
+        TEST_ASSERT_FALSE_MESSAGE(measure_at(0.3f, 0.0f, 0.5f).any, "a resting agent's last state stood past the claim's lag");
     }
     path_end();
 }
@@ -492,13 +503,87 @@ static void test_a_teleport_step_is_refused(void) {
     const float a[3] = {0.0f, 0.0f, 0.0f}, b[3] = {5.0f, 0.0f, 0.0f};
     take_pose(path_body, 100, 500, a);
     take_pose(path_body, 101, 501, b);
-    TEST_ASSERT_EQUAL_UINT32(0, path_body->poses[1].span);
+    TEST_ASSERT_EQUAL_UINT8(1, path_body->pose_count);
     path_host->now = 502;
     path_contact = 101;
     TEST_ASSERT_FALSE_MESSAGE(accepts(measure_at(2.5f, 0.0f, 0.0f)), "a teleport's chord counted");
     path_verdict_t v = measure_at(5.0f, 0.0f, 0.5f);
     TEST_ASSERT_TRUE(accepts(v));
     TEST_ASSERT_TRUE_MESSAGE(v.approach == 0.0f, "a teleport's step counted as speed");
+    path_end();
+}
+
+/* Three states at 9 m/s, then one 5 m off beside a target: the jump starts the evidence over. The
+   new state places the agent, as a point with no speed and no push, and none of the states
+   before it stands; its next step is its first speed again. */
+static void test_a_teleport_starts_the_evidence_over(void) {
+    path_start();
+    flying_states();
+    const float jumped[3] = {0.0f, 0.0f, 5.0f}, on[3] = {0.0f, 0.0f, 5.05f};
+    take_pose(path_body, 103, 503, jumped);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(1, path_body->pose_count, "the states before a teleport stayed");
+    path_host->now = 504;
+    path_contact = 104;
+    path_push = 20.0f;
+    path_verdict_t v = measure_at(0.0f, 0.0f, 5.35f);
+    TEST_ASSERT_TRUE_MESSAGE(accepts(v), "the state after a teleport places nothing");
+    TEST_ASSERT_TRUE_MESSAGE(v.approach == 0.0f, "the steps before a teleport gave its contact a speed");
+    const float chord_s = (float)SYNC_POLICY_CHORD_TICKS_MAX / 60.0f;
+    TEST_ASSERT_TRUE_MESSAGE(v.reach <= SYNC_POLICY_TAKE_SLOP_M + 0.5f * SYNC_POLICY_CONTACT_BEND_MS2 * chord_s * chord_s + 1e-4f,
+                             "the steps before a teleport pushed a take");
+    path_push = 0.0f;
+    path_contact = 102;
+    TEST_ASSERT_FALSE_MESSAGE(measure_at(0.3f, 0.0f, 0.0f).any, "a state before the teleport stood");
+    take_pose(path_body, 104, 504, on);
+    path_host->now = 505;
+    path_contact = 105;
+    v = measure_at(0.0f, 0.0f, 5.4f);
+    TEST_ASSERT_TRUE(accepts(v));
+    TEST_ASSERT_TRUE_MESSAGE(v.approach > 2.9f && v.approach < 3.1f, "the step after a teleport is not its speed");
+    path_end();
+}
+
+/* Three steps at 18 m/s, then eight rolling at 0.6 m/s into a box, the contact at the last: the
+   approach is the roll's, never the ring's fastest step, so a gentle touch claims no hard hit. */
+static void rolling_after_a_fast_start(void) {
+    float x = 0.0f;
+    for (uint32_t i = 0; i < 12; i++) {
+        const float p[3] = {x, 0.0f, 0.0f};
+        take_pose(path_body, 100 + i, 500 + i, p);
+        x += i < 3 ? 0.3f : 0.01f;
+    }
+}
+
+static void test_approach_is_the_step_at_the_contact(void) {
+    path_start();
+    rolling_after_a_fast_start();
+    path_contact = 111;
+    path_verdict_t v = measure_box(0.98f + 0.12f + 0.05f, 0.0f, 0.0f, 0.05f);
+    TEST_ASSERT_TRUE_MESSAGE(accepts(v), "the rolling touch has no evidence");
+    TEST_ASSERT_TRUE_MESSAGE(v.approach > 0.5f && v.approach < 0.7f, "the contact's approach is not the step at it");
+    path_contact = 102; /* the contact named where the fast steps ran */
+    v = measure_box(0.6f + 0.12f + 0.05f, 0.0f, 0.0f, 0.05f);
+    TEST_ASSERT_TRUE(accepts(v));
+    TEST_ASSERT_TRUE_MESSAGE(v.approach > 17.9f, "a contact on the fast steps lost their speed");
+    path_end();
+}
+
+/* The same ring and a contact named at the fast steps: it stands while the host took those
+   states within the claim's lag (two 20-tick windows), and never after, however the claim names
+   its tick, the seat heard all the while. */
+static void test_a_contact_named_long_after_has_no_evidence(void) {
+    path_start();
+    rolling_after_a_fast_start();
+    const float elsewhere[3] = {5.0f, 0.0f, 5.0f};
+    path_contact = 102;
+    TEST_ASSERT_TRUE_MESSAGE(accepts(measure_box(0.6f, 0.0f, 0.0f, 0.05f)), "a fresh contact on the fast steps has no evidence");
+    take_pose(path_other, 940, 542, elsewhere); /* 40 host ticks after the state of tick 102 */
+    TEST_ASSERT_TRUE_MESSAGE(accepts(measure_box(0.6f, 0.0f, 0.0f, 0.05f)), "a contact within the lag has no evidence");
+    const uint32_t late[3] = {41, 120, 1500};
+    for (int k = 0; k < 3; k++) {
+        take_pose(path_other, 900 + late[k], 502 + late[k], elsewhere);
+        TEST_ASSERT_FALSE_MESSAGE(measure_box(0.6f, 0.0f, 0.0f, 0.05f).any, "a contact named long after had evidence");
+    }
     path_end();
 }
 
@@ -696,6 +781,31 @@ static void test_contact_of_an_arbitrated_end_lapses_when_the_seat_leaves(void) 
     TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_STALE, check(1, n));
 }
 
+/* A target the guest owned is judged at the guest's own states of it only while the guest may
+   still claim that ownership: through the grace after the host took it back, never after, and
+   never once the host recalled it. */
+static void test_target_states_count_only_under_a_claimable_ownership(void) {
+    contact_start();
+    own_by_take(&guest, 1);
+    sync_authority_body_t *b = sync_authority_body(&host, A);
+    const float at[3] = {1.0f, 0.0f, 0.0f};
+    sync_authority_received_pose(&host, b, 1, 40, 0, 10.0f, at);
+    TEST_ASSERT_NOT_NULL_MESSAGE(sync_authority_pose_at(&host, b, 1, 42, GRACE), "the owner's state of its target was lost");
+    TEST_ASSERT_NULL(sync_authority_pose_at(&host, b, 2, 42, GRACE)); /* another seat's claim */
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_reclaim(&host, A));
+    uint32_t end = host.now;
+    host.now = end + GRACE;
+    TEST_ASSERT_NOT_NULL_MESSAGE(sync_authority_pose_at(&host, b, 1, 42, GRACE), "the take-back's grace lost the target's states");
+    host.now = end + GRACE + 1u;
+    TEST_ASSERT_NULL_MESSAGE(sync_authority_pose_at(&host, b, 1, 42, GRACE), "a target taken back was judged at the guest's old state");
+    contact_start();
+    own_by_take(&guest, 1);
+    b = sync_authority_body(&host, A);
+    sync_authority_received_pose(&host, b, 1, 40, 0, 10.0f, at);
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_assign(&host, A, BODY_SYNC_SEAT_HOST, BODY_SYNC_HOLD_UNTIL_RELEASE));
+    TEST_ASSERT_NULL_MESSAGE(sync_authority_pose_at(&host, b, 1, 42, GRACE), "a recalled target was judged at the guest's old state");
+}
+
 /* Arbitration: the host settles a contest. The guest simulated on until it heard, so its claims
    of the old number count through the grace. */
 static void test_contact_after_a_take_back_counts_within_the_grace(void) {
@@ -839,6 +949,10 @@ int main(int argc, char **argv) {
     for (int i = 1; i < argc; i++) {
         plant_revoked_as_arbitrated = plant_revoked_as_arbitrated || strcmp(argv[i], "--plant-revoked-as-arbitrated") == 0;
         plant_grows = plant_grows || strcmp(argv[i], "--plant-evidence-grows-over-gaps") == 0;
+        plant_ring_approach = plant_ring_approach || strcmp(argv[i], "--plant-approach-from-ring") == 0;
+        plant_age = plant_age || strcmp(argv[i], "--plant-evidence-age-unbounded") == 0;
+        plant_teleport = plant_teleport || strcmp(argv[i], "--plant-teleport-keeps-ring") == 0;
+        plant_target_any = plant_target_any || strcmp(argv[i], "--plant-target-any-ownership") == 0;
     }
     UNITY_BEGIN();
     RUN_TEST(test_routes_and_record_kinds);
@@ -855,6 +969,9 @@ int main(int argc, char **argv) {
     RUN_TEST(test_evidence_of_a_body_that_slept_has_no_long_chord);
     RUN_TEST(test_a_stamp_jump_buys_no_long_ray);
     RUN_TEST(test_a_teleport_step_is_refused);
+    RUN_TEST(test_a_teleport_starts_the_evidence_over);
+    RUN_TEST(test_approach_is_the_step_at_the_contact);
+    RUN_TEST(test_a_contact_named_long_after_has_no_evidence);
     RUN_TEST(test_compressed_stamps_buy_no_speed_and_no_chord);
     RUN_TEST(test_contact_after_a_take_by_another_seat);
     RUN_TEST(test_contact_after_a_flight_returns);
@@ -865,6 +982,7 @@ int main(int argc, char **argv) {
     RUN_TEST(test_contact_of_a_retake_after_a_grant_overtaken_by_a_forced_move);
     RUN_TEST(test_contact_of_a_retake_primed_by_a_relayed_state);
     RUN_TEST(test_contact_of_an_arbitrated_end_lapses_when_the_seat_leaves);
+    RUN_TEST(test_target_states_count_only_under_a_claimable_ownership);
     RUN_TEST(test_contact_after_a_take_back_counts_within_the_grace);
     RUN_TEST(test_contact_after_a_host_claim_counts_within_the_grace);
     RUN_TEST(test_contact_after_a_grant_to_another_seat_counts_within_the_grace);

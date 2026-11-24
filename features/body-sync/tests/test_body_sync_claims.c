@@ -23,6 +23,8 @@ static float plant_reach = 1.0f, plant_approach = 1.0f;
 static bool plant_take_reach; /* --plant-take-reach-unbounded: the host grants every take's evidence */
 static bool plant_grows;      /* --plant-evidence-grows-over-gaps: the host's evidence grows over its gaps */
 static bool plant_sleep;      /* --plant-transform-sleep: guest 1 stops sending a body it carries asleep */
+static bool plant_ring_approach; /* --plant-approach-from-ring: a contact's approach is the ring's fastest step */
+static bool plant_age;           /* --plant-evidence-age-unbounded: a state stands however long ago the host took it */
 static body_sync_scene_t scene;
 static body_sync_scenario_t scenario;
 static bool third_player; /* the next make() gives the breakables a third player and a rock for it */
@@ -79,6 +81,12 @@ static body_sync_stand_t *make(const char *text, int mode) {
     }
     if (plant_sleep) {
         body_sync_plant_transform_sleep(stand_testing_sync(stand, 1));
+    }
+    if (plant_ring_approach) {
+        body_sync_plant_approach_from_ring(stand_testing_sync(stand, 0));
+    }
+    if (plant_age) {
+        body_sync_plant_evidence_age_unbounded(stand_testing_sync(stand, 0));
     }
     return stand;
 }
@@ -443,6 +451,100 @@ static void forger_after_a_cut(int mode) {
 static void test_forger_after_a_cut_never_fits_host(void) { forger_after_a_cut(MODE_HOST); }
 static void test_forger_after_a_cut_never_fits_interaction(void) { forger_after_a_cut(MODE_INTERACTION); }
 
+/* Guest 1 flies its rock three steps at 18 m/s toward the crate, then rolls it nine steps at
+   0.6 m/s to stop 8 cm short of it (so its own world sees no contact), and claims the crate hit
+   at 20 m/s at the roll's tick. The host's evidence puts the rock there, so only the approach
+   stands between the claim and the crate: the roll's, never the fast steps before it. */
+static void gentle_touch_claims_no_hard_hit(int mode) {
+    body_sync_stand_t *stand = make("scenario claims\nscene breakables\nseed 17\nguests 1\nsettle 10s\nnet g1 rtt 100ms\n"
+                                    "p1 grab rock as lift\np1 wait 400ms\np1 throw glass speed 7 as throw\n",
+                                    mode);
+    body_sync_id_t rock = id_of("rock"), crate = id_of("crate");
+    uint16_t number = tick_to_flight(stand, rock);
+    b3BodyId body = stand_testing_world(stand, 1)->slots[body_sync_id_slot(rock)].body;
+    b3AABB box = b3Body_ComputeAABB(stand_testing_world(stand, 0)->slots[body_sync_id_slot(crate)].body);
+    float stop = box.upperBound.x + 0.12f + 0.08f, y = 0.5f * (box.lowerBound.y + box.upperBound.y), z = 0.5f * (box.lowerBound.z + box.upperBound.z);
+    float x[13];
+    for (int k = 12; k >= 0; k--) {
+        x[k] = k == 12 ? stop : x[k + 1] + (k < 3 ? 0.3f : 0.01f);
+    }
+    b3Body_SetGravityScale(body, 0.0f);
+    for (int k = 0; k < 12; k++) {
+        b3Body_SetTransform(body, (b3Vec3){x[k], y, z}, b3Body_GetRotation(body));
+        b3Body_SetLinearVelocity(body, (b3Vec3){(x[k + 1] - x[k]) * 60.0f, 0.0f, 0.0f});
+        b3Body_SetAngularVelocity(body, (b3Vec3){0.0f, 0.0f, 0.0f});
+        TEST_ASSERT_TRUE(body_sync_stand_tick(stand));
+    }
+    b3Body_SetLinearVelocity(body, (b3Vec3){0.0f, 0.0f, 0.0f});
+    /* The latest tick the host's evidence fits: on from the roll's states, past the fast ones'
+       reach of a chord's spacing. */
+    body_sync_contact_t at = {.gap = INFINITY};
+    uint32_t tick = 0;
+    for (int i = 0; i < 30 && !(at.gap <= at.reach); i++) {
+        TEST_ASSERT_TRUE(body_sync_stand_tick(stand));
+        for (uint32_t back = 0, now = stand_testing_tick(stand, 1); back <= 40 && !(at.gap <= at.reach); back++) {
+            tick = now - back;
+            TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_OK, body_sync_check_contact(stand_testing_sync(stand, 0), 1, rock, number, crate, tick, &at));
+        }
+    }
+    TEST_ASSERT_TRUE_MESSAGE(at.gap <= at.reach, "the host took no state of the roll beside the crate");
+    char why[96];
+    snprintf(why, sizeof(why), "the roll's approach read %.2f m/s", (double)at.approach_max);
+    TEST_ASSERT_TRUE_MESSAGE(at.approach_max < 2.0f, why);
+    send_claim_at(stand, rock, number, crate, 20.0f, tick);
+    TEST_ASSERT_TRUE(body_sync_stand_tick(stand));
+    TEST_ASSERT_TRUE_MESSAGE(on_host(stand, "crate"), "a gentle touch's claim broke the crate");
+    TEST_ASSERT_EQUAL_UINT32(1, guest(stand)->claims_rejected);
+    buckets_add_up(body_sync_stand_report(stand));
+    body_sync_stand_destroy(stand);
+}
+static void test_a_gentle_touch_claims_no_hard_hit_host(void) { gentle_touch_claims_no_hard_hit(MODE_HOST); }
+static void test_a_gentle_touch_claims_no_hard_hit_interaction(void) { gentle_touch_claims_no_hard_hit(MODE_INTERACTION); }
+
+/* Guest 1 carries its rock to a stop; the rock rests and goes out no more, while the character's
+   states keep the seat heard. The host puts the crate beside the rock: a claim of it at the
+   rock's last states fits while they are fresh; a second later, naming the same tick, it has no
+   evidence, as the host's own clock dates those states, not the claim's tick. */
+static void old_contact_tick_has_no_evidence(int mode) {
+    body_sync_stand_t *stand = make("scenario claims\nscene breakables\nseed 17\nguests 1\nsettle 10s\nnet g1 rtt 100ms\n"
+                                    "p1 grab rock as lift\np1 wait 300ms\np1 walk 2.0 0\np1 wait 3s\n",
+                                    mode);
+    body_sync_id_t rock = id_of("rock"), crate = id_of("crate");
+    body_sync_t *host = stand_testing_sync(stand, 0);
+    b3BodyId carried = stand_testing_world(stand, 0)->slots[body_sync_id_slot(rock)].body;
+    b3BodyId box = stand_testing_world(stand, 0)->slots[body_sync_id_slot(crate)].body;
+    b3Vec3 was = b3Body_GetPosition(carried);
+    for (int i = 0, still = 0; i < 600 && still < 10; i++) {
+        TEST_ASSERT_TRUE(body_sync_stand_tick(stand));
+        b3Vec3 is = b3Body_GetPosition(carried);
+        still = is.x > 1.5f && fabsf(is.x - was.x) + fabsf(is.z - was.z) < 1e-4f ? still + 1 : 0;
+        was = is;
+    }
+    uint16_t number = 0;
+    TEST_ASSERT_TRUE_MESSAGE(body_sync_contact_number(stand_testing_sync(stand, 1), rock, &number), "the carried rock names no number");
+    b3AABB r = b3Body_ComputeAABB(carried);
+    b3Body_SetGravityScale(box, 0.0f);
+    b3Body_SetTransform(box, (b3Vec3){r.upperBound.x + 0.3f + 0.08f, was.y, was.z}, b3Body_GetRotation(box));
+    body_sync_contact_t fresh = {.gap = INFINITY};
+    uint32_t tick = 0;
+    TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_OK, best_contact(stand, rock, number, crate, &fresh, &tick));
+    TEST_ASSERT_TRUE_MESSAGE(fresh.gap <= fresh.reach, "the rock beside the crate has no evidence while fresh");
+    for (int i = 0; i < 60; i++) {
+        TEST_ASSERT_TRUE(body_sync_stand_tick(stand));
+    }
+    TEST_ASSERT_TRUE_MESSAGE(stand_testing_tick(stand, 1) - tick <= STAND_CONTACT_AGE_MAX_TICKS, "the claim would be past the parser's range");
+    body_sync_contact_t late;
+    TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_OK, body_sync_check_contact(host, 1, rock, number, crate, tick, &late));
+    TEST_ASSERT_TRUE_MESSAGE(isinf(late.gap), "a contact named a second after its states had evidence");
+    send_claim_at(stand, rock, number, crate, 1.0f, tick);
+    TEST_ASSERT_TRUE(body_sync_stand_tick(stand));
+    TEST_ASSERT_EQUAL_UINT32(1, guest(stand)->claims_rejected);
+    buckets_add_up(body_sync_stand_report(stand));
+    body_sync_stand_destroy(stand);
+}
+static void test_an_old_contact_tick_has_no_evidence_host(void) { old_contact_tick_has_no_evidence(MODE_HOST); }
+static void test_an_old_contact_tick_has_no_evidence_interaction(void) { old_contact_tick_has_no_evidence(MODE_INTERACTION); }
+
 /* A hit the host accepts on the rock guest 1 carries does nothing (the carrier moves it): the
    claim counts as idle, not as an effect. */
 static void test_an_accepted_hit_that_does_nothing_is_idle(void) {
@@ -494,7 +596,7 @@ static void test_a_carried_rock_follows_its_carrier_interaction(void) { carried_
    the agent leave a gap at the contact (a missed effect, README "Contact claims"): of each mode's
    and walk's throws over `seeds` seeds at least `sent_min` claim, and at most `missed_max` of
    those claims miss. At 25 % loss, 80 of 89 apply over 24 seeds; the misses are states lost for
-   more than a chord's spacing before the contact, and a claimed speed above the fastest step the
+   more than a chord's spacing before the contact, and a claimed speed above the steps at the contact the
    host still holds. */
 static void loss_sweep(const char *net, int seeds, uint32_t sent_min, uint32_t missed_max) {
     for (int mode = MODE_HOST; mode <= MODE_INTERACTION; mode++) {
@@ -568,6 +670,10 @@ int main(int argc, char **argv) {
             plant_grows = true;
         } else if (strcmp(argv[i], "--plant-transform-sleep") == 0) {
             plant_sleep = true;
+        } else if (strcmp(argv[i], "--plant-approach-from-ring") == 0) {
+            plant_ring_approach = true;
+        } else if (strcmp(argv[i], "--plant-evidence-age-unbounded") == 0) {
+            plant_age = true;
         } else if (strcmp(argv[i], "--sweep") == 0) {
             sweep = true;
         }
@@ -599,6 +705,10 @@ int main(int argc, char **argv) {
     RUN_TEST(test_forger_after_a_cut_never_fits_host);
     RUN_TEST(test_forger_after_a_cut_never_fits_interaction);
     RUN_TEST(test_an_accepted_hit_that_does_nothing_is_idle);
+    RUN_TEST(test_a_gentle_touch_claims_no_hard_hit_host);
+    RUN_TEST(test_a_gentle_touch_claims_no_hard_hit_interaction);
+    RUN_TEST(test_an_old_contact_tick_has_no_evidence_host);
+    RUN_TEST(test_an_old_contact_tick_has_no_evidence_interaction);
     RUN_TEST(test_a_carried_rock_follows_its_carrier_host);
     RUN_TEST(test_a_carried_rock_follows_its_carrier_interaction);
     return UNITY_END();

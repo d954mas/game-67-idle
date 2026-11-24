@@ -514,26 +514,34 @@ void sync_authority_received_pose(sync_authority_t *a, sync_authority_body_t *b,
         b->pose_count = 0;
         b->pose_next = 0;
     }
-    sync_authority_pose_t *p = &b->poses[b->pose_next];
-    memset(p->step, 0, sizeof(p->step));
-    p->span = 0;
+    uint32_t span = 0;
+    float step[3] = {0.0f, 0.0f, 0.0f};
     if (b->pose_count > 0) {
         const sync_authority_pose_t *q = &b->poses[(b->pose_next + SYNC_AUTHORITY_POSES - 1u) % SYNC_AUTHORITY_POSES];
         uint32_t sent = tick - q->tick, seen = now - q->host_tick;
         uint32_t floor = seen > jitter_ticks ? seen - jitter_ticks : 0u;
         uint32_t ceiling = seen + jitter_ticks >= seen ? seen + jitter_ticks : UINT32_MAX;
-        uint32_t span = sent < floor ? floor : (sent > ceiling ? ceiling : sent);
-        span = span > 0 ? span : 1u;
-        float step[3];
+        uint32_t ticks = sent < floor ? floor : (sent > ceiling ? ceiling : sent);
+        ticks = ticks > 0 ? ticks : 1u;
         for (int i = 0; i < 3; i++) {
-            step[i] = (position[i] - q->position[i]) / (float)span;
+            step[i] = (position[i] - q->position[i]) / (float)ticks;
         }
         float travel = sqrtf(step[0] * step[0] + step[1] * step[1] + step[2] * step[2]);
         if (travel <= max_step) { /* NaN fails too: a broken pose is no step */
-            p->span = span;
-            memcpy(p->step, step, sizeof(step));
+            span = ticks;
+        } else {
+            memset(step, 0, sizeof(step));
+            /* A teleport: the states before it are no path to where the body is now, so it
+               starts the ring over as a point with no step. */
+            if (!a->plant_teleport_keeps_ring) {
+                b->pose_count = 0;
+                b->pose_next = 0;
+            }
         }
     }
+    sync_authority_pose_t *p = &b->poses[b->pose_next];
+    memcpy(p->step, step, sizeof(step));
+    p->span = span;
     memcpy(p->position, position, sizeof(p->position));
     p->tick = tick;
     p->host_tick = now;
@@ -810,14 +818,10 @@ uint16_t sync_authority_declared_number(const sync_authority_t *a, const sync_au
     return taking ? (uint16_t)(base + (b->take_refused ? 2u : 1u)) : b->number;
 }
 
-body_sync_contact_verdict_t sync_authority_check_contact(const sync_authority_t *a, uint8_t seat, body_sync_id_t agent, uint16_t number,
-                                                         uint32_t grace_ticks, const sync_authority_ended_t **ended) {
+static body_sync_contact_verdict_t ownership_verdict(const sync_authority_t *a, uint8_t seat, const sync_authority_body_t *b, uint16_t number,
+                                                     uint32_t grace_ticks, const sync_authority_ended_t **ended) {
     *ended = NULL;
     if (!sync_authority_is_host(a) || seat == BODY_SYNC_SEAT_HOST || seat >= a->seats) {
-        return BODY_SYNC_CONTACT_STALE;
-    }
-    const sync_authority_body_t *b = sync_authority_body_const(a, agent);
-    if (!b) {
         return BODY_SYNC_CONTACT_STALE;
     }
     if (b->seat == seat && b->number == number && a->joined[seat]) {
@@ -836,6 +840,13 @@ body_sync_contact_verdict_t sync_authority_check_contact(const sync_authority_t 
     }
     *ended = e;
     return e->how == SYNC_END_REVOKED ? BODY_SYNC_CONTACT_REVOKED : BODY_SYNC_CONTACT_OK;
+}
+
+body_sync_contact_verdict_t sync_authority_check_contact(const sync_authority_t *a, uint8_t seat, body_sync_id_t agent, uint16_t number,
+                                                         uint32_t grace_ticks, const sync_authority_ended_t **ended) {
+    *ended = NULL;
+    const sync_authority_body_t *b = sync_authority_body_const(a, agent);
+    return b ? ownership_verdict(a, seat, b, number, grace_ticks, ended) : BODY_SYNC_CONTACT_STALE;
 }
 
 static float length3(const float v[3]) { return sqrtf(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]); }
@@ -952,10 +963,15 @@ bool sync_authority_path_measure(const sync_authority_t *a, const sync_authority
     if (!grows && a->now - a->heard[seat] > window) {
         return false;
     }
-    /* `travel` is the fastest step the ownership showed, its contacts' approach; `pushing` only
-       the window's, since it widens a take's reach and a resting agent pushes nothing. */
-    float travel = 0.0f, pushing = 0.0f;
+    /* `travel` is the fastest step of the ring, what the planted defects read; `pushing` only the
+       window's, since it widens a take's reach and a resting agent pushes nothing. `approach` is
+       the steps of the states this contact lies on from: the agent's speed there, not anywhere
+       else the ring has been. */
+    float travel = 0.0f, pushing = 0.0f, approach = 0.0f;
     bool any = false;
+    const bool aged = a->plant_evidence_age_unbounded;
+    const float lag = (float)SYNC_POLICY_CLAIM_LAG_GRACES * (float)window, age_cap = SYNC_POLICY_EVIDENCE_AGE_MAX_S * (float)in->tick_hz;
+    const uint32_t lag_max = (uint32_t)(lag < age_cap ? lag : age_cap);
     const float none[3] = {0.0f, 0.0f, 0.0f};
     for (uint32_t i = 0; i < count; i++) {
         const sync_authority_pose_t *p = poses[i], *next = i + 1u < count ? poses[i + 1u] : NULL;
@@ -975,7 +991,17 @@ bool sync_authority_path_measure(const sync_authority_t *a, const sync_authority
         } else if (after > (grows ? 0x7FFFFFFFu : SYNC_POLICY_CHORD_TICKS_MAX)) {
             continue;
         }
+        /* The contact's tick is the claimant's word; the host's own clock says how long ago it
+           took the state. An honest claim follows its states within the lag, so an older state
+           is no evidence however the claim names its tick. */
+        if (!grows && !aged && a->now - p->host_tick > lag_max) {
+            continue;
+        }
         any = true;
+        if (p->span > 0) {
+            float step = length3(p->step);
+            approach = step > approach ? step : approach;
+        }
         float ticks = (float)after;
         /* The claim reads the target's box now: it went on from the contact for the ticks since
            this state reached the host and the contact's on from it, at most the window. */
@@ -986,6 +1012,8 @@ bool sync_authority_path_measure(const sync_authority_t *a, const sync_authority
         if (next && next->span > 0 && (grows || next->span <= SYNC_POLICY_CHORD_TICKS_MAX) && next->tick - in->contact_tick <= 0x7FFFFFFFu) {
             const float chord[3] = {next->position[0] - p->position[0], next->position[1] - p->position[1], next->position[2] - p->position[2]};
             fit_path(&f, p->position, chord, grows ? (float)(next->tick - p->tick) : (float)next->span);
+            float step = length3(next->step);
+            approach = step > approach ? step : approach;
         }
     }
     if (!any) {
@@ -998,12 +1026,15 @@ bool sync_authority_path_measure(const sync_authority_t *a, const sync_authority
     float cap = SYNC_POLICY_EVIDENCE_AGE_MAX_S * (float)in->tick_hz, push = in->push_ticks < cap ? in->push_ticks : cap;
     *gap = f.gap;
     *reach = f.reach + (grows ? travel : pushing) * push;
-    *approach_max = travel * (float)in->tick_hz + in->target_speed;
+    *approach_max = (grows || a->plant_approach_from_ring ? travel : approach) * (float)in->tick_hz + in->target_speed;
     return true;
 }
 
-const sync_authority_pose_t *sync_authority_pose_at(const sync_authority_body_t *b, uint8_t seat, uint32_t tick) {
-    if (b->pose_count == 0 || b->pose_seat != seat) {
+const sync_authority_pose_t *sync_authority_pose_at(const sync_authority_t *a, const sync_authority_body_t *b, uint8_t seat, uint32_t tick,
+                                                    uint32_t grace_ticks) {
+    const sync_authority_ended_t *ended;
+    if (b->pose_count == 0 || b->pose_seat != seat ||
+        (!a->plant_target_any_ownership && ownership_verdict(a, seat, b, b->pose_number, grace_ticks, &ended) != BODY_SYNC_CONTACT_OK)) {
         return NULL;
     }
     for (uint32_t i = 0; i < b->pose_count; i++) {

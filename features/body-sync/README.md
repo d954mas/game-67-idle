@@ -521,7 +521,7 @@ ignores the mode.
   the claimant's agents within reach of the body, by the same rule as a contact
   claim's (below): the agent along the path the host's own taken states of it
   show, never by the velocity they declare, its last state standing while it
-  rests and its seat is heard. The reach adds what the body travels and what the agent travels at its
+  rests and its seat is heard, within the claim's lag (below). The reach adds what the body travels and what the agent travels at its
   fastest step taken within the grace over a round trip, a playback delay and a tick: the body
   the guest touched was its copy of the host's, a one-way trip and a delay old,
   with the claim's way back on top, and the second layer may have pushed that
@@ -643,7 +643,15 @@ ignores the mode.
   may cost an effect, never forge one. All of it stands only while the seat is
   heard within the claim's grace (a seat gone silent leaves no evidence). The
   claim names the contact's tick on the claimant's clock, the one its states
-  are stamped with (a take: the take record's stamp). The contact lies on from
+  are stamped with (a take: the take record's stamp). That tick is the
+  claimant's word, so the host dates the evidence by its own ticks: a state
+  counts only while the host took it at most `SYNC_POLICY_CLAIM_LAG_GRACES` (2)
+  graces before it judges the claim (at most 1 s), one for the claim's own trip
+  and one for the record lane resending it. Over the claims sweep the latest
+  honest claim came 1.33 graces after its state (two resends at 25 % loss), a
+  take 8 ticks. A state older than that is no evidence, however the claim names
+  its tick: an agent that rests sends nothing, and its last states would
+  otherwise stand for any contact named on them for as long as it owns. The contact lies on from
   a taken state stamped at most `SYNC_POLICY_CHORD_TICKS_MAX` (4) ticks before
   it, for the ticks between: along the step that led to that state when that
   step spans as few ticks (only the contact turns the body), or on the chord to
@@ -654,11 +662,18 @@ ignores the mode.
   apart buy no time, stamps squeezed together neither speed a step up nor turn a
   gap into a chord. The gap is the agent's box from the target's at the nearest
   of these, the target where the claimant's own states, or the host at its take
-  of it, put it at the contact; the reach is the take slop, the target's travel
+  of it, put it at the contact (its states only under an ownership of it whose
+  claims the seat may still make: never once the host took it back and the
+  grace ran out, or recalled it); the reach is the take slop, the target's travel
   at its speed now since the contact (at most the grace) and a bend of the path
   of `SYNC_POLICY_CONTACT_BEND_MS2` (20 m/s^2): 4.4 cm over 4 ticks. The
-  approach is the fastest step of those states plus the target's speed; a step
-  faster than the box's speed is a teleport, refused as evidence, never capped.
+  approach is the fastest step of those very states (the step into each, and
+  the chord's) plus the target's speed, never a step elsewhere in the ring: a
+  fast throw that rolls on to a slow touch claims the touch's speed. A step
+  faster than the box's speed is a teleport, never capped: the states before it
+  are dropped, and it starts the evidence over as a point with no step, so the
+  agent is where the host shows it, with no speed and no push until its next
+  step.
   With no state that close before the contact the gap is INFINITY: a throw whose every flight state
   the network lost, or that ended before the host heard of it, is a missed
   effect, never a guessed one. The seam's records carry no pose, so a release
@@ -672,6 +687,13 @@ ignores the mode.
   again. A guest that released a body it only claimed or took cannot know the
   host's number (a withdrawal or refusal moves none, a crossed grant two) and
   names none for a re-take until it hears a newer one.
+
+What the gate promises: a contact claim (or a take) is consistent with what the
+host itself saw of the claimant's agent at the named contact, its position, step
+and time. It does not stop an owner that really moves its own bodies into a
+target: under INTERACTION the owner simulates them, and the host shows that
+motion. A gap in the evidence is a missed effect, never a false one. A finding
+that breaks this is a bug; anything outside it is out of scope.
 
 `body_sync_traffic` counts the takes, refusals, take-backs and returns
 (`takes`, `take_refusals`, `reclaims`, `returns`); the stand reports them per
@@ -706,7 +728,7 @@ push of a body the host does not simulate) and `claim_effects`, which add up to
 walk, in both modes: at 100 ms, 20 ms of jitter and 2 % loss, and at 150 ms,
 60 ms and 10 %, every honest claim applies; at 200 ms, 80 ms and 25 % over 24
 seeds, 80 of 89 apply (a contact more than 4 ticks after the last state the
-host took, or a claimed speed above the fastest step it still holds).
+host took, or a claimed speed above the steps it holds at the contact).
 
 ## Running the stand
 
