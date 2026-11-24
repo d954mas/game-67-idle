@@ -586,6 +586,42 @@ static bool timed_condition(parser_t *p, const line_words_t *w, uint32_t first, 
     return add_net(p, &e);
 }
 
+static bool metric_limit(parser_t *p, stand_metric_unit_t unit, const char *value, double *out) {
+    float f;
+    uint32_t ticks;
+    double v;
+    const char *suffix;
+    switch (unit) {
+    case STAND_UNIT_LENGTH:
+        if (!length_word(p, value, &f)) {
+            return false;
+        }
+        *out = (double)f;
+        return true;
+    case STAND_UNIT_ANGLE:
+        if (!angle_word(p, value, &f)) {
+            return false;
+        }
+        *out = (double)f;
+        return true;
+    case STAND_UNIT_TICKS:
+        if (!quantity(value, &v, &suffix) || strcmp(suffix, "t") != 0 || !time_word(p, value, &ticks)) {
+            return refuse(p, "'%s' needs ticks, as 6t", value);
+        }
+        *out = (double)ticks;
+        return true;
+    case STAND_UNIT_RATE:
+        return rate_word(p, value, out);
+    case STAND_UNIT_COUNT:
+        if (!bare_number(value, &v) || v < 0.0 || v != floor(v) || v > 1.0e9) {
+            return refuse(p, "'%s' needs a whole count", value);
+        }
+        *out = v;
+        return true;
+    }
+    return refuse(p, "'%s' has no unit", value);
+}
+
 static bool expect(parser_t *p, const line_words_t *w) {
     body_sync_scenario_t *s = p->out;
     if (s->expect_count >= BODY_SYNC_SCENARIO_EXPECTS_MAX) {
@@ -630,6 +666,19 @@ static bool expect(parser_t *p, const line_words_t *w) {
         e.kind = BODY_SYNC_EXPECT_EFFECT;
         if (w->count != 3 || !name_word(w->word[2], BODY_SYNC_NAME_MAX - 1)) {
             return refuse(p, "effect needs one body%s", "");
+        }
+        copy_text(e.body, sizeof(e.body), w->word[2]);
+    } else if (strcmp(what, "held") == 0) {
+        e.kind = BODY_SYNC_EXPECT_HELD;
+        if (w->count < 4 || w->count > 3 + BODY_SYNC_PLAYERS_MAX || !name_word(w->word[2], BODY_SYNC_NAME_MAX - 1)) {
+            return refuse(p, "held reads: expect held <body> <player> ...%s", "");
+        }
+        for (uint32_t k = 3; k < w->count; k++) {
+            uint8_t player;
+            if (!player_word(w->word[k], &player) || (e.players & (1u << player))) {
+                return refuse(p, "held needs distinct players p0..p3, not '%s'", w->word[k]);
+            }
+            e.players |= (uint8_t)(1u << player);
         }
         copy_text(e.body, sizeof(e.body), w->word[2]);
     } else if (strcmp(what, "left") == 0) {
@@ -678,47 +727,16 @@ static bool expect(parser_t *p, const line_words_t *w) {
         if (!stand_metric_unit(what, &unit)) {
             return refuse(p, "unknown check or metric '%s'", what);
         }
-        if (w->count != 4 || (strcmp(w->word[2], "<=") != 0 && strcmp(w->word[2], ">=") != 0)) {
-            return refuse(p, "a metric check reads: expect %s <=|>= <value>", what);
+        bool stub = w->count == 6 && strcmp(w->word[4], "stub") == 0;
+        if ((w->count != 4 && !stub) || (strcmp(w->word[2], "<=") != 0 && strcmp(w->word[2], ">=") != 0)) {
+            return refuse(p, "a metric check reads: expect %s <=|>= <value> [stub <value>]", what);
         }
         e.at_least = strcmp(w->word[2], ">=") == 0;
         e.kind = BODY_SYNC_EXPECT_METRIC_AT_MOST;
         copy_text(e.metric, sizeof(e.metric), what);
-        const char *value = w->word[3];
-        float f;
-        uint32_t ticks;
-        double v;
-        const char *suffix;
-        switch (unit) {
-        case STAND_UNIT_LENGTH:
-            if (!length_word(p, value, &f)) {
-                return false;
-            }
-            e.limit = (double)f;
-            break;
-        case STAND_UNIT_ANGLE:
-            if (!angle_word(p, value, &f)) {
-                return false;
-            }
-            e.limit = (double)f;
-            break;
-        case STAND_UNIT_TICKS:
-            if (!quantity(value, &v, &suffix) || strcmp(suffix, "t") != 0 || !time_word(p, value, &ticks)) {
-                return refuse(p, "'%s' needs ticks, as 6t", value);
-            }
-            e.limit = (double)ticks;
-            break;
-        case STAND_UNIT_RATE:
-            if (!rate_word(p, value, &e.limit)) {
-                return false;
-            }
-            break;
-        case STAND_UNIT_COUNT:
-            if (!bare_number(value, &v) || v < 0.0 || v != floor(v) || v > 1.0e9) {
-                return refuse(p, "'%s' needs a whole count", value);
-            }
-            e.limit = v;
-            break;
+        e.stub_limit = -1.0;
+        if (!metric_limit(p, unit, w->word[3], &e.limit) || (stub && !metric_limit(p, unit, w->word[5], &e.stub_limit))) {
+            return false;
         }
     }
     s->expects[s->expect_count++] = e;
@@ -964,8 +982,12 @@ static bool finish(parser_t *p) {
             p->line = e->line;
             return refuse(p, "this guest is not in the run: raise 'guests'%s", "");
         }
+        if (e->kind == BODY_SYNC_EXPECT_HELD && (e->players >> (s->guests + 1u)) != 0) {
+            p->line = e->line;
+            return refuse(p, "a named player is not in the run: raise 'guests'%s", "");
+        }
         /* Without a guest these compare nothing and would pass on nothing. */
-        bool needs_guest = e->kind == BODY_SYNC_EXPECT_AGREE_AT_REST || e->kind == BODY_SYNC_EXPECT_LEFT ||
+        bool needs_guest = e->kind == BODY_SYNC_EXPECT_AGREE_AT_REST || e->kind == BODY_SYNC_EXPECT_LEFT || e->kind == BODY_SYNC_EXPECT_HELD ||
                            (e->kind == BODY_SYNC_EXPECT_METRIC_AT_MOST && strcmp(e->metric, "host_ticks.max") != 0 &&
                             strcmp(e->metric, "echo_ticks.max") != 0);
         if (needs_guest && s->guests == 0) {

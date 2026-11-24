@@ -174,6 +174,19 @@ static void build_two_chars_item(body_sync_scene_t *s) {
     add_player(s, 2.0f, 0.0f, -HALF_PI);
 }
 
+/* A pass by throw between guests: the thrower beside the box, two catchers either side of the line
+   it flies along, each within reach of that line and clear of the box, and the host's player well
+   off it, since the host's touch would take the flight back. */
+static void build_four_chars_item(body_sync_scene_t *s) {
+    body_sync_scene_reset(s, "four_chars_item");
+    add_floor(s);
+    add_box(s, "box", 0.2f, 0.2f, 0.2f, 2.0f, -1.6f, 0.2f, 0.0f, BODY_SYNC_BODY_GRABBABLE, 3);
+    add_player(s, 0.0f, -5.0f, 0.0f);
+    add_player(s, -2.6f, 0.0f, HALF_PI);
+    add_player(s, 2.2f, -1.0f, -HALF_PI);
+    add_player(s, 2.2f, 1.0f, -HALF_PI);
+}
+
 static void build_breakables(body_sync_scene_t *s) {
     body_sync_scene_reset(s, "breakables");
     add_floor(s);
@@ -350,6 +363,7 @@ static const body_sync_scene_entry_t catalog[] = {
     {"dummy_wall", "a wall, a standing dummy and two rocks: a guest's throw flies at once, the dummy falls by its claim", build_dummy_wall},
     {"walker_lane", "a mannequin walking across a thrower's line and a rock: an impact claim on a moving host target", build_walker_lane},
     {"glass_door", "glass, a heavy door and two rocks: breaks by a guest's impact claim, the door ending the flight", build_glass_door},
+    {"four_chars_item", "four characters and one item: a guest catches another guest's throw", build_four_chars_item},
 };
 
 const body_sync_scene_entry_t *body_sync_scene_catalog(uint32_t *count) {

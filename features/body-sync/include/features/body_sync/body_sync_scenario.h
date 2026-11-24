@@ -101,12 +101,17 @@ extern "C" {
      expect effect <body>                       an effect (a knockdown, a break) took the scene
                                                 body on the host, and every guest that stayed
                                                 shows it once: knocked down, or gone
+     expect held <body> <player> ...            at one tick every endpoint shows the scene body
+                                                in the same named player's hand, and no endpoint
+                                                but her own shows it in another named one's
      expect pace <label>                        a walk to a point keeps up with the same walk in
                                                 a reference run of the scenario on one world,
                                                 every player local, no network (README
                                                 "Scenario format" derives its margin)
-     expect <metric> <= <value>                 metric names of body_sync_metrics.h, the
-                                                worst guest counts
+     expect <metric> <=|>= <value> [stub <value>]
+                                                metric names of body_sync_metrics.h, the
+                                                worst guest counts; `stub` bounds the stub,
+                                                which has no render offset to blend a handover
    With `guests 0` the checks that compare a guest (agree_at_rest, left, and every metric but
    host_ticks.max and echo_ticks.max) are refused.
 
@@ -233,6 +238,7 @@ typedef enum body_sync_expect_kind {
     BODY_SYNC_EXPECT_MOVED, /* a body's travel on the host from the first tick to the last */
     BODY_SYNC_EXPECT_PACE,  /* a walk's progress against the same walk in a local reference run */
     BODY_SYNC_EXPECT_EFFECT, /* a scene body an effect took, shown on every endpoint */
+    BODY_SYNC_EXPECT_HELD,   /* a scene body every endpoint showed in one of the named players' hands at once */
 } body_sync_expect_kind_t;
 
 typedef struct body_sync_expect {
@@ -247,8 +253,10 @@ typedef struct body_sync_expect {
     char metric[BODY_SYNC_METRIC_NAME_MAX]; /* METRIC_AT_MOST */
     double limit; /* METRIC_AT_MOST, in the metric's unit: m, deg, ticks or bytes/s; MOVED in m */
     double layer_limit; /* MOVED: the bound while the second layer is on; negative: `limit` */
-    char body[BODY_SYNC_NAME_MAX]; /* MOVED, EFFECT: the scene body */
+    double stub_limit;  /* METRIC_AT_MOST: the bound on the stub implementation; negative: `limit` */
+    char body[BODY_SYNC_NAME_MAX]; /* MOVED, EFFECT, HELD: the scene body */
     bool at_least;                 /* MOVED: >= rather than <= */
+    uint8_t players;               /* HELD: a bit per player whose hand passes */
 } body_sync_expect_t;
 
 typedef struct body_sync_scenario {

@@ -1,0 +1,47 @@
+# A guest throws the box to another guest, who grabs it in flight: a grab of a body flying under
+# another guest. The host grants it on the seam's contact evidence (her character along the path
+# the host took of it, the box put back along its velocity to her grab's tick), the box rides her
+# hand on every endpoint, and the thrower's states of the flight sent before she heard of the catch
+# are dropped by their number.
+scenario catch_guest_throw_100
+scene four_chars_item
+seed 31
+guests 2
+settle 6s
+
+net g1 rtt 100ms jitter 10ms loss 1%
+net g2 rtt 100ms jitter 10ms loss 1%
+
+p1 grab box as lift
+p1 wait 300ms
+p1 throw 4 0.2 0 speed 9 as throw
+# The walk ends the tick the box comes within her reach on her own world, and the grab follows.
+p2 walk box speed 1 on throw as reach
+p2 grab box as catch
+# Held long enough for her hand to reach the thrower's world: two one-way trips and two delays.
+p2 wait 1500ms
+p2 drop as put
+
+expect result lift granted
+expect result throw done
+expect result catch granted
+expect held box p2
+expect agree_at_rest 5cm
+expect no_stuck
+# The thrower simulates the flight on until the grant reaches her, a state a tick: at least one
+# arrives late. Measured 7 over 20 seeds (seed 31: 7); at most a state a tick over the grant's trip
+# to her and a lost record's resend, as in recall_flight.
+expect late_drops.count >= 1
+expect late_drops.count <= 30
+# Derived: the claim takes over from the pose the catcher shows (as in throw_catch): 0, and 1 cm
+# for a placement's rounding.
+expect local_correction.max <= 1cm
+# Derived: the host's and the thrower's copies hand the flight over to her hand through the render
+# offset, at most 0.15 of 2 m a tick: 0.3 m (measured 0.18-0.30). The stub draws a copy at its
+# newest state with no offset, so the handover shows whole: a jump below 2 m, a snap past it.
+expect jump.max <= 0.3m stub 2m
+expect snap.count <= 0 stub 1
+# A catch is a grab: nothing moves by interaction, and nothing of the host's touches the flight.
+expect takes.count <= 0
+expect take_refusals.count <= 0
+expect reclaims.count <= 0

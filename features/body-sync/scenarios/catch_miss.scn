@@ -1,0 +1,28 @@
+# A guest reaches for another guest's throw that passes far from her: out of reach on her own world,
+# the grab claims nothing. The box flies on under the thrower and lands, and nothing comes of the
+# reach. A claim she sends anyway is refused by the host's evidence (test_body_sync_claims: a far
+# catch).
+scenario catch_miss
+scene four_chars_item
+seed 51
+guests 2
+settle 6s
+
+net g1 rtt 100ms jitter 10ms loss 1%
+net g2 rtt 100ms jitter 10ms loss 1%
+
+p1 grab box as lift
+p1 wait 300ms
+p1 throw -1 0.2 4 speed 9 as throw
+# The flight's middle: the box is 4 m and more from her.
+at 900ms p2 grab box as catch
+
+expect result lift granted
+expect result throw done
+expect result catch failed
+expect moved box >= 2m
+expect agree_at_rest 5cm
+expect no_stuck
+expect effects_once
+expect late_drops.count <= 0
+expect takes.count <= 0

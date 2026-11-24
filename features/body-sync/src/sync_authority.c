@@ -129,6 +129,7 @@ static void host_move_to(sync_authority_t *a, sync_authority_body_t *b, uint8_t 
     uint64_t bit = 1ull << (slot % 64);
     bool skip = seat != BODY_SYNC_SEAT_HOST && (a->refused[seat][slot / 64] & bit);
     a->refused[seat][slot / 64] &= ~bit;
+    uint8_t from = b->seat;
     b->seat = seat;
     b->number += skip ? 2u : 1u;
     b->granted_seq = granted;
@@ -137,6 +138,12 @@ static void host_move_to(sync_authority_t *a, sync_authority_body_t *b, uint8_t 
     }
     if (seat != BODY_SYNC_SEAT_HOST) {
         b->holder = BODY_SYNC_ID_NONE;
+    }
+    /* What the host received of the body was its last owner's: a new guest owner is read from the
+       host's own move (this hold, no holder) until her states come, or another guest's claim of a
+       body just granted would read the old flight's hold. */
+    if (seat != BODY_SYNC_SEAT_HOST && seat != from) {
+        b->has_in = false;
     }
     b->hold = hold;
     a->owned_by[seat] += seat != BODY_SYNC_SEAT_HOST && hold == BODY_SYNC_HOLD_UNTIL_REST ? 1u : 0u;

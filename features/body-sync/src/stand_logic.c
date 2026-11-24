@@ -610,7 +610,7 @@ const char *stand_verb_name(body_sync_verb_t verb) {
 }
 
 const char *stand_expect_name(body_sync_expect_kind_t kind) {
-    static const char *names[] = {"none", "agree_at_rest", "no_stuck", "effects_once", "result", "one_of", "metric", "left", "moved", "pace", "effect"};
+    static const char *names[] = {"none", "agree_at_rest", "no_stuck", "effects_once", "result", "one_of", "metric", "left", "moved", "pace", "effect", "held"};
     return (unsigned)kind < sizeof(names) / sizeof(names[0]) ? names[kind] : "none";
 }
 

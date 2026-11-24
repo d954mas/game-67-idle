@@ -87,7 +87,7 @@ box3d_enable(test_body_sync_claims_stub)
 add_test(NAME test_body_sync_claims_stub COMMAND test_body_sync_claims_stub WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 add_test(NAME test_body_sync_claims_stub_mf_reach_unbounded
     COMMAND "${CMAKE_COMMAND}" -DEXE=$<TARGET_FILE:test_body_sync_claims_stub> -DARGS=--plant-claim-reach-unbounded
-            "-DCASES=test_forged_far_claim_is_rejected_host|test_flung_far_claim_is_rejected_host"
+            "-DCASES=test_forged_far_claim_is_rejected_host|test_flung_far_claim_is_rejected_host|test_a_far_catch_is_refused_host"
             -P "${CMAKE_CURRENT_LIST_DIR}/expect_unity_fail.cmake")
 # The host's limits on impact claims must each fail the cases meant for them when planted: an
 # approach read as 0 refuses every honest throw's claim, an unbounded reach takes a forged one.
@@ -97,7 +97,17 @@ add_test(NAME test_body_sync_claims_mf_approach_scale0
             -P "${CMAKE_CURRENT_LIST_DIR}/expect_unity_fail.cmake")
 add_test(NAME test_body_sync_claims_mf_reach_unbounded
     COMMAND "${CMAKE_COMMAND}" -DEXE=$<TARGET_FILE:test_body_sync_claims> -DARGS=--plant-claim-reach-unbounded
-            "-DCASES=test_forged_far_claim_is_rejected_host|test_forged_far_claim_is_rejected_interaction|test_flung_far_claim_is_rejected_host|test_flung_far_claim_is_rejected_interaction"
+            "-DCASES=test_forged_far_claim_is_rejected_host|test_forged_far_claim_is_rejected_interaction|test_flung_far_claim_is_rejected_host|test_flung_far_claim_is_rejected_interaction|test_a_far_catch_is_refused_host|test_a_far_catch_is_refused_interaction"
+            -P "${CMAKE_CURRENT_LIST_DIR}/expect_unity_fail.cmake")
+# A host that reads a catcher's evidence off by her reach refuses the honest catch: the box is never
+# in her hand on every endpoint.
+add_test(NAME test_body_sync_claims_mf_catch_evidence_off
+    COMMAND "${CMAKE_COMMAND}" -DEXE=$<TARGET_FILE:test_body_sync_claims> -DARGS=--plant-catch-evidence-off
+            "-DCASES=test_a_guest_catches_a_guest_throw_host|test_a_guest_catches_a_guest_throw_interaction"
+            -P "${CMAKE_CURRENT_LIST_DIR}/expect_unity_fail.cmake")
+add_test(NAME test_body_sync_claims_stub_mf_catch_evidence_off
+    COMMAND "${CMAKE_COMMAND}" -DEXE=$<TARGET_FILE:test_body_sync_claims_stub> -DARGS=--plant-catch-evidence-off
+            "-DCASES=test_a_guest_catches_a_guest_throw_host"
             -P "${CMAKE_CURRENT_LIST_DIR}/expect_unity_fail.cmake")
 add_test(NAME test_body_sync_claims_mf_take_reach_unbounded
     COMMAND "${CMAKE_COMMAND}" -DEXE=$<TARGET_FILE:test_body_sync_claims> -DARGS=--plant-take-reach-unbounded
@@ -145,7 +155,8 @@ set(BODY_SYNC_CORE_SCENARIOS two_walk)
 set(BODY_SYNC_SLOW_SCENARIOS stack_punch pile_throw cabinet_carry mannequin_hits grab_dispute breakables_break load_four
     edge_throw_cut edge_stall edge_deaf load_overflow pile_settle_loss10 throw_catch
     bounce_wall cut_short cut_long hitch_guest hitch_host rate_mismatch rate_rough two_ping latency_drop
-    throw_dummy throw_glass_door throw_walker recall_flight recall_carry remove_owned)
+    throw_dummy throw_glass_door throw_walker recall_flight recall_carry remove_owned
+    catch_guest_throw_100 catch_guest_throw_250 catch_race catch_miss)
 # The same scenarios with the second layer on (the real seam; the stub has no layer): their
 # checks hold in both modes. The layer scenes name it themselves.
 set(BODY_SYNC_LAYER_KG 20)
@@ -162,6 +173,7 @@ set(core_tests test_body_sync_logic test_body_sync_playback test_body_sync_soft 
     test_body_sync_claims test_body_sync_claims_stub test_body_sync_claims_stub_mf_reach_unbounded test_body_sync_claims_mf_end_grace_zero
     test_body_sync_claims_mf_approach_scale0 test_body_sync_claims_mf_reach_unbounded
     test_body_sync_claims_mf_approach_unbounded test_body_sync_claims_mf_take_reach_unbounded
+    test_body_sync_claims_mf_catch_evidence_off test_body_sync_claims_stub_mf_catch_evidence_off
     test_body_sync_claims_mf_evidence_grows_over_gaps test_body_sync_claims_mf_transform_sleep
     test_body_sync_authority_mf_approach_from_ring test_body_sync_authority_mf_evidence_age_unbounded
     test_body_sync_authority_mf_teleport_keeps_ring test_body_sync_authority_mf_target_any_ownership
@@ -227,7 +239,8 @@ set(BODY_SYNC_AUTHORITY_SCENARIOS authority_host_push authority_two_guests autho
     authority_three_host authority_three_guest authority_three_cross)
 set(BODY_SYNC_INTERACTION_SCENARIOS layer_bounce layer_pile layer_push layer_rest layer_stand layer_nudge layer_leave pile_throw throw_catch
     load_four char_push edge_throw_cut pile_settle_loss10 breakables_break mannequin_hits cabinet_carry grab_dispute
-    throw_dummy throw_glass_door throw_walker recall_flight recall_carry remove_owned)
+    throw_dummy throw_glass_door throw_walker recall_flight recall_carry remove_owned
+    catch_guest_throw_100 catch_guest_throw_250 catch_race catch_miss)
 foreach(scn IN LISTS BODY_SYNC_AUTHORITY_SCENARIOS)
     add_test(NAME test_body_sync_scn_${scn}
         COMMAND body_sync_stand_cli "${BODY_SYNC_SCENARIOS}/${scn}.scn" --out "${CMAKE_CURRENT_BINARY_DIR}/${scn}.json" --quiet)

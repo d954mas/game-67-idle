@@ -28,6 +28,9 @@ static bool plant_ring_approach; /* --plant-approach-from-ring: a contact's appr
 static bool plant_age;           /* --plant-evidence-age-unbounded: a state stands however long ago the host took it */
 static bool plant_end_grace;     /* --plant-end-grace-zero: no claim counts once the agent's ownership ended */
 static bool plant_recall_number; /* --plant-recall-keeps-number: a recall leaves the old number standing for claims */
+/* --plant-catch-evidence-off: the host reads a catch's gap a character's reach (1.65 m) farther, past
+   the grab's allowance whatever the seam measures */
+static bool plant_catch_off;
 static body_sync_scene_t scene;
 static body_sync_scenario_t scenario;
 static bool third_player; /* the next make() gives the breakables a third player and a rock for it */
@@ -76,6 +79,7 @@ static body_sync_stand_t *make(const char *text, int mode) {
     body_sync_stand_t *stand = body_sync_stand_create(&config, &error);
     TEST_ASSERT_NOT_NULL_MESSAGE(stand, error.text);
     stand_testing_plant_claim_limits(stand, plant_reach, plant_approach);
+    stand_testing_plant_catch_offset(stand, plant_catch_off ? 1.65f : 0.0f);
 /* The stub has none of the seam's plants: its build runs every case honest, so the claims
    must-fails are the real seam's alone. */
 #ifndef CLAIMS_STUB
@@ -251,6 +255,58 @@ static void recall_drops_the_late_claim(int mode) {
     all_pass(report);
     body_sync_stand_destroy(stand);
 }
+/* catch_guest_throw_100 as shipped: g2 grabs g1's throw in flight, and the host grants it on her
+   evidence, the flight put back along its velocity to her grab's tick. A host that judged the
+   flight where it shows it now, a round trip and a delay on, refuses the honest catch: the box is
+   never in her hand on every endpoint. */
+static void guest_catches_a_guest_throw(int mode) {
+    static char text[BODY_SYNC_SCENARIO_TEXT_MAX + 1];
+    FILE *f = fopen(BODY_SYNC_SCENARIOS_DIR "/catch_guest_throw_100.scn", "rb");
+    TEST_ASSERT_NOT_NULL(f);
+    size_t n = fread(text, 1, BODY_SYNC_SCENARIO_TEXT_MAX, f);
+    fclose(f);
+    text[n] = '\0';
+    body_sync_stand_t *stand = make(text, mode);
+    const body_sync_report_t *report = body_sync_stand_run(stand);
+    bool held = false;
+    for (uint32_t i = 0; i < report->check_count; i++) {
+        if (report->checks[i].kind == BODY_SYNC_EXPECT_HELD) {
+            held = true;
+            TEST_ASSERT_TRUE_MESSAGE(report->checks[i].passed, report->checks[i].detail);
+        }
+    }
+    TEST_ASSERT_TRUE_MESSAGE(held, "the scenario checks no hand");
+    all_pass(report);
+    body_sync_stand_destroy(stand);
+}
+static void test_a_guest_catches_a_guest_throw_host(void) { guest_catches_a_guest_throw(MODE_HOST); }
+static void test_a_guest_catches_a_guest_throw_interaction(void) { guest_catches_a_guest_throw(MODE_INTERACTION); }
+
+/* A guest's claim of another guest's flight far out of her reach, made outside any grab: the host
+   refuses it, the box flies on under its thrower and lands, and the worlds agree at rest. */
+static void far_catch_is_refused(int mode) {
+    body_sync_stand_t *stand = make("scenario claims\nscene four_chars_item\nseed 5\nguests 2\nsettle 6s\n"
+                                    "net g1 rtt 100ms jitter 10ms\nnet g2 rtt 100ms jitter 10ms\n"
+                                    "p1 grab box as lift\np1 wait 300ms\np1 throw -1 0.2 4 speed 9 as throw\n"
+                                    "expect result throw done\nexpect agree_at_rest 5cm\nexpect no_stuck\nexpect late_drops.count <= 0\n",
+                                    mode);
+    body_sync_id_t box = id_of("box");
+    body_sync_authority_t a;
+    while (body_sync_stand_now(stand) < 40 && body_sync_stand_tick(stand)) {
+    }
+    TEST_ASSERT_TRUE(body_sync_authority(stand_testing_sync(stand, 0), box, &a));
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(1, a.seat, "the throw is not in flight under g1");
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_claim(stand_testing_sync(stand, 2), box, BODY_SYNC_HOLD_UNTIL_RELEASE));
+    while (body_sync_stand_tick(stand)) {
+        TEST_ASSERT_TRUE(body_sync_authority(stand_testing_sync(stand, 0), box, &a));
+        TEST_ASSERT_NOT_EQUAL_MESSAGE(2, a.seat, "the host granted a catch from far out of reach");
+    }
+    all_pass(body_sync_stand_report(stand));
+    body_sync_stand_destroy(stand);
+}
+static void test_a_far_catch_is_refused_host(void) { far_catch_is_refused(MODE_HOST); }
+static void test_a_far_catch_is_refused_interaction(void) { far_catch_is_refused(MODE_INTERACTION); }
+
 static void test_a_recall_drops_the_late_claim_host(void) { recall_drops_the_late_claim(MODE_HOST); }
 static void test_a_recall_drops_the_late_claim_interaction(void) { recall_drops_the_late_claim(MODE_INTERACTION); }
 
@@ -728,6 +784,8 @@ int main(int argc, char **argv) {
             plant_end_grace = true;
         } else if (strcmp(argv[i], "--plant-recall-keeps-number") == 0) {
             plant_recall_number = true;
+        } else if (strcmp(argv[i], "--plant-catch-evidence-off") == 0) {
+            plant_catch_off = true;
         } else if (strcmp(argv[i], "--sweep") == 0) {
             sweep = true;
         }
@@ -755,6 +813,8 @@ int main(int argc, char **argv) {
     RUN_TEST(test_an_old_contact_tick_has_no_evidence_host);
     RUN_TEST(test_a_carried_rock_follows_its_carrier_host);
     RUN_TEST(test_a_recall_drops_the_late_claim_host);
+    RUN_TEST(test_a_guest_catches_a_guest_throw_host);
+    RUN_TEST(test_a_far_catch_is_refused_host);
     return UNITY_END();
 #endif
     if (sweep) {
@@ -792,6 +852,10 @@ int main(int argc, char **argv) {
     RUN_TEST(test_a_carried_rock_follows_its_carrier_host);
     RUN_TEST(test_a_carried_rock_follows_its_carrier_interaction);
     RUN_TEST(test_a_recall_drops_the_late_claim_host);
+    RUN_TEST(test_a_guest_catches_a_guest_throw_host);
+    RUN_TEST(test_a_far_catch_is_refused_host);
     RUN_TEST(test_a_recall_drops_the_late_claim_interaction);
+    RUN_TEST(test_a_guest_catches_a_guest_throw_interaction);
+    RUN_TEST(test_a_far_catch_is_refused_interaction);
     return UNITY_END();
 }

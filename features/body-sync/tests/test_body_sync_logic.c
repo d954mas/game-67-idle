@@ -14,7 +14,8 @@ void tearDown(void) {}
 static const char *const shipped[] = {"two_walk",       "stack_punch", "pile_throw", "cabinet_carry", "mannequin_hits", "grab_dispute",
                                       "breakables_break", "load_four",  "edge_throw_cut", "edge_stall", "edge_deaf",
                                       "throw_dummy",      "throw_glass_door", "throw_walker",
-                                      "recall_flight",    "recall_carry",     "remove_owned"};
+                                      "recall_flight",    "recall_carry",     "remove_owned",
+                                      "catch_guest_throw_100", "catch_guest_throw_250", "catch_race", "catch_miss"};
 
 static body_sync_scenario_t scenario;
 static body_sync_scene_t scene;
@@ -214,6 +215,14 @@ static void test_refusals_name_their_line(void) {
         {"scenario a\nscene b\nexpect left host\n", 3},
         {"scenario a\nscene b\nexpect effect\n", 3},
         {"scenario a\nscene b\nexpect effect dummy glass\n", 3},
+        {"scenario a\nscene b\nexpect held box\n", 3},
+        {"scenario a\nscene b\nexpect held box p9\n", 3},
+        {"scenario a\nscene b\nexpect held box p1 p1\n", 3},
+        {"scenario a\nscene b\nguests 1\nexpect held box p2\n", 4},
+        {"scenario a\nscene b\nguests 0\nexpect held box p0\n", 4},
+        {"scenario a\nscene b\nexpect jump.max <= 0.3m stub\n", 3},
+        {"scenario a\nscene b\nexpect jump.max <= 0.3m stub 2deg\n", 3},
+        {"scenario a\nscene b\nexpect jump.max <= 0.3m layer 2m\n", 3},
         {"scenario a\nscene b\nat 600s p0 walk 1 1\n", 3},
         {"scenario a\nscene b\nat 600s net g1 loss 2%\n", 3},
         {"scenario a\nscene b\np0 wait 590s\nsettle 20s\n", 4},
@@ -588,6 +597,13 @@ static void test_new_forms_are_read(void) {
     TEST_ASSERT_TRUE_MESSAGE(parse("scenario a\nscene b\nexpect effect dummy\n", &error), error.text);
     TEST_ASSERT_EQUAL(BODY_SYNC_EXPECT_EFFECT, scenario.expects[0].kind);
     TEST_ASSERT_EQUAL_STRING("dummy", scenario.expects[0].body);
+    TEST_ASSERT_TRUE_MESSAGE(parse("scenario a\nscene b\nguests 2\nexpect held box p1 p2\nexpect jump.max <= 0.3m stub 2m\nexpect snap.count <= 0\n", &error),
+                             error.text);
+    TEST_ASSERT_EQUAL(BODY_SYNC_EXPECT_HELD, scenario.expects[0].kind);
+    TEST_ASSERT_EQUAL_UINT8(0x6, scenario.expects[0].players);
+    TEST_ASSERT_EQUAL_STRING("box", scenario.expects[0].body);
+    TEST_ASSERT_TRUE(scenario.expects[1].limit > 0.29 && scenario.expects[1].stub_limit > 1.99);
+    TEST_ASSERT_TRUE(scenario.expects[2].stub_limit < 0.0); /* no stub bound written: the bound itself */
     TEST_ASSERT_TRUE_MESSAGE(parse("scenario a\nscene b\nguests 0\np0 walk 1 1\nexpect host_ticks.max <= 3t\nexpect no_stuck\n", &error), error.text);
     /* a timed action cuts off the long wait before it, so this schedule fits */
     TEST_ASSERT_TRUE_MESSAGE(parse("scenario a\nscene b\np0 wait 600s\nat 1s p0 wait 1s\n", &error), error.text);

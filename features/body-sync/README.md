@@ -81,7 +81,8 @@ verdicts, the stand's records, metric arithmetic and JSON) are the separate
 library `body_sync_stand_logic` and are tested alone.
 
 Scene catalog: `floor_wall`, `stack10`, `pile60`, `cabinet_mug`, `mannequin`
-(one standing, one walking a route), `two_chars_item`, `breakables` (glass,
+(one standing, one walking a route), `two_chars_item`, `four_chars_item` (a
+thrower and two catchers either side of the box's line), `breakables` (glass,
 a crate with contents), `load300` (300 bodies, four players), `dummy_wall`
 (a wall and a standing dummy to throw at), `walker_lane` (a mannequin walking
 across a thrower's line), `glass_door` (glass and a heavy door, both broken by
@@ -225,6 +226,11 @@ record of it went out since. A body's priority and age reset when its packet
 is handed to the session, not when it is written. Without fates (no
 `body_sync_resolve`) nothing is acknowledged: 200 sleeping bodies then cost
 about 1 KB a tick for ever, against nothing once acknowledged.
+A record whose authority group changed (a new number: a claim granted, a take,
+a move) carries every rare group again: the host takes a guest's state only
+under the number it holds for her, so a group acknowledged under the claim's
+old number (a holder set at the grab, before the grant) may never have been
+read there.
 
 The budget is 1000 bytes (`state_budget`, 0 takes it), clamped by each
 write's capacity. `body_sync_create` refuses a budget without room for one
@@ -581,6 +587,20 @@ ignores the mode.
   would lean on a copy of the other's that is a round trip through the host
   late, and the heap would creep and never rest (`authority_two_guests_far`).
   The priority is one constant in the policy (`SYNC_POLICY_PRIORITY`).
+- **A catch.** The policy moves no body between guests by interaction, but a
+  caller's claim is the caller's to answer: `body_sync_answer` may grant a body
+  another guest flies, an arbitrated end of hers (her late states are dropped
+  by their number, her contact claims count within the grace). The host's move
+  forgets what it received of the old owner, so `body_sync_authority` there
+  reads the grant's hold and no holder until the new owner's states come. The
+  stand grants a grab of another guest's flight (a hold until settled or until
+  rest, no holder) on `body_sync_check_contact` of the catcher's character and
+  the body, within the seam's reach and her grab's (her reach less the
+  capsule's radius); a body in another guest's hold until release is hers, so
+  two catchers of one throw get it once and a caught body is never caught back
+  (`catch_guest_throw_100`, `catch_guest_throw_250`, `catch_race`). A claim the
+  record lane resends a round trip late lands past the host's 12 taken states
+  of the catcher and is refused: a missed catch, never a false one.
 - **The host's hold.** A guest's body owned by interaction is held on the host
   as any dynamic copy (owner's velocity and the closed error), and keeps
   `character_category`'s bits there, so the host's character meets it; that
@@ -816,8 +836,9 @@ expect result <label> <done|granted|refused|hit|missed|rejected|failed>
 expect one_of <outcome> <label> <label> ...
 expect moved <body> <=|>= <length>  # the body's travel on the host, first tick to last
 expect effect <body>                # a knockdown or break took the body on the host, shown once on every guest
+expect held <body> <player> ...     # at one tick every endpoint shows the body in one named player's hand, and no endpoint but her own ever shows another named one holding it
 expect pace <label>                 # a walk to a point keeps up with a local reference run
-expect <metric> <=|>= <value>
+expect <metric> <=|>= <value> [stub <value>]   # stub: the bound on the stub, which blends no handover
 ```
 
 Units are required: `250ms`, `1.5s`, `90t` (ticks), `5cm`, `0.05m`, `3deg`,
@@ -1083,14 +1104,16 @@ shoving the cabinet is its must-fail contrast), cuts of 0.5 s and 3 s
 (`rate_mismatch`, `rate_rough`), two guests at 30 and 250 ms (`two_ping`), a
 recall of a guest's body in flight and from her hands with her late states and
 claim dropped (`recall_flight`, `recall_carry`), a removal of a guest's body in
-flight (`remove_owned`), and hostile bytes on every parser (seeded fuzz in the
+flight (`remove_owned`), a guest catching another guest's throw in flight at 100
+and 250 ms and two guests reaching for it at once (`catch_guest_throw_100`,
+`catch_guest_throw_250`, `catch_race`; a reach that misses: `catch_miss`), and
+hostile bytes on every parser (seeded fuzz in the
 tests). The stand never reuses a scene body's slot, so an old packet meeting a
 reused slot is covered at the seam only (`test_body_sync_stub`, both
 implementations: a guest's state and release of another generation after the
 host binds the slot again under her seat and number are stale, and a
 generation equal modulo 16 is refused for the quarantine). Not yet
-covered: a grab of a body flying under another guest's authority, a sleeping
-body moved by the host, more moving bodies than a budget allows, a record over the unfragmented limit, a reader that stalls for 10 s,
+covered: a sleeping body moved by the host, more moving bodies than a budget allows, a record over the unfragmented limit, a reader that stalls for 10 s,
 reconnects, joins and the host leaving (the seam has no baseline yet), the
 16-bit packet number wrapping, a guest pushing a stack
 or standing on a host's body, a hit on a target that already moved on the

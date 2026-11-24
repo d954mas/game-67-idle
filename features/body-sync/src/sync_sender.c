@@ -151,8 +151,12 @@ void sync_sender_tick(sync_sender_t *s, uint32_t tick, const sync_body_input_t *
             /* A body that needed nothing starts its age when it wants a packet again. */
             bool was_idle = b->asleep && b->rest_acked && !pending_groups(b);
             sync_rare_t now = in->state.rare;
+            /* The host takes a guest's state only under the number it holds for her, so a group
+               acknowledged under another (a claim's states before its grant) may never have been
+               read there: a new number sends every group again. */
+            bool renumbered = b->groups_known && !same_value(&b->last_value, &now, SYNC_RARE_AUTHORITY);
             for (int g = 0; g < SYNC_RARE_GROUPS; g++) {
-                if (!b->groups_known || !same_value(&b->last_value, &now, (uint8_t)(1u << g))) {
+                if (!b->groups_known || renumbered || !same_value(&b->last_value, &now, (uint8_t)(1u << g))) {
                     b->version[g]++;
                 }
             }

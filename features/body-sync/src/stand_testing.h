@@ -23,10 +23,14 @@ uint32_t stand_testing_tick(body_sync_stand_t *stand, uint32_t endpoint);
    declares in its states, is `add` more than the body's own; the body moves as it would. A peer
    lying about its speed. */
 void stand_testing_plant_declared_velocity(body_sync_stand_t *stand, uint32_t endpoint, body_sync_id_t body, const float add[3], uint32_t ticks);
-/* The host's limits on an impact claim read `reach_scale` times the seam's reach and
-   `approach_scale` times its approach (1 and 1 unplanted): an approach of 0 refuses every honest
-   claim of a throw, an infinite reach takes a claim of a target far from its agent. */
+/* The host's limits on an impact claim, and on a catch (a grab of another guest's flight), read
+   `reach_scale` times the seam's reach and `approach_scale` times its approach (1 and 1
+   unplanted): an approach of 0 refuses every honest claim of a throw, an infinite reach takes a
+   claim or a catch of a body far from its agent. */
 void stand_testing_plant_claim_limits(body_sync_stand_t *stand, float reach_scale, float approach_scale);
+/* The host reads a catch's gap `metres` farther than the seam measures it: the catcher's evidence
+   off by that much. */
+void stand_testing_plant_catch_offset(body_sync_stand_t *stand, float metres);
 
 /* Planted defects for the lag-aligned gap: state packets every endpoint takes are stamped
    `ticks` later than they were sent (a copy then shows its owner a tick early for the tick it

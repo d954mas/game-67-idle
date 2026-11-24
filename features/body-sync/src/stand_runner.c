@@ -250,6 +250,7 @@ struct body_sync_stand {
     uint32_t claims_format[BODY_SYNC_ENDPOINTS_MAX];
     uint32_t claims_ended[BODY_SYNC_ENDPOINTS_MAX];
     float claim_reach_scale, claim_approach_scale; /* 1 and 1; stand_testing_plant_claim_limits */
+    float plant_catch_m; /* stand_testing_plant_catch_offset */
     uint32_t plant_declared_endpoint, plant_declared_ticks; /* stand_testing_plant_declared_velocity; 0 ticks none */
     body_sync_id_t plant_declared_body;
     float plant_declared_add[3];
@@ -282,6 +283,10 @@ struct body_sync_stand {
     body_sync_check_metrics_t pace_check[BODY_SYNC_SCENARIO_EXPECTS_MAX];
     bool pace_closed[BODY_SYNC_SCENARIO_EXPECTS_MAX]; /* its walk ended: the last sample is in */
     float pace_start[BODY_SYNC_SCENARIO_EXPECTS_MAX], pace_best[BODY_SYNC_SCENARIO_EXPECTS_MAX];
+    /* `expect held`: a bit per player another endpoint showed the body in her hand, and the player
+       plus one whose hand every endpoint showed it in at one tick, and that tick. */
+    uint8_t held_shown[BODY_SYNC_SCENARIO_EXPECTS_MAX], held_all[BODY_SYNC_SCENARIO_EXPECTS_MAX];
+    uint32_t held_tick[BODY_SYNC_SCENARIO_EXPECTS_MAX];
     float one_way_max_ms;  /* the slowest one-way path the run set, jitter and reordering included */
     uint32_t frozen_max; /* ticks: the longest cut, stall or deafness the run set */
     uint32_t plant_wall_endpoint, plant_wall_count, plant_wall_slots[8]; /* stand_testing_plant_wall */
@@ -929,6 +934,30 @@ static void character_tick(body_sync_stand_t *st, endpoint_t *ep) {
 
 /* ---- host decisions ---- */
 
+/* A catch: a grab of a body flying under another guest. The host's copy of that body runs a round
+   trip and more ahead of what the catcher saw, so where the host shows the two now is no evidence;
+   the seam's contact measure is: the catcher's character on the path the host's own taken states of
+   it show, the body put back along its velocity to the claim's tick. The grab took it within
+   `reach` of the character's centre, so at most reach less the capsule's radius from its box. */
+static bool catch_in_reach(const body_sync_stand_t *st, endpoint_t *host, const body_sync_claim_event_t *claim, const stand_target_t *t,
+                           const body_sync_authority_t *now) {
+    if (!t->live || !t->desc || t->character || t->held || !(t->desc->flags & BODY_SYNC_BODY_GRABBABLE) ||
+        (now->hold != BODY_SYNC_HOLD_UNTIL_SETTLED && now->hold != BODY_SYNC_HOLD_UNTIL_REST) || claim->seat >= st->scene.player_count) {
+        return false;
+    }
+    body_sync_id_t agent = stand_world_id(host->world, character_slot(st, claim->seat));
+    body_sync_authority_t mine;
+    if (!agent || !body_sync_authority(host->sync, agent, &mine) || mine.seat != claim->seat) {
+        return false;
+    }
+    body_sync_contact_t c;
+    if (body_sync_check_contact(host->sync, claim->seat, agent, mine.number, claim->id, claim->tick, &c) != BODY_SYNC_CONTACT_OK) {
+        return false;
+    }
+    float grab = st->scene.character.reach - st->scene.character.radius;
+    return c.gap + st->plant_catch_m <= c.reach * st->claim_reach_scale + grab;
+}
+
 static void answer_claims(body_sync_stand_t *st) {
     endpoint_t *host = &st->ep[0];
     body_sync_claim_event_t claim;
@@ -941,19 +970,30 @@ static void answer_claims(body_sync_stand_t *st) {
         }
         body_sync_authority_t now;
         body_sync_authority(host->sync, claim.id, &now);
-        bool granted = stand_rules_grab(&t, claimant, st->scene.character.reach) && (now.seat == BODY_SYNC_SEAT_HOST || now.seat == claim.seat);
-        body_sync_answer(host->sync, &claim, granted);
-        body_sync_authority(host->sync, claim.id, &now);
-        for (uint32_t i = 0; i < st->scenario.action_count; i++) {
-            action_track_t *a = &st->actions[i];
+        /* Only a flight of another guest's is caught: one she carries or claimed into her own hold
+           stays hers, so two catchers of one throw get it once and a caught body is not caught back. */
+        bool caught = now.seat != BODY_SYNC_SEAT_HOST && now.seat != claim.seat;
+        bool granted = caught ? catch_in_reach(st, host, &claim, &t, &now) : stand_rules_grab(&t, claimant, st->scene.character.reach);
+        int32_t grab = -1;
+        for (uint32_t i = 0; i < st->scenario.action_count && grab < 0; i++) {
+            const action_track_t *a = &st->actions[i];
             if (a->awaiting && !a->answered_on_host && a->ref_id == claim.id && st->scenario.actions[i].verb == BODY_SYNC_VERB_GRAB &&
                 st->scenario.actions[i].player == claim.seat) {
-                a->answered_on_host = true;
-                a->answer_number = now.number;
-                a->host_ticks = (int32_t)(st->now - a->start_tick);
-                a->seen_mask |= 1u;
-                break;
+                grab = (int32_t)i;
             }
+        }
+        /* The thrower's packets of the flight sent before she hears of the catch come in late. */
+        if (granted && caught && grab >= 0) {
+            open_late(st, grab, claim.id);
+        }
+        body_sync_answer(host->sync, &claim, granted);
+        body_sync_authority(host->sync, claim.id, &now);
+        if (grab >= 0) {
+            action_track_t *a = &st->actions[grab];
+            a->answered_on_host = true;
+            a->answer_number = now.number;
+            a->host_ticks = (int32_t)(st->now - a->start_tick);
+            a->seen_mask |= 1u;
         }
     }
 }
@@ -2707,6 +2747,47 @@ static void record_pace(body_sync_stand_t *st) {
     }
 }
 
+/* The player whose character carries the scene body `name` on `ep`, -1 for none. */
+static int32_t holder_player(const body_sync_stand_t *st, const endpoint_t *ep, const char *name) {
+    body_sync_id_t id = body_id_by_name(st, ep, name);
+    body_sync_authority_t a;
+    if (!id || !body_sync_authority(ep->sync, id, &a) || a.holder == BODY_SYNC_ID_NONE) {
+        return -1;
+    }
+    for (uint32_t p = 0; p < st->scene.player_count; p++) {
+        if (a.holder == stand_world_id(ep->world, character_slot(st, p))) {
+            return (int32_t)p;
+        }
+    }
+    return -1;
+}
+
+/* `expect held`: a player's own world shows her grab before the host answers it, so only the other
+   endpoints say whose hand the body was in. */
+static void record_held(body_sync_stand_t *st) {
+    for (uint32_t i = 0; i < st->scenario.expect_count; i++) {
+        const body_sync_expect_t *x = &st->scenario.expects[i];
+        if (x->kind != BODY_SYNC_EXPECT_HELD) {
+            continue;
+        }
+        int32_t same = -1;
+        bool all = true;
+        for (uint32_t e = 0; e < st->endpoints; e++) {
+            const endpoint_t *ep = &st->ep[e];
+            int32_t p = ep->active && ep->built ? holder_player(st, ep, x->body) : -1;
+            if (p >= 0 && (uint32_t)p != e) {
+                st->held_shown[i] |= (uint8_t)(1u << p);
+            }
+            all = all && p >= 0 && (same < 0 || p == same);
+            same = p >= 0 ? p : same;
+        }
+        if (all && same >= 0 && st->held_all[i] == 0 && (x->players & (1u << same))) {
+            st->held_all[i] = (uint8_t)(same + 1);
+            st->held_tick[i] = st->now;
+        }
+    }
+}
+
 bool body_sync_stand_tick(body_sync_stand_t *st) {
     if (!st || st->ended) {
         return false;
@@ -2740,6 +2821,7 @@ bool body_sync_stand_tick(body_sync_stand_t *st) {
         plant_jolt(st);
         track_actions(st);
         watch_late(st);
+        record_held(st);
     }
     record_pace(st);
     st->rest_run = all_at_rest(st) ? st->rest_run + 1 : 0;
@@ -2996,6 +3078,29 @@ static void check_effects(body_sync_stand_t *st, body_sync_check_metrics_t *c) {
 
 /* The scene body's knockdown or break, applied on the host, shown once by every guest that stayed:
    effects_once holds what was applied to every endpoint, this holds that the effect happened. */
+static void check_held(const body_sync_stand_t *st, uint32_t i, const body_sync_expect_t *x, body_sync_check_metrics_t *c) {
+    uint8_t shown = (uint8_t)(st->held_shown[i] & x->players), all = st->held_all[i];
+    uint32_t count = 0;
+    char names[32] = "";
+    for (uint32_t p = 0; p < BODY_SYNC_PLAYERS_MAX; p++) {
+        if (shown & (1u << p)) {
+            count++;
+            size_t at = strlen(names);
+            snprintf(names + at, sizeof(names) - at, "%sp%u", at ? " " : "", p);
+        }
+    }
+    c->passed = all != 0 && shown == (uint8_t)(1u << (all - 1u));
+    c->value = (double)count;
+    c->limit = 1.0;
+    if (all == 0) {
+        snprintf(c->detail, sizeof(c->detail), "%s never in one hand on every endpoint at once", x->body);
+    } else if (!c->passed) {
+        snprintf(c->detail, sizeof(c->detail), "%s shown in the hands of %s", x->body, names);
+    } else {
+        snprintf(c->detail, sizeof(c->detail), "%s in p%u's hand on every endpoint at tick %u", x->body, all - 1u, st->held_tick[i]);
+    }
+}
+
 static void check_effect(body_sync_stand_t *st, const body_sync_expect_t *x, body_sync_check_metrics_t *c) {
     uint32_t index = body_sync_scene_find_body(&st->scene, x->body);
     body_sync_id_t id = index < STAND_BODIES_MAX ? st->start_id[index] : BODY_SYNC_ID_NONE;
@@ -3273,8 +3378,8 @@ static void evaluate(body_sync_stand_t *st) {
             char why[BODY_SYNC_ERROR_TEXT_MAX];
             stand_metric_value(r, &st->metrics, x->metric, &v, why, sizeof(why));
             c->value = v;
-            c->limit = x->limit;
-            c->passed = x->at_least ? v >= x->limit : v <= x->limit;
+            c->limit = x->stub_limit >= 0.0 && strncmp(body_sync_implementation(), "stub", 4) == 0 ? x->stub_limit : x->limit;
+            c->passed = x->at_least ? v >= c->limit : v <= c->limit;
             snprintf(c->detail, sizeof(c->detail), "%s%s%s", x->metric, why[0] ? ": " : "", why);
             break;
         }
@@ -3295,6 +3400,9 @@ static void evaluate(body_sync_stand_t *st) {
         }
         case BODY_SYNC_EXPECT_PACE:
             check_pace(st, i, c);
+            break;
+        case BODY_SYNC_EXPECT_HELD:
+            check_held(st, i, x, c);
             break;
         case BODY_SYNC_EXPECT_EFFECT:
             check_effect(st, x, c);
@@ -3371,7 +3479,8 @@ static bool check_scenario(const body_sync_stand_t *st, body_sync_error_t *error
     }
     for (uint32_t i = 0; i < s->expect_count; i++) {
         const body_sync_expect_t *x = &s->expects[i];
-        if ((x->kind == BODY_SYNC_EXPECT_MOVED || x->kind == BODY_SYNC_EXPECT_EFFECT) && body_sync_scene_find_body(&st->scene, x->body) == UINT32_MAX) {
+        if ((x->kind == BODY_SYNC_EXPECT_MOVED || x->kind == BODY_SYNC_EXPECT_EFFECT || x->kind == BODY_SYNC_EXPECT_HELD) &&
+            body_sync_scene_find_body(&st->scene, x->body) == UINT32_MAX) {
             char text[BODY_SYNC_ERROR_TEXT_MAX];
             snprintf(text, sizeof(text), "the scene has no body '%s'", x->body);
             error_text(error, x->line, text);
@@ -3706,6 +3815,8 @@ void stand_testing_plant_declared_velocity(body_sync_stand_t *st, uint32_t endpo
     memcpy(st->plant_declared_add, add, sizeof(st->plant_declared_add));
     st->plant_declared_ticks = ticks;
 }
+
+void stand_testing_plant_catch_offset(body_sync_stand_t *st, float metres) { st->plant_catch_m = metres; }
 
 void stand_testing_plant_claim_limits(body_sync_stand_t *st, float reach_scale, float approach_scale) {
     st->claim_reach_scale = reach_scale;
