@@ -94,16 +94,12 @@ static void stretch(ClothState *s, const ClothEdge *e, const float *w, float alp
     float length = sqrtf(len2);
     float target = e->length;
     if (compress_limit > 0.0F && length < e->length) {
-        /* Preserve circumferential WEFT hoops against radial collapse while allowing WARP/DIAG
-           creases to gather softly without coarse-mesh Euler buckling. */
-        bool is_weft = e->kind == CLOTH_EDGE_WEFT;
-        float eff_limit = is_weft ? 0.5F * compress_limit : compress_limit;
-        float min_len = e->length * (1.0F - eff_limit);
-        if (length >= min_len) {
-            alpha += (is_weft ? 3.0F : 12.0F) * weight;
-        } else {
-            target = min_len;
-        }
+        /* Tension field: a compressed edge buckles freely down to its limit and is held there. The response is zero
+           on both sides of the limit, so an edge crossing it meets no jump in force, which would pump energy into a
+           resting drape. WEFT hoops get half the limit, so they keep their girth against radial collapse. */
+        float min_len = e->length * (1.0F - (e->kind == CLOTH_EDGE_WEFT ? 0.5F : 1.0F) * compress_limit);
+        if (length >= min_len) return;
+        target = min_len;
     }
     float dl = (target - length - alpha * *lambda) / (weight + alpha);
     *lambda += dl;

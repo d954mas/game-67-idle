@@ -51,7 +51,7 @@ typedef struct {
     float weft_bend_scale;    /* 0 defaults to 1.0; >1 softens weft/diag hinges. */
     float weft_max_strain;    /* 0 defaults to max_edge_strain; separate limit for weft/diag edges. */
     float friction;           /* Coulomb coefficient against shapes and convexes, static equal to kinetic. */
-    float compression_limit;  /* 0..0.5 free edge shortening fraction before compression stiffness engages. */
+    float compression_limit;  /* 0..0.5 fraction an edge shortens freely before it is held (half for WEFT). */
 } ClothMaterial;
 
 /* Where each vertex's skinned pose is this substep, and the unit direction from the cloth toward the body. */

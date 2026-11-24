@@ -194,6 +194,35 @@ static void test_a_thin_cone_at_15_mps_leaves_the_panel_outside_and_within_max_d
     TEST_ASSERT_TRUE(pushed >= 0.5F * (limb[0].r + fabric.thickness));
 }
 
+/* A free vertex b on a warp edge from a pin a, the third corner a pin far enough that its edges stay inside their
+   limit. Compressed inside the limit the edge is free; past it, it is held at the limit. The response is continuous
+   at the limit, since a jump there keeps a resting drape in motion. */
+static float compressed_step(float length) {
+    static const float rest3[][3] = {{0, 0, 0}, {1, 0, 0}, {0, 0, -1}};
+    static const ClothFace face3 = {0, 1, 2};
+    static const ClothEdge edges3[] = {{0, 1, 2, -1, 1, 0, CLOTH_EDGE_WARP}, {1, 2, 0, -1, 1.41421356F, 0, CLOTH_EDGE_DIAG},
+                                       {2, 0, 1, -1, 1, 0, CLOTH_EDGE_WARP}};
+    static const float inv_area3[] = {6, 6, 6};
+    static const float r3[] = {0, 0.5F, 0};
+    static const ClothBackstop off3[] = {{0, 0}, {0, 0}, {0, 0}};
+    static const ClothMesh edge = {.vertices = 3, .faces = 1, .edges = 3, .rest = rest3, .inv_area = inv_area3,
+                                   .face = &face3, .edge = edges3, .max_distance = r3, .backstop = off3};
+    const ClothMaterial m = {.density = 0.2F, .stretch = 1e-7F, .bend = 1e12F, .iterations = 1, .compression_limit = 0.2F};
+    reference(&edge, edge.rest, toward_back);
+    TEST_ASSERT_TRUE(cloth_reset(&cloth, &edge, &m, ref, r, NULL));
+    cloth.x[1][0] = length;
+    cloth_step(&cloth, &edge, &m, dt, NULL, ref, r, NULL);
+    TEST_ASSERT_TRUE(cloth.frame_valid);
+    return cloth.x[1][0];
+}
+
+static void test_a_compressed_edge_is_free_inside_its_limit_and_held_at_it(void) {
+    NEAR(1e-6F, 0.9F, compressed_step(0.9F));
+    NEAR(1e-6F, 0.801F, compressed_step(0.801F));
+    NEAR(1e-4F, 0.8F, compressed_step(0.7F));
+    NEAR(1e-4F, 0.8F, compressed_step(0.799F));
+}
+
 static void test_a_plane_backstop_puts_a_vertex_pushed_past_it_back_on_the_plane(void) {
     const ClothBackstop off = {0, 0}, plane = {0.01F, INFINITY};
     ClothBackstop backstop[4] = {off, off, off, plane};
@@ -395,6 +424,7 @@ int main(void) {
     RUN_TEST(test_a_cone_sweeping_a_pinned_panel_at_15_mps_leaves_no_vertex_inside);
     RUN_TEST(test_a_thin_cone_at_15_mps_leaves_the_panel_outside_and_within_max_distance);
     RUN_TEST(test_a_plane_backstop_puts_a_vertex_pushed_past_it_back_on_the_plane);
+    RUN_TEST(test_a_compressed_edge_is_free_inside_its_limit_and_held_at_it);
     RUN_TEST(test_reset_leaves_a_seat_through_its_nearest_face_not_along_b);
     RUN_TEST(test_reset_gives_the_reference_and_exits_along_minus_b);
     RUN_TEST(test_friction_holds_below_mu_and_slides_above);
