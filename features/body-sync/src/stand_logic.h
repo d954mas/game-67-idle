@@ -121,6 +121,10 @@ stand_effect_t stand_rules_impact(const stand_target_t *target, float speed);
    approach may exceed what it saw by a quarter plus 0.5 m/s, a hit event's approach against the
    sampled speeds of the states; the gap must lie within the reach the seam derives. */
 #define STAND_IMPACT_SPEED_SCALE 1.25f
+/* The oldest contact an impact claim may name, ticks before the record's own stamp: a claim waits
+   behind its tick's seam records a tick or two; one this old names a contact the host's evidence
+   (12 states) no longer holds. A contact after the stamp never happened. */
+#define STAND_CONTACT_AGE_MAX_TICKS 120u
 #define STAND_IMPACT_SPEED_SLACK 0.5f
 bool stand_impact_accepts(float gap, float reach, float approach_max, float claimed_speed);
 
@@ -172,6 +176,7 @@ typedef struct stand_record {
     uint8_t source;    /* SPAWN: template index */
     float origin[3];   /* HIT */
     float speed;       /* IMPACT */
+    uint32_t tick;     /* IMPACT: the sender's tick of the contact, the one its states are stamped with */
     float position[3]; /* SPAWN */
     float rotation[4];
     float velocity[3];
@@ -184,9 +189,10 @@ uint32_t stand_record_encode(const stand_record_t *record, uint8_t *buffer, uint
    may send only its own types. False with `error` filled on anything out of range: an unknown
    type, a wrong size, a type of the other side, an id with a slot past the bodies or generation
    0, and per type its fields (an impact's agent that is its target, a speed not finite, negative
-   or past the limits). Never asserts. */
-bool stand_record_decode(const uint8_t *data, uint32_t size, bool from_host, const stand_limits_t *limits, stand_record_t *out, char *error,
-                         size_t error_size);
+   or past the limits, a contact tick after `stamp`, the record's own, or more than
+   STAND_CONTACT_AGE_MAX_TICKS before it). Never asserts. */
+bool stand_record_decode(const uint8_t *data, uint32_t size, bool from_host, uint32_t stamp, const stand_limits_t *limits, stand_record_t *out,
+                         char *error, size_t error_size);
 body_sync_stand_kind_t stand_record_kind(stand_record_type_t type);
 
 /* ---- a rest's end ---- */
@@ -290,6 +296,8 @@ typedef struct stand_metrics {
     uint32_t rest_lag[BODY_SYNC_GUESTS_MAX], soft_places[BODY_SYNC_GUESTS_MAX], host_wakes[BODY_SYNC_GUESTS_MAX];
     uint32_t aligned_predicted[BODY_SYNC_GUESTS_MAX], pause_window[BODY_SYNC_GUESTS_MAX];
     double creep[BODY_SYNC_GUESTS_MAX];
+    double carry_gap[BODY_SYNC_GUESTS_MAX];
+    uint32_t carry_ticks[BODY_SYNC_GUESTS_MAX];
     uint32_t bytes_second[BODY_SYNC_GUESTS_MAX][2][BODY_SYNC_KINDS_ALL][BODY_SYNC_TIME_MAX_S];
     uint64_t bytes_total[BODY_SYNC_GUESTS_MAX][2][BODY_SYNC_KINDS_ALL];
     double link_rate_sum[BODY_SYNC_GUESTS_MAX][2];
@@ -328,6 +336,8 @@ void stand_metrics_end_tick(stand_metrics_t *metrics);
 void stand_metrics_response(stand_metrics_t *metrics, uint32_t guest, double ticks);
 void stand_metrics_response_miss(stand_metrics_t *metrics, uint32_t guest);
 void stand_metrics_rest(stand_metrics_t *metrics, uint32_t guest, double jitter_m, bool wake);
+/* A tick the host shows a body this guest's character carries, `gap_m` from its hold point. */
+void stand_metrics_carry(stand_metrics_t *metrics, uint32_t guest, double gap_m);
 /* A guest's world at rest stopped resting: a break of its own, or a host wake (`host`: only host
    bodies moved). */
 void stand_metrics_rest_break(stand_metrics_t *metrics, uint32_t guest, bool host);

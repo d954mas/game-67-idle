@@ -22,6 +22,7 @@ void tearDown(void) {}
 static float plant_reach = 1.0f, plant_approach = 1.0f;
 static bool plant_take_reach; /* --plant-take-reach-unbounded: the host grants every take's evidence */
 static bool plant_grows;      /* --plant-evidence-grows-over-gaps: the host's evidence grows over its gaps */
+static bool plant_sleep;      /* --plant-transform-sleep: guest 1 stops sending a body it carries asleep */
 static body_sync_scene_t scene;
 static body_sync_scenario_t scenario;
 static bool third_player; /* the next make() gives the breakables a third player and a rock for it */
@@ -76,6 +77,9 @@ static body_sync_stand_t *make(const char *text, int mode) {
     if (plant_grows) {
         body_sync_plant_evidence_grows_over_gaps(stand_testing_sync(stand, 0));
     }
+    if (plant_sleep) {
+        body_sync_plant_transform_sleep(stand_testing_sync(stand, 1));
+    }
     return stand;
 }
 
@@ -125,8 +129,40 @@ static uint16_t tick_to_flight(body_sync_stand_t *stand, body_sync_id_t body) {
     return 0;
 }
 
+/* The host's measure of guest 1's claim of `agent` against `target` at the contact tick that comes
+   nearest within its reach, of the guest's last 40 ticks: what a forger free to name any tick
+   gets. Its tick in *tick. */
+static body_sync_contact_verdict_t best_contact(body_sync_stand_t *stand, body_sync_id_t agent, uint16_t number, body_sync_id_t target,
+                                                body_sync_contact_t *out, uint32_t *tick) {
+    uint32_t now = stand_testing_tick(stand, 1);
+    body_sync_contact_verdict_t best = BODY_SYNC_CONTACT_STALE;
+    *out = (body_sync_contact_t){.gap = INFINITY};
+    *tick = now;
+    for (uint32_t back = 0; back <= 40; back++) {
+        body_sync_contact_t c;
+        body_sync_contact_verdict_t v = body_sync_check_contact(stand_testing_sync(stand, 0), 1, agent, number, target, now - back, &c);
+        if (v != BODY_SYNC_CONTACT_STALE && (isinf(out->gap) || c.gap - c.reach < out->gap - out->reach)) {
+            *out = c;
+            *tick = now - back;
+            best = v;
+        }
+        out->approach_max = c.approach_max > out->approach_max ? c.approach_max : out->approach_max;
+    }
+    return best;
+}
+
+static void send_claim_at(body_sync_stand_t *stand, body_sync_id_t agent, uint16_t number, body_sync_id_t target, float speed, uint32_t tick) {
+    stand_record_t r = {.type = STAND_REC_IMPACT, .target = target, .body = agent, .number = number, .speed = speed, .tick = tick};
+    uint8_t bytes[STAND_RECORD_MAX];
+    uint32_t size = stand_record_encode(&r, bytes, sizeof(bytes));
+    TEST_ASSERT_TRUE(size > 0);
+    TEST_ASSERT_TRUE(stand_testing_record(stand, 1, bytes, size));
+}
+
+/* A claim naming guest 1's tick now as the contact's. */
 static void send_claim(body_sync_stand_t *stand, body_sync_id_t agent, uint16_t number, body_sync_id_t target, float speed) {
-    stand_record_t r = {.type = STAND_REC_IMPACT, .target = target, .body = agent, .number = number, .speed = speed};
+    stand_record_t r = {.type = STAND_REC_IMPACT, .target = target, .body = agent, .number = number, .speed = speed,
+                        .tick = stand_testing_tick(stand, 1)};
     uint8_t bytes[STAND_RECORD_MAX];
     uint32_t size = stand_record_encode(&r, bytes, sizeof(bytes));
     TEST_ASSERT_TRUE(size > 0);
@@ -239,13 +275,14 @@ static void flung_far_claim_is_rejected(int mode) {
     b3Vec3 v = b3Body_GetLinearVelocity(body);
     b3Body_SetLinearVelocity(body, (b3Vec3){v.x, v.y + 40.0f, v.z});
     body_sync_contact_t c = {.approach_max = 0.0f};
+    uint32_t tick = 0;
     for (int i = 0; i < 30 && !(c.approach_max > 20.0f); i++) {
         TEST_ASSERT_TRUE(body_sync_stand_tick(stand));
-        body_sync_check_contact(stand_testing_sync(stand, 0), 1, rock, number, crate, &c);
+        best_contact(stand, rock, number, crate, &c, &tick);
     }
     /* The speed bound alone would pass the claim now. */
     TEST_ASSERT_TRUE_MESSAGE(c.approach_max > 20.0f, "the host did not see the fling");
-    send_claim(stand, rock, number, crate, 6.5f);
+    send_claim_at(stand, rock, number, crate, 6.5f, tick);
     TEST_ASSERT_TRUE(body_sync_stand_tick(stand));
     TEST_ASSERT_TRUE_MESSAGE(on_host(stand, "crate"), "a flung rock's claim broke the crate");
     TEST_ASSERT_EQUAL_UINT32(1, guest(stand)->claims_rejected);
@@ -262,12 +299,13 @@ static void test_inflated_claim_speed_is_rejected(void) {
     body_sync_id_t rock = id_of("rock"), glass = id_of("glass");
     uint16_t number = tick_to_flight(stand, rock);
     body_sync_contact_t c = {.gap = INFINITY};
+    uint32_t tick = 0;
     for (int i = 0; i < 120 && !(c.gap <= c.reach); i++) {
         TEST_ASSERT_TRUE(body_sync_stand_tick(stand));
-        TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_OK, body_sync_check_contact(stand_testing_sync(stand, 0), 1, rock, number, glass, &c));
+        TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_OK, best_contact(stand, rock, number, glass, &c, &tick));
     }
     TEST_ASSERT_TRUE_MESSAGE(c.gap <= c.reach, "the rock never came within reach of the glass");
-    send_claim(stand, rock, number, glass, 60.0f);
+    send_claim_at(stand, rock, number, glass, 60.0f, tick);
     TEST_ASSERT_TRUE(body_sync_stand_tick(stand));
     TEST_ASSERT_TRUE_MESSAGE(on_host(stand, "glass"), "a claim at 60 m/s broke the glass");
     TEST_ASSERT_EQUAL_UINT32(1, guest(stand)->claims_rejected);
@@ -361,17 +399,17 @@ static void forger_never_fits(const char *text, int mode) {
     body_sync_stand_t *stand = make(text, mode);
     body_sync_id_t rock = id_of("rock"), crate = id_of("crate");
     uint16_t number = tick_to_flight(stand, rock);
-    body_sync_t *host = stand_testing_sync(stand, 0);
     float best = INFINITY;
     bool sent = false;
     for (int i = 0; i < 400 && !sent && body_sync_stand_tick(stand); i++) {
         body_sync_contact_t c;
-        if (body_sync_check_contact(host, 1, rock, number, crate, &c) != BODY_SYNC_CONTACT_OK) {
+        uint32_t tick;
+        if (best_contact(stand, rock, number, crate, &c, &tick) != BODY_SYNC_CONTACT_OK || isinf(c.gap)) {
             continue;
         }
         best = c.gap - c.reach < best ? c.gap - c.reach : best;
         if (c.gap <= c.reach && c.approach_max * STAND_IMPACT_SPEED_SCALE + STAND_IMPACT_SPEED_SLACK >= 6.5f) {
-            send_claim(stand, rock, number, crate, 6.5f);
+            send_claim_at(stand, rock, number, crate, 6.5f, tick);
             sent = true;
         }
     }
@@ -436,11 +474,28 @@ static void test_an_accepted_hit_that_does_nothing_is_idle(void) {
     body_sync_stand_destroy(stand);
 }
 
+/* Guest 1 lifts the rock, waits until its rest pose is acknowledged, walks with it and throws
+   it: Box3D keeps the carried rock asleep while the carry moves it by transform, and the host
+   must still show it at its carrier's hold point (one tick of the walk and the copy grid). */
+static void carried_rock_follows_its_carrier(int mode) {
+    body_sync_stand_t *stand = make("scenario carry\nscene breakables\nseed 17\nguests 1\nsettle 10s\nnet g1 rtt 100ms jitter 20ms loss 2%\n"
+                                    "p1 grab rock as lift\np1 wait 400ms\np1 walk 2.3 0\np1 throw glass speed 7 as throw\n"
+                                    "expect result lift granted\nexpect carry_gap.max <= 0.15m\nexpect effects_once\n",
+                                    mode);
+    const body_sync_report_t *report = body_sync_stand_run(stand);
+    all_pass(report);
+    TEST_ASSERT_TRUE(report->guests[0].carry_ticks >= 30); /* the walk, 50 ticks measured */
+    body_sync_stand_destroy(stand);
+}
+static void test_a_carried_rock_follows_its_carrier_host(void) { carried_rock_follows_its_carrier(MODE_HOST); }
+static void test_a_carried_rock_follows_its_carrier_interaction(void) { carried_rock_follows_its_carrier(MODE_INTERACTION); }
+
 /* Honest throws under loss and jitter: the host accepts their claims except where its states of
    the agent leave a gap at the contact (a missed effect, README "Contact claims"): of each mode's
    and walk's throws over `seeds` seeds at least `sent_min` claim, and at most `missed_max` of
-   those claims miss. At 25 % loss a carried rock the guest stopped sending (asleep in the hand)
-   and thrown at the glass two ticks away leaves the host nothing of its walk or its flight. */
+   those claims miss. At 25 % loss, 80 of 89 apply over 24 seeds; the misses are states lost for
+   more than a chord's spacing before the contact, and a claimed speed above the fastest step the
+   host still holds. */
 static void loss_sweep(const char *net, int seeds, uint32_t sent_min, uint32_t missed_max) {
     for (int mode = MODE_HOST; mode <= MODE_INTERACTION; mode++) {
         for (int walk = 0; walk < 2; walk++) {
@@ -467,7 +522,7 @@ static void loss_sweep(const char *net, int seeds, uint32_t sent_min, uint32_t m
 }
 static void test_loss_sweep_100ms(void) { loss_sweep("rtt 100ms jitter 20ms loss 2%", 12, 11, 1); }
 static void test_loss_sweep_150ms(void) { loss_sweep("rtt 150ms jitter 60ms loss 10%", 12, 11, 1); }
-static void test_loss_sweep_200ms(void) { loss_sweep("rtt 200ms jitter 80ms loss 25%", 24, 18, 12); }
+static void test_loss_sweep_200ms(void) { loss_sweep("rtt 200ms jitter 80ms loss 25%", 24, 20, 4); }
 
 /* The honest claim, sent twice more under its key once it applied: counted as repeats, applied
    once. A claim the parser refuses is counted and costs the seat nothing. */
@@ -511,6 +566,8 @@ int main(int argc, char **argv) {
             plant_take_reach = true;
         } else if (strcmp(argv[i], "--plant-evidence-grows-over-gaps") == 0) {
             plant_grows = true;
+        } else if (strcmp(argv[i], "--plant-transform-sleep") == 0) {
+            plant_sleep = true;
         } else if (strcmp(argv[i], "--sweep") == 0) {
             sweep = true;
         }
@@ -542,5 +599,7 @@ int main(int argc, char **argv) {
     RUN_TEST(test_forger_after_a_cut_never_fits_host);
     RUN_TEST(test_forger_after_a_cut_never_fits_interaction);
     RUN_TEST(test_an_accepted_hit_that_does_nothing_is_idle);
+    RUN_TEST(test_a_carried_rock_follows_its_carrier_host);
+    RUN_TEST(test_a_carried_rock_follows_its_carrier_interaction);
     return UNITY_END();
 }

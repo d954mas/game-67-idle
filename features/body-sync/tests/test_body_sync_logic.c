@@ -246,10 +246,12 @@ static void test_rules_verdicts(void) {
     }
 }
 
+enum { STAMP = 1000 }; /* the records' own stamp; an impact names a contact just before it */
+
 static void test_records_round_trip_and_refuse(void) {
     const stand_record_t samples[] = {
         {.type = STAND_REC_HIT, .target = ID(3, 1), .action = 7, .origin = {1.0f, 2.0f, 3.0f}},
-        {.type = STAND_REC_IMPACT, .target = ID(4, 2), .body = ID(5, 1), .number = 513, .speed = 6.0f},
+        {.type = STAND_REC_IMPACT, .target = ID(4, 2), .body = ID(5, 1), .number = 513, .speed = 6.0f, .tick = STAMP - 1},
         {.type = STAND_REC_VERDICT, .target = ID(3, 1), .action = 7, .accepted = 1},
         {.type = STAND_REC_SPAWN, .target = ID(40, 3), .source = 2, .position = {1, 2, 3}, .rotation = {0, 0, 0, 1}, .velocity = {1, 0, 0}},
         {.type = STAND_REC_REMOVE, .target = ID(9, 1)},
@@ -262,12 +264,12 @@ static void test_records_round_trip_and_refuse(void) {
         TEST_ASSERT_TRUE(size > 1);
         TEST_ASSERT_EQUAL_UINT8(STAND_FAMILY_STAND, buffer[0]);
         bool from_host = samples[i].type >= STAND_REC_VERDICT;
-        TEST_ASSERT_TRUE_MESSAGE(stand_record_decode(buffer + 1, size - 1, from_host, &limits, &out, why, sizeof(why)), why);
+        TEST_ASSERT_TRUE_MESSAGE(stand_record_decode(buffer + 1, size - 1, from_host, STAMP, &limits, &out, why, sizeof(why)), why);
         TEST_ASSERT_EQUAL(samples[i].type, out.type);
         TEST_ASSERT_EQUAL_UINT32(samples[i].target, out.target);
-        TEST_ASSERT_FALSE(stand_record_decode(buffer + 1, size - 1, !from_host, &limits, &out, why, sizeof(why)));
+        TEST_ASSERT_FALSE(stand_record_decode(buffer + 1, size - 1, !from_host, STAMP, &limits, &out, why, sizeof(why)));
         for (uint32_t cut = 0; cut < size - 1; cut++) {
-            TEST_ASSERT_FALSE(stand_record_decode(buffer + 1, cut, from_host, &limits, &out, why, sizeof(why)));
+            TEST_ASSERT_FALSE(stand_record_decode(buffer + 1, cut, from_host, STAMP, &limits, &out, why, sizeof(why)));
         }
         TEST_ASSERT_EQUAL_UINT32(0, stand_record_encode(&samples[i], buffer, size - 1));
     }
@@ -278,7 +280,7 @@ static void test_records_round_trip_and_refuse(void) {
         for (uint32_t k = 0; k < size; k++) {
             buffer[k] = (uint8_t)stand_rng_next(&rng);
         }
-        if (stand_record_decode(buffer, size, (i & 1) != 0, &limits, &out, why, sizeof(why))) {
+        if (stand_record_decode(buffer, size, (i & 1) != 0, STAMP, &limits, &out, why, sizeof(why))) {
             TEST_ASSERT_TRUE((out.target & 0xFFFFu) < STAND_BODIES_MAX && (out.target >> 16) != 0);
         }
     }
@@ -378,7 +380,7 @@ static void test_claim_keys(void) {
 /* An impact claim's every field out of range is refused by name; a valid one mutated byte by
    byte, and random bytes, never crash, and whatever parses holds every field in range. */
 static void test_impact_record_refusals(void) {
-    const stand_record_t valid = {.type = STAND_REC_IMPACT, .target = ID(4, 2), .body = ID(5, 1), .number = 9, .speed = 6.0f};
+    const stand_record_t valid = {.type = STAND_REC_IMPACT, .target = ID(4, 2), .body = ID(5, 1), .number = 9, .speed = 6.0f, .tick = STAMP - 2};
     uint8_t buffer[STAND_RECORD_MAX];
     stand_record_t out;
     char why[96];
@@ -395,26 +397,29 @@ static void test_impact_record_refusals(void) {
         {{.type = STAND_REC_IMPACT, .target = ID(4, 2), .body = ID(5, 1), .speed = INFINITY}, "impact speed out of range"},
         {{.type = STAND_REC_IMPACT, .target = ID(4, 2), .body = ID(5, 1), .speed = -1.0f}, "impact speed out of range"},
         {{.type = STAND_REC_IMPACT, .target = ID(4, 2), .body = ID(5, 1), .speed = 100.5f}, "impact speed out of range"},
+        {{.type = STAND_REC_IMPACT, .target = ID(4, 2), .body = ID(5, 1), .speed = 6.0f, .tick = STAMP + 1}, "impact tick out of range"},
+        {{.type = STAND_REC_IMPACT, .target = ID(4, 2), .body = ID(5, 1), .speed = 6.0f, .tick = STAMP - STAND_CONTACT_AGE_MAX_TICKS - 1}, "impact tick out of range"},
     };
     for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
         uint32_t size = stand_record_encode(&cases[i].record, buffer, sizeof(buffer));
         TEST_ASSERT_TRUE(size > 1);
-        TEST_ASSERT_FALSE(stand_record_decode(buffer + 1, size - 1, false, &limits, &out, why, sizeof(why)));
+        TEST_ASSERT_FALSE(stand_record_decode(buffer + 1, size - 1, false, STAMP, &limits, &out, why, sizeof(why)));
         TEST_ASSERT_NOT_NULL_MESSAGE(strstr(why, cases[i].why), why);
     }
     uint32_t size = stand_record_encode(&valid, buffer, sizeof(buffer));
-    TEST_ASSERT_TRUE(stand_record_decode(buffer + 1, size - 1, false, &limits, &out, why, sizeof(why)));
+    TEST_ASSERT_TRUE(stand_record_decode(buffer + 1, size - 1, false, STAMP, &limits, &out, why, sizeof(why)));
     TEST_ASSERT_EQUAL_UINT32(valid.body, out.body);
     TEST_ASSERT_EQUAL_UINT16(valid.number, out.number);
     TEST_ASSERT_TRUE(out.speed == valid.speed);
+    TEST_ASSERT_EQUAL_UINT32(valid.tick, out.tick);
     /* wrong length both ways, an unknown type, and a host's type from a guest */
-    TEST_ASSERT_FALSE(stand_record_decode(buffer + 1, size, false, &limits, &out, why, sizeof(why)));
+    TEST_ASSERT_FALSE(stand_record_decode(buffer + 1, size, false, STAMP, &limits, &out, why, sizeof(why)));
     TEST_ASSERT_NOT_NULL(strstr(why, "wrong size"));
     buffer[1] = 0;
-    TEST_ASSERT_FALSE(stand_record_decode(buffer + 1, size - 1, false, &limits, &out, why, sizeof(why)));
+    TEST_ASSERT_FALSE(stand_record_decode(buffer + 1, size - 1, false, STAMP, &limits, &out, why, sizeof(why)));
     TEST_ASSERT_NOT_NULL(strstr(why, "unknown type"));
     buffer[1] = STAND_REC_REMOVE + 1;
-    TEST_ASSERT_FALSE(stand_record_decode(buffer + 1, size - 1, false, &limits, &out, why, sizeof(why)));
+    TEST_ASSERT_FALSE(stand_record_decode(buffer + 1, size - 1, false, STAMP, &limits, &out, why, sizeof(why)));
     TEST_ASSERT_NOT_NULL(strstr(why, "unknown type"));
 
     stand_rng_t rng;
@@ -428,13 +433,14 @@ static void test_impact_record_refusals(void) {
         }
         uint32_t cut = (stand_rng_next(&rng) % 8 == 0) ? (uint32_t)(stand_rng_next(&rng) % size) : size - 1;
         why[0] = 0;
-        if (stand_record_decode(buffer + 1, cut, false, &limits, &out, why, sizeof(why))) {
+        if (stand_record_decode(buffer + 1, cut, false, STAMP, &limits, &out, why, sizeof(why))) {
             taken++;
             TEST_ASSERT_TRUE(out.type == STAND_REC_IMPACT || out.type == STAND_REC_HIT);
             TEST_ASSERT_TRUE((out.target & 0xFFFFu) < STAND_BODIES_MAX && (out.target >> 16) != 0);
             if (out.type == STAND_REC_IMPACT) {
                 TEST_ASSERT_TRUE((out.body & 0xFFFFu) < STAND_BODIES_MAX && (out.body >> 16) != 0 && out.body != out.target);
                 TEST_ASSERT_TRUE(isfinite(out.speed) && out.speed >= 0.0f && out.speed <= limits.max_speed);
+                TEST_ASSERT_TRUE((uint32_t)STAMP - out.tick <= STAND_CONTACT_AGE_MAX_TICKS);
             }
         } else {
             refused++;

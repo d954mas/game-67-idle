@@ -263,13 +263,15 @@ bool body_sync_contact_number(const body_sync_t *sync, body_sync_id_t id, uint16
      ownership of the body (one is kept per seat and body), any ownership from before a seat
      joined again.
    `out` measures only what the host itself took of that ownership's states, never the velocity
-   they declare (README "Contact claims"); no such state within the grace gives gap INFINITY.
+   they declare (README "Contact claims"), at `contact_tick`, the claimant's tick of the contact
+   (the one its states are stamped with): a contact lies at most SYNC_POLICY_CHORD_TICKS_MAX (4)
+   ticks on from a taken state, else it has no evidence and the gap is INFINITY.
    A seat not joined gets nothing of a grace. The seam judges no effect: the game dedupes per target effect
    across seats, not per claim key (seat, agent, number, target): after an arbitrated end both
    seats may get OK for the same contact for up to the grace (1 s at most), and after any end the
    host's own simulation may meet the same target again. */
 body_sync_contact_verdict_t body_sync_check_contact(const body_sync_t *sync, uint8_t seat, body_sync_id_t agent, uint16_t number,
-                                                    body_sync_id_t target, body_sync_contact_t *out);
+                                                    body_sync_id_t target, uint32_t contact_tick, body_sync_contact_t *out);
 
 /* ---- the tick ---- */
 

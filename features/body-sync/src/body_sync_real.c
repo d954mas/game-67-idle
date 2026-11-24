@@ -79,6 +79,14 @@ typedef struct entry {
     b3JointId release_filter;
     uint32_t release_end;
     float owner_speed; /* m/s, its owner's at the playback pose, as of the last apply as a copy */
+    /* Host: where its own world had it when a guest's take was judged, and the take's stamp: the
+       target a claim of that guest's contact names, before the take moved it. */
+    bool take_pose_known;
+    uint32_t take_tick;
+    float take_at[3];
+    /* A local body's pose its sleep is measured from: the last read awake, or the last move (body_rests). */
+    bool sleep_anchored;
+    float sleep_at[3], sleep_turn[4];
 } entry_t;
 
 /* The light copies one apply marks (mark_reached), and the walk through their contacts. */
@@ -92,6 +100,7 @@ typedef struct marking {
 
 struct body_sync {
     body_sync_config_t config;
+    bool plant_transform_sleep; /* body_sync_plant_transform_sleep */
     marking_t marking;
     float dt;
     uint32_t now; /* the last apply's or collect's tick */
@@ -159,18 +168,24 @@ static void contact_boxes(b3AABB target, b3AABB agent, b3Vec3 at, sync_contact_s
    the one that comes nearest within its reach; never the velocity they declare
    (sync_authority_contact_measure). The target travelled a round trip, a delay and a tick since
    the touch at most. */
-static float take_gap(void *context, uint8_t seat, uint32_t slot, float *reach) {
+static float take_gap(void *context, uint8_t seat, uint32_t slot, uint32_t tick, float *reach) {
     body_sync_t *s = context;
-    const entry_t *e = &s->entries[slot];
+    entry_t *e = &s->entries[slot];
     *reach = 0.0f;
     if (!b3Body_IsValid(e->body)) {
         return INFINITY;
     }
+    b3Vec3 here = b3Body_GetPosition(e->body);
+    e->take_pose_known = true;
+    e->take_tick = tick;
+    e->take_at[0] = here.x;
+    e->take_at[1] = here.y;
+    e->take_at[2] = here.z;
     b3AABB box = b3Body_ComputeAABB(e->body);
     float ticks = evidence_ticks(s, seat), best = INFINITY;
     sync_contact_scene_t scene = {.target_speed = speed_of(e->body), .tick_hz = s->config.tick_hz, .max_speed = s->config.max_speed,
-                                  .slack_ticks = (float)s->playback.timelines[seat].delay + 1.0f, .window_ticks = (uint32_t)ceilf(ticks),
-                                  .target_ticks = ticks, .push_ticks = ticks};
+                                  .contact_tick = tick, .later_points = true, .window_ticks = (uint32_t)ceilf(ticks), .target_ticks = ticks,
+                                  .push_ticks = ticks};
     for (uint32_t k = 0; k < BODY_SYNC_BODIES_MAX; k++) {
         const sync_authority_body_t *a = &s->authority.bodies[k];
         const entry_t *g = &s->entries[k];
@@ -194,6 +209,7 @@ static float take_gap(void *context, uint8_t seat, uint32_t slot, float *reach) 
 
 void body_sync_plant_take_reach_unbounded(body_sync_t *s) { s->authority.plant_take_reach_unbounded = true; }
 void body_sync_plant_evidence_grows_over_gaps(body_sync_t *s) { s->authority.plant_evidence_grows_over_gaps = true; }
+void body_sync_plant_transform_sleep(body_sync_t *s) { s->plant_transform_sleep = true; }
 
 body_sync_t *body_sync_create(const body_sync_config_t *config) {
     if (!config || !b3World_IsValid(config->world) || config->seats < 1 || config->seats > BODY_SYNC_SEATS_MAX ||
@@ -369,7 +385,7 @@ bool body_sync_contact_number(const body_sync_t *s, body_sync_id_t id, uint16_t 
 }
 
 body_sync_contact_verdict_t body_sync_check_contact(const body_sync_t *s, uint8_t seat, body_sync_id_t agent, uint16_t number,
-                                                    body_sync_id_t target, body_sync_contact_t *out) {
+                                                    body_sync_id_t target, uint32_t contact_tick, body_sync_contact_t *out) {
     body_sync_contact_t scratch;
     out = out ? out : &scratch;
     *out = (body_sync_contact_t){.gap = INFINITY};
@@ -386,8 +402,22 @@ body_sync_contact_verdict_t body_sync_check_contact(const body_sync_t *s, uint8_
     out->ended = ended != NULL;
     out->ended_age_ticks = ended ? s->authority.now - ended->tick : 0u;
     sync_contact_scene_t scene = {.target_speed = speed_of(t->body), .tick_hz = s->config.tick_hz, .max_speed = s->config.max_speed,
-                                  .slack_ticks = (float)s->playback.timelines[seat].delay + 1.0f, .window_ticks = (uint32_t)ceilf(ticks)};
-    contact_boxes(b3Body_ComputeAABB(t->body), b3Body_ComputeAABB(g->body), b3Body_GetPosition(g->body), &scene);
+                                  .contact_tick = contact_tick, .window_ticks = (uint32_t)ceilf(ticks)};
+    b3AABB target_box = b3Body_ComputeAABB(t->body);
+    /* A target the claimant's seat moves itself (one it took at the contact) is judged where its
+       own taken states put it at the contact, not where it went since. */
+    const sync_authority_body_t *tb = sync_authority_body_const(&s->authority, target);
+    const sync_authority_pose_t *then = tb ? sync_authority_pose_at(tb, seat, contact_tick) : NULL;
+    /* Before its first state, the claimant took it at the contact: where the host had it then. */
+    bool taken_then = !then && tb && tb->seat == seat && t->take_pose_known &&
+                      (contact_tick - t->take_tick <= SYNC_POLICY_CHORD_TICKS_MAX || t->take_tick - contact_tick <= SYNC_POLICY_CHORD_TICKS_MAX);
+    if (then || taken_then) {
+        const float *at = then ? then->position : t->take_at;
+        b3Vec3 now = b3Body_GetPosition(t->body), d = {at[0] - now.x, at[1] - now.y, at[2] - now.z};
+        target_box.lowerBound = b3Add(target_box.lowerBound, d);
+        target_box.upperBound = b3Add(target_box.upperBound, d);
+    }
+    contact_boxes(target_box, b3Body_ComputeAABB(g->body), b3Body_GetPosition(g->body), &scene);
     sync_authority_contact_measure(&s->authority, agent, seat, ended, &scene, &out->gap, &out->reach, &out->approach_max);
     return verdict;
 }
@@ -1438,6 +1468,32 @@ static void holder_fields(sync_rare_t *rare, body_sync_id_t holder) {
 }
 
 /* A local body as the sender wants it: full precision, every rare group's value. */
+/* Whether a local body rests at this pose. Box3D keeps a body asleep while the game moves it by
+   transform (a carried body: kinematic, set to its hold point every tick, no velocity), so its
+   sleep is rest only while the body stays within the stillness bounds of the pose it fell asleep
+   at; one moved past them is awake, or the sender would stop at its rest pose and the peers
+   would show it left behind. */
+static bool body_rests(const body_sync_t *s, entry_t *e, const float position[3], const float rotation[4]) {
+    if (b3Body_IsAwake(e->body)) {
+        memcpy(e->sleep_at, position, sizeof(e->sleep_at));
+        memcpy(e->sleep_turn, rotation, sizeof(e->sleep_turn));
+        e->sleep_anchored = true;
+        return false;
+    }
+    if (s->plant_transform_sleep) {
+        return true;
+    }
+    float dx = position[0] - e->sleep_at[0], dy = position[1] - e->sleep_at[1], dz = position[2] - e->sleep_at[2];
+    float dot = fabsf(rotation[0] * e->sleep_turn[0] + rotation[1] * e->sleep_turn[1] + rotation[2] * e->sleep_turn[2] + rotation[3] * e->sleep_turn[3]);
+    bool near = e->sleep_anchored && sqrtf(dx * dx + dy * dy + dz * dz) <= SYNC_POLICY_QUIET_M && dot >= cosf(0.5f * SYNC_POLICY_QUIET_RAD);
+    if (!near) {
+        memcpy(e->sleep_at, position, sizeof(e->sleep_at));
+        memcpy(e->sleep_turn, rotation, sizeof(e->sleep_turn));
+        e->sleep_anchored = true;
+    }
+    return near;
+}
+
 static void read_local(body_sync_t *s, uint32_t slot, sync_body_input_t *in) {
     sync_authority_body_t *a = &s->authority.bodies[slot];
     entry_t *e = &s->entries[slot];
@@ -1470,7 +1526,7 @@ static void read_local(body_sync_t *s, uint32_t slot, sync_body_input_t *in) {
     in->present = true;
     /* A quiet body owned by interaction goes out as a rest pose though awake (a pile leaning on a
        character never sleeps): the pose the host continues from at its release. */
-    in->asleep = !b3Body_IsAwake(e->body) || (!is_host(s) && a->hold == BODY_SYNC_HOLD_UNTIL_REST && e->quiet);
+    in->asleep = body_rests(s, e, r->position, r->rotation) || (!is_host(s) && a->hold == BODY_SYNC_HOLD_UNTIL_REST && e->quiet);
     in->held = a->holder != BODY_SYNC_ID_NONE;
     in->flying = a->hold == BODY_SYNC_HOLD_UNTIL_SETTLED;
     in->character = e->body_class == BODY_SYNC_CLASS_CHARACTER;

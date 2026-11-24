@@ -74,6 +74,8 @@ extern "C" {
      step.count offset_step.count snap.count [body-ticks]   behind_ticks.max behind_ticks.p95 [ticks]
      response_ticks.max response_ticks.p95 [ticks]   response_misses.count [hits]   rest_jitter.max [m]
      rest_wakes.count [body-ticks]   rest_breaks.count [breaks]   host_wakes.count [wakes]   rest_lag_ticks.max [ticks]   soft_places.max [placements]
+     carry_gap.max [m]: the farthest the host shows a body this guest's character carries from
+       that character's hold point as the host shows it (a guest with no carry fails a check)
      pause_window.max [ticks]: the most ticks one copy's pull was paused in any 120 it was drawn
        (twice the layer's chain cap; the cap bounds it by (120 + 60) / 2, sync_soft.h)
      aligned_gap.max aligned_gap.p95 local_correction.max [m]   local_turn.max [deg]
@@ -207,6 +209,10 @@ typedef struct body_sync_guest_metrics {
     uint32_t rest_breaks;
     uint32_t host_wakes; /* rests that ended only because host bodies moved: the host's physics */
     double creep_max;    /* m/s, the fastest an awake host body moved while this guest's world rested */
+    /* "carry": the farthest the host showed a body this guest's character carries from that
+       character's hold point, over the ticks it showed one (carry_ticks). */
+    double carry_gap_max_m;
+    uint32_t carry_ticks;
     uint32_t rest_ticks;         /* copy-ticks the rest measures saw; none fails their checks */
     uint32_t rest_lag_max_ticks; /* the longest a copy moved on while its owner rested, untouched */
     uint32_t soft_places_max;    /* the most placements one predicted copy took (a stall, a snap) */

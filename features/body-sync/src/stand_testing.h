@@ -14,8 +14,11 @@ bool stand_testing_effect(body_sync_stand_t *stand, stand_effect_t effect, body_
 /* Records a guest as left without its session ending. */
 void stand_testing_mark_left(body_sync_stand_t *stand, uint8_t seat);
 /* A stand record (family byte first) reaching the host from guest `seat` now, as the network
-   would hand it: parsed, then judged at the host's next tick. False when it was not taken. */
+   would hand it, stamped with that guest's tick: parsed, then judged at the host's next tick.
+   False when it was not taken. */
 bool stand_testing_record(body_sync_stand_t *stand, uint8_t seat, const uint8_t *data, uint32_t size);
+/* The tick `endpoint` stamps its states and records with now. */
+uint32_t stand_testing_tick(body_sync_stand_t *stand, uint32_t endpoint);
 /* For the next `ticks` of `endpoint`, the velocity its seam reads of `body` at collect, and so
    declares in its states, is `add` more than the body's own; the body moves as it would. A peer
    lying about its speed. */

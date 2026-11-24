@@ -70,6 +70,10 @@ add_test(NAME test_body_sync_claims_mf_evidence_grows_over_gaps
     COMMAND "${CMAKE_COMMAND}" -DEXE=$<TARGET_FILE:test_body_sync_claims> -DARGS=--plant-evidence-grows-over-gaps
             "-DCASES=test_forger_at_600ms_never_fits_host|test_forger_after_a_cut_never_fits_host"
             -P "${CMAKE_CURRENT_LIST_DIR}/expect_unity_fail.cmake")
+add_test(NAME test_body_sync_claims_mf_transform_sleep
+    COMMAND "${CMAKE_COMMAND}" -DEXE=$<TARGET_FILE:test_body_sync_claims> -DARGS=--plant-transform-sleep
+            "-DCASES=test_a_carried_rock_follows_its_carrier_host|test_a_carried_rock_follows_its_carrier_interaction"
+            -P "${CMAKE_CURRENT_LIST_DIR}/expect_unity_fail.cmake")
 add_test(NAME test_body_sync_claims_mf_approach_unbounded
     COMMAND "${CMAKE_COMMAND}" -DEXE=$<TARGET_FILE:test_body_sync_claims> -DARGS=--plant-claim-approach-unbounded
             "-DCASES=test_inflated_claim_speed_is_rejected"
@@ -100,7 +104,7 @@ set(core_tests test_body_sync_logic test_body_sync_playback test_body_sync_soft 
     test_body_sync_authority_mf_evidence_grows_over_gaps
     test_body_sync_claims test_body_sync_claims_mf_approach_scale0 test_body_sync_claims_mf_reach_unbounded
     test_body_sync_claims_mf_approach_unbounded test_body_sync_claims_mf_take_reach_unbounded
-    test_body_sync_claims_mf_evidence_grows_over_gaps)
+    test_body_sync_claims_mf_evidence_grows_over_gaps test_body_sync_claims_mf_transform_sleep)
 set(slow_tests test_body_sync_free_step test_body_sync_claims_loss_sweep)
 foreach(impl IN LISTS BODY_SYNC_IMPLS)
     string(REPLACE "|" ";" parts "${impl}")

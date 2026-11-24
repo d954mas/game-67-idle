@@ -183,6 +183,13 @@ due bodies by `acc`. A record that does not fit is left out whole and counted
 | asleep, its rest pose not acknowledged | 0.5 |
 | asleep and acknowledged | 0, not sent until it wakes |
 
+Asleep means at rest: Box3D keeps a body asleep while the game moves it by
+transform (a carried body, kinematic, set to its hold point every tick), so
+the seam counts a sleeping body as awake once it leaves the pose it fell asleep
+at by the stillness bounds (2 mm, 0.004 rad). Otherwise a carried body would
+go out no more once its rest pose was acknowledged, and the peers would show
+it left behind its carrier (`carry_gap.max` measures it).
+
 Staleness bound: with M awake bodies and room for N records a packet after
 the characters, an awake body goes at most max(4, 30 + ceil(M / N)) ticks
 between two packets that carry it, overflow or not. `stale_ticks.max` and
@@ -634,25 +641,25 @@ ignores the mode.
   sender's tick, its own), past the ownership's end until another ownership's
   states replace them. A gap in them is no evidence, never a wider bound: it
   may cost an effect, never forge one. All of it stands only while the seat is
-  heard within the claim's grace (a body at rest sends no state, so its last
-  one stands as a point; a seat gone silent leaves no evidence). A contact lies
-  at one of those states, or on the path two consecutive ones show while the
-  later is within the grace and they are at most `SYNC_POLICY_CHORD_TICKS_MAX`
-  (4) ticks apart: their chord, or on from the first along the step that led to
-  it (only the contact turns the body); or, for a playback delay and a tick
-  after the last state while it is within the grace (its successor lost, or
-  overtaken by the claim), on along its step. Two states are as far apart as
-  the sender's ticks say, never more than the host's own ticks between them plus
-  the playback delay: stamps far apart buy no time. Farther apart (a sleep, a
-  cut link, withheld states) the two count only as points, and the step that
-  led to the later one extends nothing. The gap is the agent's box from the
-  target's at the nearest of these; the reach is the take slop, the target's
-  travel over that path's time and a bend of the path of
-  `SYNC_POLICY_CONTACT_BEND_MS2` (20 m/s^2): 4.4 cm over a chord, 0.14 m over a
-  slack of 7 ticks, none at a state. The approach is the fastest step of those
-  states (over the sender's span, never under the host's own less the playback
-  delay) plus the target's speed; a step faster than the box's speed is a
-  teleport, refused as evidence, never capped. With no taken state standing the gap is INFINITY: a throw whose every flight state
+  heard within the claim's grace (a seat gone silent leaves no evidence). The
+  claim names the contact's tick on the claimant's clock, the one its states
+  are stamped with (a take: the take record's stamp). The contact lies on from
+  a taken state stamped at most `SYNC_POLICY_CHORD_TICKS_MAX` (4) ticks before
+  it, for the ticks between: along the step that led to that state when that
+  step spans as few ticks (only the contact turns the body), or on the chord to
+  the next state when the contact comes before it and they are as close. A
+  contact further on from every state has no evidence; the time it may grow
+  over is those ticks, never a delay. A state's span is the sender's, kept
+  within the playback delay of the host's own ticks between the two: stamps far
+  apart buy no time, stamps squeezed together neither speed a step up nor turn a
+  gap into a chord. The gap is the agent's box from the target's at the nearest
+  of these, the target where the claimant's own states, or the host at its take
+  of it, put it at the contact; the reach is the take slop, the target's travel
+  at its speed now since the contact (at most the grace) and a bend of the path
+  of `SYNC_POLICY_CONTACT_BEND_MS2` (20 m/s^2): 4.4 cm over 4 ticks. The
+  approach is the fastest step of those states plus the target's speed; a step
+  faster than the box's speed is a teleport, refused as evidence, never capped.
+  With no state that close before the contact the gap is INFINITY: a throw whose every flight state
   the network lost, or that ended before the host heard of it, is a missed
   effect, never a guessed one. The seam's records carry no pose, so a release
   cannot stand in. A guest that acknowledges late raises its measured round trip:
@@ -674,8 +681,10 @@ The stand plays the game's side of contact claims. The owner of a flying body
 (a throw's settling hold, a take's hold until rest) judges each contact with
 the host's own rule (`stand_rules_impact`). The host applies its own bodies'
 effects at once. A guest sends an impact record (target, agent, the agent's
-`body_sync_contact_number`, the contact's approach speed) on its record lane
-after that tick's seam records. A body that names no number (a claim not yet
+`body_sync_contact_number`, the contact's approach speed, the contact's tick)
+on its record lane after that tick's seam records; the parser refuses a tick
+after the record's own stamp or more than `STAND_CONTACT_AGE_MAX_TICKS` (120)
+before it. A body that names no number (a claim not yet
 granted) sends nothing: a missed effect, never a false one. The guest sends
 each key (agent, number, target) once, so a body bouncing on a target claims it
 once and a new throw, under a new number, claims a target that survived again.
@@ -695,11 +704,9 @@ push of a body the host does not simulate) and `claim_effects`, which add up to
 `claims`; `claims_format` counts what the parser refused. The sweep
 (`test_body_sync_claims --sweep`) throws at the glass from rest and after a
 walk, in both modes: at 100 ms, 20 ms of jitter and 2 % loss, and at 150 ms,
-60 ms and 10 %, at most one honest claim in twelve misses; at 200 ms, 80 ms and
-25 % over 24 seeds, 73 of 89 apply. Most of the misses there are a carried rock
-the guest stopped sending once its rest pose was acknowledged (asleep in the
-hand) and threw at the glass two ticks away: the host took nothing of its walk
-or its flight.
+60 ms and 10 %, every honest claim applies; at 200 ms, 80 ms and 25 % over 24
+seeds, 80 of 89 apply (a contact more than 4 ticks after the last state the
+host took, or a claimed speed above the fastest step it still holds).
 
 ## Running the stand
 

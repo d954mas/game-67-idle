@@ -210,7 +210,7 @@ static float length3(const float v[3]) { return sqrtf(v[0] * v[0] + v[1] * v[1] 
    slower than the claim behind it but by a tick. The agent is measured where the host's last
    taken state of that ownership put it (body_sync_real.c says why not its declared velocity). */
 body_sync_contact_verdict_t body_sync_check_contact(const body_sync_t *s, uint8_t seat, body_sync_id_t agent, uint16_t number,
-                                                    body_sync_id_t target, body_sync_contact_t *out) {
+                                                    body_sync_id_t target, uint32_t contact_tick, body_sync_contact_t *out) {
     body_sync_contact_t scratch;
     out = out ? out : &scratch;
     *out = (body_sync_contact_t){.gap = INFINITY};
@@ -231,7 +231,7 @@ body_sync_contact_verdict_t body_sync_check_contact(const body_sync_t *s, uint8_
                                   .target_speed = length3((const float[3]){vb.x, vb.y, vb.z}),
                                   .tick_hz = s->config.tick_hz,
                                   .max_speed = s->limits.max_speed,
-                                  .slack_ticks = 1.0f,
+                                  .contact_tick = contact_tick,
                                   .window_ticks = 2u}; /* the tick a state crosses in and the one the claim is judged in */
     sync_authority_contact_measure(&s->authority, agent, seat, ended, &scene, &out->gap, &out->reach, &out->approach_max);
     return verdict;

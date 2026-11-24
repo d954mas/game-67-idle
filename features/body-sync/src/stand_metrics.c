@@ -187,6 +187,14 @@ void stand_metrics_rest(stand_metrics_t *metrics, uint32_t guest, double jitter_
     metrics->rest_ticks[guest]++;
 }
 
+void stand_metrics_carry(stand_metrics_t *metrics, uint32_t guest, double gap_m) {
+    if (guest >= metrics->guests) {
+        return;
+    }
+    metrics->carry_gap[guest] = gap_m > metrics->carry_gap[guest] ? gap_m : metrics->carry_gap[guest];
+    metrics->carry_ticks[guest]++;
+}
+
 void stand_metrics_rest_break(stand_metrics_t *metrics, uint32_t guest, bool host) {
     if (guest < metrics->guests) {
         (host ? metrics->host_wakes : metrics->rest_breaks)[guest]++;
@@ -327,6 +335,8 @@ void stand_metrics_summarize(const stand_metrics_t *metrics, body_sync_report_t 
         out->rest_breaks = metrics->rest_breaks[g];
         out->host_wakes = metrics->host_wakes[g];
         out->creep_max = metrics->creep[g];
+        out->carry_gap_max_m = metrics->carry_gap[g];
+        out->carry_ticks = metrics->carry_ticks[g];
         out->rest_ticks = metrics->rest_ticks[g];
         out->rest_lag_max_ticks = metrics->rest_lag[g];
         out->soft_places_max = metrics->soft_places[g];
@@ -377,7 +387,7 @@ static const struct {
     {"returns.count", STAND_UNIT_COUNT},         {"lost_takes.count", STAND_UNIT_COUNT},      {"lost_takes.max", STAND_UNIT_LENGTH},
     {"claims.count", STAND_UNIT_COUNT},          {"claims_rejected.count", STAND_UNIT_COUNT}, {"claims_format.count", STAND_UNIT_COUNT},
     {"claims_repeat.count", STAND_UNIT_COUNT},   {"claim_effects.count", STAND_UNIT_COUNT},   {"claims_overflow.count", STAND_UNIT_COUNT},
-    {"claims_idle.count", STAND_UNIT_COUNT},
+    {"claims_idle.count", STAND_UNIT_COUNT},     {"carry_gap.max", STAND_UNIT_LENGTH},
 };
 
 bool stand_metric_unit(const char *name, stand_metric_unit_t *unit) {
@@ -470,6 +480,14 @@ bool stand_metric_value(const body_sync_report_t *report, const stand_metrics_t 
             }
             *value = (double)INFINITY;
             return true;
+        } else if (m->carry_ticks == 0 && strcmp(name, "carry_gap.max") == 0) {
+            if (detail && detail_size) {
+                snprintf(detail, detail_size, "g%u: no carry was measured", (unsigned)m->seat);
+            }
+            *value = (double)INFINITY;
+            return true;
+        } else if (strcmp(name, "carry_gap.max") == 0) {
+            v = m->carry_gap_max_m;
         } else if (m->response_events == 0 && strncmp(name, "response_ticks", 14) == 0) {
             if (detail && detail_size) {
                 snprintf(detail, detail_size, "g%u: no hit was measured", (unsigned)m->seat);
@@ -918,6 +936,9 @@ bool stand_json_write(const body_sync_report_t *r, const stand_metrics_t *m, boo
         put(&j, ",");
         key(&j, "creep_max");
         number(&j, gm->creep_max);
+        put(&j, ",");
+        key(&j, "carry_gap_max");
+        number(&j, gm->carry_gap_max_m);
         put(&j, ",");
         key(&j, "rest_ticks");
         putf(&j, "%u", gm->rest_ticks);

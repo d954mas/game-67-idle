@@ -357,7 +357,7 @@ static uint32_t record_size(stand_record_type_t type) {
     case STAND_REC_HIT:
         return 2 + 4 + 2 + 12;
     case STAND_REC_IMPACT:
-        return 2 + 4 + 4 + 2 + 4;
+        return 2 + 4 + 4 + 2 + 4 + 4;
     case STAND_REC_VERDICT:
         return 2 + 4 + 2 + 1;
     case STAND_REC_SPAWN:
@@ -390,6 +390,7 @@ uint32_t stand_record_encode(const stand_record_t *r, uint8_t *buffer, uint32_t 
         put_u32(p, r->body);
         put_u16(p + 4, r->number);
         put_f32(p + 6, r->speed);
+        put_u32(p + 10, r->tick);
         break;
     case STAND_REC_VERDICT:
         put_u16(p, r->action);
@@ -441,8 +442,8 @@ static bool bad(char *error, size_t size, const char *what) {
     return false;
 }
 
-bool stand_record_decode(const uint8_t *data, uint32_t size, bool from_host, const stand_limits_t *limits, stand_record_t *out, char *error,
-                         size_t error_size) {
+bool stand_record_decode(const uint8_t *data, uint32_t size, bool from_host, uint32_t stamp, const stand_limits_t *limits, stand_record_t *out,
+                         char *error, size_t error_size) {
     memset(out, 0, sizeof(*out));
     if (!data || size < 1) {
         return bad(error, error_size, "empty");
@@ -483,6 +484,7 @@ bool stand_record_decode(const uint8_t *data, uint32_t size, bool from_host, con
         out->body = get_u32(p);
         out->number = get_u16(p + 4);
         out->speed = get_f32(p + 6);
+        out->tick = get_u32(p + 10);
         if (!id_ok(out->body)) {
             return bad(error, error_size, "impact agent id out of range");
         }
@@ -491,6 +493,9 @@ bool stand_record_decode(const uint8_t *data, uint32_t size, bool from_host, con
         }
         if (!(isfinite(out->speed) && out->speed >= 0.0f && out->speed <= limits->max_speed)) {
             return bad(error, error_size, "impact speed out of range");
+        }
+        if (stamp - out->tick > STAND_CONTACT_AGE_MAX_TICKS) {
+            return bad(error, error_size, "impact tick out of range");
         }
         break;
     case STAND_REC_VERDICT:

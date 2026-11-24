@@ -641,8 +641,8 @@ static void test_a_duplicate_take_moves_nothing(void) {
 }
 
 static uint32_t gap_calls;
-static float counting_gap(void *context, uint8_t seat, uint32_t slot, float *reach) {
-    (void)context, (void)seat, (void)slot;
+static float counting_gap(void *context, uint8_t seat, uint32_t slot, uint32_t tick, float *reach) {
+    (void)context, (void)seat, (void)slot, (void)tick;
     gap_calls++;
     *reach = SYNC_POLICY_TAKE_SLOP_M;
     return 0.0f;

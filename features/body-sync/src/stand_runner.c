@@ -818,7 +818,7 @@ static void judge_impact(body_sync_stand_t *st, uint8_t seat, const stand_record
         return;
     }
     body_sync_contact_t c;
-    body_sync_contact_verdict_t verdict = body_sync_check_contact(host->sync, seat, r->body, r->number, r->target, &c);
+    body_sync_contact_verdict_t verdict = body_sync_check_contact(host->sync, seat, r->body, r->number, r->target, r->tick, &c);
     if (verdict != BODY_SYNC_CONTACT_OK || !stand_impact_accepts(c.gap, c.reach * st->claim_reach_scale, c.approach_max * st->claim_approach_scale, r->speed)) {
         st->claims_rejected[seat]++;
         return;
@@ -900,7 +900,8 @@ static void impacts(body_sync_stand_t *st, endpoint_t *ep) {
             }
             /* Marked sent only once queued: a claim the full queue dropped goes again at the next hit. */
             stand_claim_key_t key = {.agent = fid, .target = tid, .number = number, .seat = ep->index};
-            stand_record_t r = {.type = STAND_REC_IMPACT, .target = tid, .body = fid, .number = number, .speed = h->speed};
+            stand_record_t r = {.type = STAND_REC_IMPACT, .target = tid, .body = fid, .number = number, .speed = h->speed,
+                                .tick = coop_session_tick(ep->session)};
             if (!stand_claim_keys_has(&ep->claimed, key) && queue_record(st, ep, BODY_SYNC_SEAT_HOST, &r)) {
                 stand_claim_keys_add(&ep->claimed, key);
             }
@@ -999,10 +1000,10 @@ static void stand_record_in(body_sync_stand_t *st, endpoint_t *ep, uint8_t seat,
 /* A stand record's bytes after the family byte. A guest sends only claims: one the parser
    refuses is counted and dropped, it costs that claim and not the seat. A host's record that
    does not parse leaves the guest's world unknowable: false, and the session closes. */
-static bool stand_bytes_in(body_sync_stand_t *st, endpoint_t *ep, uint8_t seat, const uint8_t *data, uint32_t size) {
+static bool stand_bytes_in(body_sync_stand_t *st, endpoint_t *ep, uint8_t seat, uint32_t stamp, const uint8_t *data, uint32_t size) {
     stand_record_t r;
     char why[96];
-    if (!stand_record_decode(data, size, seat == BODY_SYNC_SEAT_HOST, &st->limits, &r, why, sizeof(why))) {
+    if (!stand_record_decode(data, size, seat == BODY_SYNC_SEAT_HOST, stamp, &st->limits, &r, why, sizeof(why))) {
         if (is_host_ep(ep) && seat < BODY_SYNC_ENDPOINTS_MAX) {
             st->claims_format[seat]++;
             return true;
@@ -1048,7 +1049,7 @@ static void poll_events(body_sync_stand_t *st, endpoint_t *ep) {
             if (ok && ev.data[0] == STAND_FAMILY_SEAM) {
                 ok = body_sync_receive_record(ep->sync, ev.seat, ev.tick, ev.data + 1, ev.size - 1) != BODY_SYNC_FORMAT;
             } else if (ok && ev.data[0] == STAND_FAMILY_STAND) {
-                ok = stand_bytes_in(st, ep, ev.seat, ev.data + 1, ev.size - 1);
+                ok = stand_bytes_in(st, ep, ev.seat, ev.tick, ev.data + 1, ev.size - 1);
             } else {
                 ok = false;
             }
@@ -2053,6 +2054,36 @@ static void note_lost_takes(body_sync_stand_t *st) {
    character reaches the guest's tick); both simulate one contact from one rest pose, so past it
    they differ by chaos. A pause begun on a moving owner shares no such moment: the flight-pause
    gap measures it at the playback tick, its lead included. */
+/* Host: every body a guest's character carries, against that character's hold point as the host
+   shows both. The guest sets the body there each tick before its step, so they part by one
+   tick of the walk and the copy grid. */
+static void sample_carry(body_sync_stand_t *st) {
+    endpoint_t *host = &st->ep[0];
+    const body_sync_character_tuning_t *t = &st->scene.character;
+    for (uint32_t g = 1; g < st->endpoints; g++) {
+        uint32_t c = character_slot(st, g);
+        body_sync_id_t character = stand_world_id(host->world, c);
+        if (!st->ep[g].active || !character || !host->world->slots[c].live) {
+            continue;
+        }
+        float at[3], rot[4];
+        pose_of(host, c, at, rot);
+        /* The facing yaw's forward, (0, 0, 1) turned by the character's rotation. */
+        const float forward[3] = {2.0f * (rot[0] * rot[2] + rot[3] * rot[1]), 0.0f, 1.0f - 2.0f * (rot[0] * rot[0] + rot[1] * rot[1])};
+        const float hold[3] = {at[0] + forward[0] * t->hold_forward, at[1] + t->hold_up, at[2] + forward[2] * t->hold_forward};
+        for (uint32_t slot = 0; slot < STAND_BODIES_MAX; slot++) {
+            body_sync_id_t id = stand_world_id(host->world, slot);
+            body_sync_authority_t a;
+            if (slot == c || !host->world->slots[slot].live || !id || !body_sync_authority(host->sync, id, &a) || a.holder != character) {
+                continue;
+            }
+            float p[3], q[4];
+            pose_of(host, slot, p, q);
+            stand_metrics_carry(&st->metrics, g - 1u, (double)stand_distance3(p, hold));
+        }
+    }
+}
+
 static void sample_aligned(body_sync_stand_t *st) {
     endpoint_t *host = &st->ep[0];
     for (uint32_t g = 1; g < st->endpoints; g++) {
@@ -2320,6 +2351,7 @@ static void sample(body_sync_stand_t *st) {
     sample_playback(st);
     note_lost_takes(st);
     sample_aligned(st);
+    sample_carry(st);
     sample_local(st);
     stand_metrics_end_tick(&st->metrics);
 
@@ -3397,11 +3429,15 @@ bool stand_testing_effect(body_sync_stand_t *st, stand_effect_t effect, body_syn
 
 void stand_testing_mark_left(body_sync_stand_t *st, uint8_t seat) { mark_left(st, seat); }
 
+uint32_t stand_testing_tick(body_sync_stand_t *st, uint32_t endpoint) {
+    return st && endpoint < st->endpoints ? coop_session_tick(st->ep[endpoint].session) : 0u;
+}
+
 bool stand_testing_record(body_sync_stand_t *st, uint8_t seat, const uint8_t *data, uint32_t size) {
     if (!st || seat == BODY_SYNC_SEAT_HOST || seat >= st->endpoints || size < 1 || data[0] != STAND_FAMILY_STAND) {
         return false;
     }
-    return stand_bytes_in(st, &st->ep[0], seat, data + 1, size - 1);
+    return stand_bytes_in(st, &st->ep[0], seat, coop_session_tick(st->ep[seat].session), data + 1, size - 1);
 }
 
 void stand_testing_plant_declared_velocity(body_sync_stand_t *st, uint32_t endpoint, body_sync_id_t body, const float add[3], uint32_t ticks) {
