@@ -9,13 +9,14 @@
   "copy_model": "in-place",
   "layer": "L0",
   "owners": ["features/garment-cloth"],
-  "dependencies": ["engine nt_core and nt_math", "engine nt_skeletal and nt_hash for skeletal actors", "Python with NumPy for authoring", "SciPy for surface projection"],
+  "dependencies": ["engine nt_core and nt_math", "engine nt_skeletal and nt_hash for skeletal actors", "Python with NumPy for authoring", "SciPy for surface projection", "Pillow for the cards of garment.view", "ai_studio/assets/tools/blender/lib/glb.py for the poses garment.host reads"],
   "provides": [
     "garment_cloth",
     "garment_actor_prepare",
     "garment_actor_update",
     "garment_actor_debug_lines",
     "garment_actor_clear",
+    "garment_actor_piece",
     "garment_asset_view",
     "garment_asset_free",
     "cloth_frame_valid",
@@ -57,13 +58,21 @@
     "garment_proxy.subdivide_long_edges",
     "garment_proxy.improve_mesh_quality",
     "garment_fit_capsules.fit_tapered_capsule",
-    "garment_fit_capsules.fit_body_capsules"
+    "garment_fit_capsules.fit_body_capsules",
+    "garment_host (gh_load, gh_step, gh_positions, gh_reference, gh_records, gh_metrics, gh_override, gh_free)",
+    "garment.host.Host",
+    "garment.host.Skeleton",
+    "garment.host.ramp",
+    "garment.host.bake",
+    "garment.host.corrective",
+    "garment.transfer.render_positions",
+    "garment.view.card"
   ],
   "flags": {"feature": "FEATURE_GARMENT_CLOTH=1 on consumers linked to garment_cloth"},
   "manuals": {"install": "features/garment-cloth/INSTALL.md"},
   "commands": {
     "owner": "node ai_studio/feature_testing/run.mjs",
-    "test_core": "ctest --test-dir ai_studio/feature_testing/consumer/build/feature-verify -R \"^test_garment_(actor|asset|blob|cloth|cook|binding|paint|model|render|proxy)$\" --output-on-failure"
+    "test_core": "ctest --test-dir ai_studio/feature_testing/consumer/build/feature-verify -R \"^test_garment_(actor|asset|blob|cloth|cook|binding|paint|model|render|proxy|host|host_py)$\" --output-on-failure"
   },
-  "registers": {"cmake_targets": ["garment_cloth"], "ctest_targets": ["test_garment_actor", "test_garment_asset", "test_garment_blob", "test_garment_cloth", "test_garment_cook", "test_garment_binding", "test_garment_paint", "test_garment_model", "test_garment_render", "test_garment_proxy"]}
+  "registers": {"cmake_targets": ["garment_cloth", "garment_host"], "ctest_targets": ["test_garment_actor", "test_garment_asset", "test_garment_blob", "test_garment_cloth", "test_garment_cook", "test_garment_binding", "test_garment_paint", "test_garment_model", "test_garment_render", "test_garment_proxy", "test_garment_host", "test_garment_host_py"]}
 }

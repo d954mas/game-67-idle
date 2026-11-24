@@ -504,6 +504,13 @@ bool garment_actor_update(GarmentActor *a, const GarmentSet *set, const nt_skele
     return true;
 }
 
+bool garment_actor_piece(const GarmentActor *a, int piece, const ClothState **cloth, const ClothReference **reference) {
+    if (!a || !a->primed || !a->pieces || piece < 0 || piece >= a->set->piece_count) return false;
+    if (cloth) *cloth = &a->pieces[piece].cloth;
+    if (reference) *reference = a->pieces[piece].frame;
+    return true;
+}
+
 bool garment_actor_debug_lines(const GarmentActor *actor, const nt_skeletal_skeleton_t *skel,
                               const nt_skeletal_mat34_t *pose, unsigned layers, int weight_joint,
                               ClothDebugLine emit, void *user) {

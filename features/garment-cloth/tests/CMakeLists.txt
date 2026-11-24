@@ -38,5 +38,23 @@ add_test(NAME test_garment_binding COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_C
 add_test(NAME test_garment_paint COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_paint.py")
 add_test(NAME test_garment_model COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_model.py")
 add_test(NAME test_garment_proxy COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_proxy.py")
+# The host stepped against the solver directly; the blob comes from the Python side of the same test.
+set(host_fixture "${CMAKE_CURRENT_BINARY_DIR}/garment_host_fixture.garment")
+add_custom_command(OUTPUT "${host_fixture}"
+    COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_host.py" --emit "${host_fixture}"
+    DEPENDS test_host.py ../tools/garment_blob.py ../tools/garment_cook.py VERBATIM)
+set_source_files_properties("${host_fixture}" PROPERTIES HEADER_FILE_ONLY TRUE)
+add_executable(test_garment_host test_host.c ../tools/host/garment_host.c "${host_fixture}")
+target_compile_definitions(test_garment_host PRIVATE "GARMENT_HOST_FIXTURE=\"${host_fixture}\"" _CRT_SECURE_NO_WARNINGS)
+target_link_libraries(test_garment_host PRIVATE garment_cloth nt_hash unity)
+nt_set_warning_flags(test_garment_host)
+nt_set_sanitizer_flags(test_garment_host)
+add_test(NAME test_garment_host COMMAND test_garment_host)
+set(host_tests test_garment_host)
+if(TARGET garment_host)
+    add_test(NAME test_garment_host_py COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/test_host.py"
+        "$<TARGET_FILE:garment_host>")
+    list(APPEND host_tests test_garment_host_py)
+endif()
 set_tests_properties(test_garment_actor test_garment_asset test_garment_blob test_garment_cloth test_garment_cook test_garment_binding
-    test_garment_paint test_garment_model test_garment_proxy test_garment_render PROPERTIES LABELS "core")
+    test_garment_paint test_garment_model test_garment_proxy test_garment_render ${host_tests} PROPERTIES LABELS "core")

@@ -104,6 +104,10 @@ bool garment_actor_prepare(GarmentActor *actor, const GarmentSet *set, const nt_
 bool garment_actor_update(GarmentActor *actor, const GarmentSet *set, const nt_skeletal_skeleton_t *skel,
                           const GarmentInput *in);
 
+/* One piece's cloth and its reference at the frame pose after the last update, for tools that read the solver;
+   false for a piece out of range or an actor without an update. */
+bool garment_actor_piece(const GarmentActor *actor, int piece, const ClothState **cloth, const ClothReference **reference);
+
 /* A negative weight_joint shows the max-distance map; other values are skeleton joint indices. */
 bool garment_actor_debug_lines(const GarmentActor *actor, const nt_skeletal_skeleton_t *skel,
                               const nt_skeletal_mat34_t *pose, unsigned layers, int weight_joint,
