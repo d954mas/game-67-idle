@@ -126,6 +126,9 @@ bool sync_policy_grants(const sync_policy_grant_in_t *in);
 /* The reach of a take's evidence: SYNC_POLICY_TAKE_SLOP_M plus the agent's and the body's travel
    (m/s) over `age_s`, the time the host's copy of the agent trails the guest. */
 float sync_policy_take_reach(float agent_speed, float body_speed, float age_s);
+/* The distance between two axis-aligned boxes given by their low and high corners, 0 where
+   they overlap: the evidence's gap. */
+float sync_policy_box_gap(const float lo[3], const float hi[3], const float other_lo[3], const float other_hi[3]);
 
 /* Host: one of its agents touches a copy a guest owns by interaction. */
 typedef struct sync_policy_reclaim_in {

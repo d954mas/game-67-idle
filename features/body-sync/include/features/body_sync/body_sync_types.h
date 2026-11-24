@@ -99,6 +99,29 @@ typedef struct body_sync_claim_event {
     body_sync_hold_t hold;
 } body_sync_claim_event_t;
 
+/* The host's verdict on a guest's contact claim (body_sync_check_contact). */
+typedef enum body_sync_contact_verdict {
+    /* The seat simulates the agent under that number now, or gave it back itself under it. */
+    BODY_SYNC_CONTACT_OK = 0,
+    /* Nothing to judge: a body, generation, seat or number the host does not know for that seat. */
+    BODY_SYNC_CONTACT_STALE,
+    /* The host took that ownership away (an assign, a host claim or take-back, a grant to
+       another seat): the claimant simulated on past the host's move, which it could not see. */
+    BODY_SYNC_CONTACT_REVOKED,
+} body_sync_contact_verdict_t;
+
+/* The host's own world around a contact claim, metres and m/s; the game sets its thresholds. */
+typedef struct body_sync_contact {
+    /* Between the boxes of the agent and the target: the agent where the host shows it or where
+       its newest state puts it, whichever is nearer. INFINITY when the verdict is STALE. */
+    float gap;
+    /* How far apart they may be after a real touch: the take evidence's reach over a round trip,
+       a playback delay and a tick (sync_policy_take_reach). */
+    float reach;
+    /* The faster of the agent's shown and sent speeds plus the target's shown speed. */
+    float approach_max;
+} body_sync_contact_t;
+
 typedef enum body_sync_traffic_kind {
     BODY_SYNC_TRAFFIC_HEADER = 0, /* the seam's own bytes in a packet: counts, ticks, acks */
     BODY_SYNC_TRAFFIC_COPY,       /* poses for interpolated copies */

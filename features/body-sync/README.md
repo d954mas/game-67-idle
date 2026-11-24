@@ -39,7 +39,7 @@ one process or in two.
 
 | Header | What it gives |
 |---|---|
-| `features/body_sync/body_sync.h` | The seam: `create` with the box and speeds a peer's numbers must stay in, seats joined and left, `bind`/`unbind` an id to a `b3BodyId` with its starting authority and number, authority (`claim`, `release`, `poll_claim`, `answer`, `assign`, `set_holder`, `set_flags`), the tick (`set_peer_tick`, `receive_state`, `receive_record`, `apply`, `collect`, `write_state`, `state_sent`, `unresolved`/`resolve`, `peek_record`/`pop_record`), `render_offset`, `traffic` by kind, the second layer's `is_predicted`, `is_pull_paused`, `is_layer_copy`, `lost_take` and `round_trip`. Includes Box3D. |
+| `features/body_sync/body_sync.h` | The seam: `create` with the box and speeds a peer's numbers must stay in, seats joined and left, `bind`/`unbind` an id to a `b3BodyId` with its starting authority and number, authority (`claim`, `release`, `poll_claim`, `answer`, `assign`, `set_holder`, `set_flags`), the host's gate on contact claims (`check_contact`, with the claimant's `contact_number`), the tick (`set_peer_tick`, `receive_state`, `receive_record`, `apply`, `collect`, `write_state`, `state_sent`, `unresolved`/`resolve`, `peek_record`/`pop_record`), `render_offset`, `traffic` by kind, the second layer's `is_predicted`, `is_pull_paused`, `is_layer_copy`, `lost_take` and `round_trip`. Includes Box3D. |
 | `features/body_sync/body_sync_scene.h` | Scenes as C data: body descriptors (shape, size, mass or density, friction, restitution, linear and angular damping, pose, motion, role, flags, model tag, routes, breakable templates), player spawns, the character's tuning, `validate`, the 8-scene catalog and lookup in it or in a caller's table. |
 | `features/body_sync/body_sync_scenario.h` | The scenario grammar (top comment), the parsed struct, `parse` and `load`, which refuse with a line and a reason. |
 | `features/body_sync/body_sync_metrics.h` | Metric definitions and names, the report structs, schema `body_sync.metrics.v2`. |
@@ -596,6 +596,31 @@ ignores the mode.
   a duplicate take of a body the guest owns this way is answered and moves
   nothing. A caller's claim with the hold until rest is
   INVALID.
+
+- **Contact claims.** The owner of a body judges its contacts and the host
+  checks the claim with `body_sync_check_contact(seat, agent, number, target)`;
+  the claim names `body_sync_contact_number` (the number the body's states
+  declare, so a waiting take names its grant's; a claim that is not a take names
+  none until it is granted, since the host takes none of its states before).
+  A seat's records arrive in order, and the contact that ends a flight (always
+  under HOST, against a heavy body under INTERACTION) sends its release first:
+  the host has the body back before it reads the claim, so a gate on "owns it
+  now" would refuse every honest one. The host instead keeps, per seat and
+  body, that seat's newest ownership that ended and how: OK while the seat owns
+  the body under the number or gave it back itself under it (a release, a
+  flight's return), whoever owns it since, since the claim describes the past
+  flight; REVOKED when the host ended it by force (an assign, its own claim or
+  take-back, a grant to another seat), as the claimant simulated on past a move
+  it could not see; STALE for anything else: an old generation, a seat not
+  joined (a seat that left, and its ownerships once it joins again), a number
+  the seat never held (another seat's, or the one a refused take's states
+  declared, which the host's next move to that seat skips), a claim older than
+  the seat's newest ended ownership, a guest calling. The host's world comes
+  with it: the gap between the agent's and the target's boxes (the agent's copy
+  or its newest state, the nearer), the take evidence's reach over a round trip,
+  a delay and a tick, and the fastest approach. The seam sets no threshold and
+  judges no effect: the game dedupes by (seat, agent, number, target), and after
+  a voluntary end the host's own simulation may meet the same target again.
 
 `body_sync_traffic` counts the takes, refusals, take-backs and returns
 (`takes`, `take_refusals`, `reclaims`, `returns`); the stand reports them per

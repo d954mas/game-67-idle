@@ -7,6 +7,7 @@
 #include "stub_wire.h"
 #include "sync_authority.h"
 #include "sync_masks.h"
+#include "sync_policy.h"
 
 /* The naive seam: every bound body's raw pose, velocities and motion type to every seat, every
    tick, in as many packets as it takes; copies are kinematic bodies driven to the newest pose.
@@ -196,6 +197,37 @@ bool body_sync_authority(const body_sync_t *s, body_sync_id_t id, body_sync_auth
     }
     sync_authority_describe(&s->authority, b, out);
     return true;
+}
+
+bool body_sync_contact_number(const body_sync_t *s, body_sync_id_t id, uint16_t *number) {
+    const sync_authority_body_t *b = sync_authority_body_const(&s->authority, id);
+    return b && sync_authority_contact_number(&s->authority, b, number);
+}
+
+static float length3(const float v[3]) { return sqrtf(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]); }
+
+/* The stub drives a copy to the newest pose it received within the step, so its copy trails
+   the guest by a tick only and the agent is measured where the host shows it. */
+body_sync_contact_verdict_t body_sync_check_contact(const body_sync_t *s, uint8_t seat, body_sync_id_t agent, uint16_t number,
+                                                    body_sync_id_t target, body_sync_contact_t *out) {
+    body_sync_contact_t scratch;
+    out = out ? out : &scratch;
+    *out = (body_sync_contact_t){.gap = INFINITY};
+    body_sync_contact_verdict_t verdict = sync_authority_check_contact(&s->authority, seat, agent, number);
+    const entry_t *g = entry_const(s, agent), *t = entry_const(s, target);
+    if (verdict == BODY_SYNC_CONTACT_STALE || agent == target || !g || !t || !b3Body_IsValid(g->body) || !b3Body_IsValid(t->body)) {
+        return BODY_SYNC_CONTACT_STALE;
+    }
+    b3AABB a = b3Body_ComputeAABB(g->body), b = b3Body_ComputeAABB(t->body);
+    const float alo[3] = {a.lowerBound.x, a.lowerBound.y, a.lowerBound.z}, ahi[3] = {a.upperBound.x, a.upperBound.y, a.upperBound.z};
+    const float blo[3] = {b.lowerBound.x, b.lowerBound.y, b.lowerBound.z}, bhi[3] = {b.upperBound.x, b.upperBound.y, b.upperBound.z};
+    b3Vec3 va = b3Body_GetLinearVelocity(g->body), vb = b3Body_GetLinearVelocity(t->body);
+    float shown = length3((const float[3]){va.x, va.y, va.z}), sent = g->has_in ? length3(g->in.velocity) : 0.0f;
+    float agent_speed = sent > shown ? sent : shown, target_speed = length3((const float[3]){vb.x, vb.y, vb.z});
+    out->gap = sync_policy_box_gap(blo, bhi, alo, ahi);
+    out->reach = sync_policy_take_reach(agent_speed, target_speed, s->dt);
+    out->approach_max = agent_speed + target_speed;
+    return verdict;
 }
 
 bool body_sync_is_local(const body_sync_t *s, body_sync_id_t id) {

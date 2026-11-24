@@ -234,6 +234,33 @@ body_sync_result_t body_sync_set_holder(body_sync_t *sync, body_sync_id_t id, bo
 body_sync_result_t body_sync_set_flags(body_sync_t *sync, body_sync_id_t id, uint8_t flags);
 uint8_t body_sync_flags(const body_sync_t *sync, body_sync_id_t id);
 
+/* ---- contact claims ---- */
+
+/* The authority number a contact claim of a local body names: the number its states declare,
+   so a take still waiting names the number its grant will give. False when nothing is bound,
+   the body is not local, or a claim that is not a take waits for its answer: the host takes no
+   state of such a claim before its grant, and judges none of its contacts either. */
+bool body_sync_contact_number(const body_sync_t *sync, body_sync_id_t id, uint16_t *number);
+
+/* Host only: whether `seat` may claim a contact of its body `agent` with `target` under the
+   authority number `number` (body_sync_contact_number on the claimant), and the host's own
+   world around it in `out`. Every argument may come from a peer's bytes: anything out of
+   range, unbound, of an old generation, a seat not joined, the host's own seat, a guest
+   calling, or `target` equal to `agent` is STALE; the call never asserts.
+
+   OK while the seat simulates the agent under that number, and after it gave it back itself
+   under that number (a release, a flight's return at contact or rest) until it owns the body
+   again and that ownership ends. The seat's records arrive in order, so its release lands
+   before the claim of the contact that ended the flight; the claim describes that flight, and
+   another seat owning the body since does not change it. REVOKED when the host ended that
+   ownership by force (body_sync_assign, a host claim or take-back, a grant to another seat).
+   The host keeps one ended ownership per seat and body: a claim older than the seat's newest
+   ownership of the body is STALE. A seat that left is STALE, and so is all it owned before
+   it joined again. The seam judges no effect: the game dedupes claims (seat, agent, number,
+   target) and decides from `out`. */
+body_sync_contact_verdict_t body_sync_check_contact(const body_sync_t *sync, uint8_t seat, body_sync_id_t agent, uint16_t number,
+                                                    body_sync_id_t target, body_sync_contact_t *out);
+
 /* ---- the tick ---- */
 
 /* `seat`'s tick as this endpoint sees it now (coop_session_peer_tick); negative while unknown.

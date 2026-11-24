@@ -1409,6 +1409,71 @@ static void test_destroy_gives_the_mask_bits_back(void) {
     TEST_ASSERT_TRUE_MESSAGE(after == B3_DEFAULT_MASK_BITS, "destroy kept the character bit off");
 }
 
+/* The contact gate end to end: the guest's release travels in the seam's records, its claim of
+   the contact that ended the flight after them, so the host has the body back before it judges
+   the claim, and the claim still counts. The host's world around it is measured. */
+static void test_a_contact_claim_counts_after_its_release(void) {
+    tick_all();
+    body_sync_id_t target = body_sync_id_make(1, 1);
+    grant(&guest, ID0, BODY_SYNC_HOLD_UNTIL_SETTLED);
+    uint16_t n = 0;
+    TEST_ASSERT_TRUE(body_sync_contact_number(guest.sync, ID0, &n));
+    TEST_ASSERT_FALSE(body_sync_contact_number(other.sync, ID0, &n) || body_sync_contact_number(guest.sync, target, &n)); /* copies */
+    TEST_ASSERT_TRUE(body_sync_contact_number(guest.sync, ID0, &n));
+    body_sync_contact_t c;
+    TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_OK, body_sync_check_contact(host.sync, GUEST, ID0, n, target, &c));
+    /* neighbours a metre apart, 0.4 m cubes, nearly still: a finite gap under a metre */
+    TEST_ASSERT_TRUE(c.gap >= 0.0f && c.gap < 1.0f);
+    TEST_ASSERT_TRUE(c.reach >= 0.15f && isfinite(c.reach));
+    TEST_ASSERT_TRUE(c.approach_max >= 0.0f && isfinite(c.approach_max));
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_release(guest.sync, ID0));
+    records(&guest, &host);
+    TEST_ASSERT_TRUE(body_sync_is_local(host.sync, ID0));
+    TEST_ASSERT_EQUAL_MESSAGE(BODY_SYNC_CONTACT_OK, body_sync_check_contact(host.sync, GUEST, ID0, n, target, &c),
+                              "the claim of a flight its own release ended was rejected");
+    TEST_ASSERT_TRUE(c.gap >= 0.0f && c.gap < 1.0f);
+    /* the host's own forced move of that flight's body, before the release arrived */
+    grant(&guest, ID0, BODY_SYNC_HOLD_UNTIL_SETTLED);
+    TEST_ASSERT_TRUE(body_sync_contact_number(guest.sync, ID0, &n));
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_assign(host.sync, ID0, BODY_SYNC_SEAT_HOST, BODY_SYNC_HOLD_UNTIL_RELEASE));
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_release(guest.sync, ID0));
+    records(&guest, &host);
+    TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_REVOKED, body_sync_check_contact(host.sync, GUEST, ID0, n, target, &c));
+    TEST_ASSERT_TRUE(c.gap >= 0.0f && c.gap < 1.0f); /* measured all the same: the game may log it */
+}
+
+/* A guest's claim names a slot the host bound again since: the old generation and the new
+   body are both STALE, as is everything the host cannot judge, and nothing is measured. */
+static void test_a_contact_of_a_rebound_slot_is_stale(void) {
+    tick_all();
+    body_sync_id_t old = body_sync_id_make(5, 1), fresh = body_sync_id_make(5, 2), target = body_sync_id_make(6, 1);
+    grant(&guest, old, BODY_SYNC_HOLD_UNTIL_SETTLED);
+    uint16_t n = 0;
+    TEST_ASSERT_TRUE(body_sync_contact_number(guest.sync, old, &n));
+    body_sync_contact_t c;
+    TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_OK, body_sync_check_contact(host.sync, GUEST, old, n, target, &c));
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_unbind(host.sync, old));
+    body_sync_bind_t bind = {.body = host.bodies[5], .body_class = BODY_SYNC_CLASS_LIGHT, .authority = BODY_SYNC_SEAT_HOST, .number = n};
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_bind(host.sync, fresh, &bind));
+    TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_STALE, body_sync_check_contact(host.sync, GUEST, old, n, target, &c));
+    TEST_ASSERT_TRUE(isinf(c.gap) && c.reach == 0.0f && c.approach_max == 0.0f);
+    TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_STALE, body_sync_check_contact(host.sync, GUEST, fresh, n, target, &c));
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_release(guest.sync, old));
+    records(&guest, &host); /* the release names the old generation: stale, ends nothing */
+    TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_STALE, body_sync_check_contact(host.sync, GUEST, old, n, target, &c));
+    TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_STALE, body_sync_check_contact(host.sync, GUEST, fresh, n, target, &c));
+    /* what the host cannot judge either */
+    grant(&guest, ID0, BODY_SYNC_HOLD_UNTIL_SETTLED);
+    TEST_ASSERT_TRUE(body_sync_contact_number(guest.sync, ID0, &n));
+    TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_OK, body_sync_check_contact(host.sync, GUEST, ID0, n, target, NULL));
+    TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_STALE, body_sync_check_contact(host.sync, GUEST, ID0, n, ID0, &c));                    /* itself */
+    TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_STALE, body_sync_check_contact(host.sync, GUEST, ID0, n, old, &c));                    /* gone */
+    TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_STALE, body_sync_check_contact(host.sync, GUEST, ID0, n, body_sync_id_make(0xFFFF, 1), &c));
+    TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_STALE, body_sync_check_contact(host.sync, OTHER, ID0, n, target, &c));                 /* not its */
+    TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_STALE, body_sync_check_contact(host.sync, 200, ID0, n, target, &c));                   /* no seat */
+    TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_STALE, body_sync_check_contact(guest.sync, GUEST, ID0, n, target, &c));                /* host only */
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_every_body_reaches_the_guest_within_the_packet_limit);
@@ -1457,5 +1522,7 @@ int main(void) {
     RUN_TEST(test_mask_bits_are_taken_and_given_back_exactly);
     RUN_TEST(test_destroy_gives_the_mask_bits_back);
     RUN_TEST(test_bind_refuses_too_many_shapes);
+    RUN_TEST(test_a_contact_claim_counts_after_its_release);
+    RUN_TEST(test_a_contact_of_a_rebound_slot_is_stale);
     return UNITY_END();
 }

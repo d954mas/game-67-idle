@@ -81,6 +81,18 @@ typedef struct sync_authority_pending {
 
 enum { SYNC_AUTHORITY_RECORD_BYTES = STUB_RECORD_BYTES_MAX, SYNC_AUTHORITY_OWED_WORDS = BODY_SYNC_BODIES_MAX / 64 };
 
+/* How a guest's ownership of a body ended, for its contact claims (sync_authority_check_contact). */
+typedef enum sync_authority_end {
+    SYNC_END_NONE = 0,
+    SYNC_END_VOLUNTARY, /* its own release: a flight's return at contact or rest, a let-go */
+    SYNC_END_FORCED,    /* the host's move: assign, host claim, take-back, a grant to another seat, a leave */
+} sync_authority_end_t;
+
+typedef struct sync_authority_ended {
+    uint16_t number;
+    uint8_t how; /* sync_authority_end_t */
+} sync_authority_ended_t;
+
 typedef struct sync_authority {
     uint8_t self;
     uint8_t seats;
@@ -112,6 +124,12 @@ typedef struct sync_authority {
        body to that seat, which skips a number (sync_authority_declared_number). */
     uint64_t refused[BODY_SYNC_SEATS_MAX][SYNC_AUTHORITY_OWED_WORDS];
     uint32_t now;
+    /* Host: each seat's newest ownership of each body that ended, kept until the body is bound
+       again or the seat joins again. */
+    sync_authority_ended_t ended[BODY_SYNC_SEATS_MAX][BODY_SYNC_BODIES_MAX];
+    /* A planted defect for tests that require a check to catch it: every forced end is
+       recorded as voluntary. Never set outside tests. */
+    bool plant_forced_as_voluntary;
     /* Host: the shell's measure of a take's evidence (sync_policy_grant_in_t agent_gap, *reach).
        None: every take counts as touching, for the parts tested without a world. */
     float (*take_gap)(void *context, uint8_t seat, uint32_t slot, float *reach);
@@ -224,6 +242,12 @@ void sync_authority_host_active(sync_authority_t *a, body_sync_id_t id, bool act
 /* Host: one of its agents touched a guest's body owned by interaction: it comes back to the host
    at once, forced, still owned by interaction there. */
 body_sync_result_t sync_authority_reclaim(sync_authority_t *a, body_sync_id_t id);
+
+/* Host: whether `seat` may claim a contact of `agent` under `number` (body_sync_check_contact,
+   the ownership half): every argument untrusted, anything unknown STALE. */
+body_sync_contact_verdict_t sync_authority_check_contact(const sync_authority_t *a, uint8_t seat, body_sync_id_t agent, uint16_t number);
+/* The number a contact claim of a local body names (body_sync_contact_number). */
+bool sync_authority_contact_number(const sync_authority_t *a, const sync_authority_body_t *b, uint16_t *number);
 
 /* The id a record's holder names on this side, by slot and low generation bits; NONE when no
    body of that generation is bound there. */

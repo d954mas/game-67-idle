@@ -72,6 +72,15 @@ float sync_policy_take_reach(float agent_speed, float body_speed, float age_s) {
     return SYNC_POLICY_TAKE_SLOP_M + (agent_speed + body_speed) * age_s;
 }
 
+float sync_policy_box_gap(const float lo[3], const float hi[3], const float other_lo[3], const float other_hi[3]) {
+    float d2 = 0.0f;
+    for (int i = 0; i < 3; i++) {
+        float d = other_lo[i] - hi[i] > lo[i] - other_hi[i] ? other_lo[i] - hi[i] : lo[i] - other_hi[i];
+        d2 += d > 0.0f ? d * d : 0.0f;
+    }
+    return sqrtf(d2);
+}
+
 bool sync_policy_host_reclaims(const sync_policy_reclaim_in_t *in) {
     return in->mode == SYNC_POLICY_INTERACTION && in->priority == SYNC_POLICY_HOST_FIRST && in->owner_seat != BODY_SYNC_SEAT_HOST &&
            in->owner_hold == BODY_SYNC_HOLD_UNTIL_REST && agent_moves(in->agent_speed, in->pushed);
