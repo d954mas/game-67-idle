@@ -1,4 +1,4 @@
-"""Cook an outfit from its sidecar (spec B.7, B.8): the blob v3 the runtime loads and the `_GARMENT` render binding of
+"""Cook an outfit from its sidecar (spec B.7, B.8): the blob v4 the runtime loads and the `_GARMENT` render binding of
 each model that wears it.
 
 The sidecar holds everything authored (sim meshes, pins as r = 0, weights, maps, fabric names, layer pairs); the
@@ -186,7 +186,7 @@ def shapes(colliders, joints, inverse_binds):
 
 
 def cook(outfit_id, sidecar_data, model, fabrics, colliders, inertia):
-    """(blob, streams, report): the blob v3 of one outfit, the `_GARMENT` stream of each primitive of the model that
+    """(blob, streams, report): the blob v4 of one outfit, the `_GARMENT` stream of each primitive of the model that
     wears it (None where no piece binds) and a report row per piece.
 
     sidecar_data: the sidecar bytes; model: a model.RenderModel whose skin the sidecar was built on; fabrics:
@@ -199,8 +199,8 @@ def cook(outfit_id, sidecar_data, model, fabrics, colliders, inertia):
 
 def cook_blob(outfit_id, sc, model, fabrics, colliders, inertia):
     """(blob, report) of a read Sidecar, without the render binding: what the runtime loads, for the game's cook and for
-    a bake that steps the outfit through the host. The sidecar's corrective morph targets become the blob's
-    correctives, in the sidecar's order."""
+    a bake that steps the outfit through the host. The sidecar's corrective morph targets (deltas and key backstop)
+    become the blob's correctives, in the sidecar's order."""
     joints = sc.joint_names
     if joints != model.joints:
         raise ValueError(f"{outfit_id}: the sidecar's skeleton is not the model's skin")

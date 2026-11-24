@@ -479,7 +479,17 @@ class Piece:
         return sc.Piece(id=self.id, label=self.label, fabric=self.fabric, points=single(self.x),
                         faces=self.faces.copy(), joints=order.astype("<u2"), weights=single(values),
                         r=single(self.r), d=single(self.d), R=single(self.R), b=single(self.b),
-                        correctives={k: (single(dx), single(db)) for k, (dx, db) in self.correctives.items()})
+                        correctives={k: tuple(single(a) for a in shape) for k, shape in self.correctives.items()})
+
+
+def _overrides(piece, d, R):
+    """The script's paint and smooth of d and R, in the order it wrote them (build order step 5)."""
+    for o in piece.overrides:
+        target = {"d": d, "R": R}[o["name"]]
+        if o["kind"] == "paint":
+            target[o["mask"]] = o["value"][o["mask"]]
+        else:
+            _smooth(piece, target, o["mask"], o["iterations"])
 
 
 def _smooth(piece, target, mask, iterations):
@@ -568,7 +578,8 @@ class Outfit:
     colliders, clips, looks: the body shapes file, the clip manifest and the look models that share this sidecar
     (the checks read them; a build reads the clips for the layer rule and a bake reads all but the looks); seats:
     {seated clip: the game's seat convex as (n, d) plane rows in actor space}, the input of the game's gate G10 and of
-    a seated bake."""
+    a seated bake; or a function that returns them from a reader of game files (`read(relative path) -> path`), so
+    every file the seats come from is a build input."""
 
     instances = []
 
@@ -587,7 +598,7 @@ class Outfit:
         self.colliders = None if colliders is None else self.root / colliders
         self.clips = None if clips is None else self.root / clips
         self.looks = [self.root / look for look in looks]
-        self.seats = dict(seats or {})
+        self.seats = dict((seats(self._input) if callable(seats) else seats) or {})
         self.pieces = []
         self.layers = []
         self.separations = []
@@ -752,6 +763,7 @@ class Outfit:
             p.origin = {k: v.copy() for k, v in p.origin.items()}
             p.sites = list(p.sites)
             p.correctives = {}
+            p.layer_d = None
             p.f = Fields(p)
         findings = []
         for p in pieces.values():
@@ -773,12 +785,7 @@ class Outfit:
         for outer, inner in self.layer_rules:
             findings += self._layer(pieces[outer], pieces[inner])
         for p in pieces.values():
-            for o in p.overrides:
-                target = {"d": p.d, "R": p.R}[o["name"]]
-                if o["kind"] == "paint":
-                    target[o["mask"]] = o["value"][o["mask"]]
-                else:
-                    _smooth(p, target, o["mask"], o["iterations"])
+            _overrides(p, p.d, p.R)
         ordered = [pieces[p.id] for p in self.pieces]
         records = []
         if self.corrective_requests:
@@ -790,6 +797,17 @@ class Outfit:
         result = (ordered, findings, records)
         self._resolved = (digest, result)
         return result
+
+    def backstop_at(self, p, points, body):
+        """(b, d, R) of a resolved piece in another configuration of its reference (a corrective's settled drape)
+        against the body posed there, by the rule the build applies at rest: the body measure (step 3), the outer d
+        the layer rule set (its gap is already the narrowest over every clip frame), then the script's overrides."""
+        b, d, R, _, _ = body_maps.backstop(points, p.faces, p.pins, body, p.thickness)
+        if p.layer_d is not None:
+            hit, values = p.layer_d
+            d[hit] = values
+        _overrides(p, d, R)
+        return b, d, R
 
     def resolved_piece(self, piece_id):
         return next(p for p in self.resolve()[0] if p.id == piece_id)
@@ -839,6 +857,7 @@ class Outfit:
         g_i = self._narrowest(i, o, gap_i, face_i, bary_i, sign=-1.0)
         hit_o = np.isfinite(g_o) & ~o.pins
         o.d[hit_o] = np.maximum((g_o[hit_o] - t) / 2, 0)
+        o.layer_d = (hit_o, o.d[hit_o].copy())
         o._mark("backstop", hit_o, "build: layer rule")
         was_free = ~i.pins
         hit_i = np.isfinite(g_i) & ~i.pins
@@ -954,6 +973,7 @@ class Outfit:
         """Write the sidecar and its asset record and return the sidecar's path; a file with the same bytes is left
         untouched."""
         data = sc.write(self.built())
+        Bd.source_record(self.model_path)
         path = self.sidecar_path()
         path.parent.mkdir(parents=True, exist_ok=True)
         if not path.is_file() or path.read_bytes() != data:
@@ -963,5 +983,5 @@ class Outfit:
         Bd.write_record(path, self.root if path.resolve().is_relative_to(self.root) else path.parent,
                         what="The outfit's sim meshes, pins, skin weights and maps (garment-cloth sidecar, spec B.1): a "
                              "built artifact of its script; the cook refuses it once an input in extras.build changes.",
-                        producer=script, rebuild=f"python {script}" if script else None)
+                        producer=script, rebuild=f"python {script}" if script else None, source=self.model_path)
         return path

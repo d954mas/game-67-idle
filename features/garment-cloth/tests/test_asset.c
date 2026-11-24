@@ -7,6 +7,8 @@
 
 #include "garment_asset_fixture.gen.h"
 
+#include <signal.h>
+
 void setUp(void) {}
 void tearDown(void) {}
 
@@ -112,7 +114,42 @@ static void test_outfit_without_cloth_views_as_null(void) {
     free(data);
 }
 
-int main(void) {
+/* An assert traps; CTest counts a trap as a crash, not a failure WILL_FAIL can invert, so the trap exits 3 here. */
+static void trapped(int signal_number) {
+    (void)signal_number;
+    _Exit(3);
+}
+
+/* `--reject <case>`: view the fixture's blob of that case, which must stop on an assert; exiting 0 means the view
+   accepted it, so CTest runs these with WILL_FAIL. */
+static int view_rejected(const char *name) {
+    (void)signal(SIGILL, trapped);
+#if defined(SIGTRAP)
+    (void)signal(SIGTRAP, trapped);
+#endif
+    char path[1024];
+    const size_t stem = strlen(GARMENT_FIXTURE_BLOB) - strlen(".garment");
+    (void)snprintf(path, sizeof path, "%.*s.%s.garment", (int)stem, GARMENT_FIXTURE_BLOB, name);
+    /* A missing file must not pass as a rejection: it returns 0, which fails the test. */
+    FILE *f = fopen(path, "rb");
+    if (!f) return 0;
+    fseek(f, 0, SEEK_END);
+    const uint32_t size = (uint32_t)ftell(f);
+    fseek(f, 0, SEEK_SET);
+    uint32_t *data = malloc(size + 4U);
+    const bool read = data && fread(data, 1, size, f) == size;
+    fclose(f);
+    if (read) garment_asset_free(garment_asset_view(data, size));
+    free(data);
+    return 0;
+}
+
+int main(int argc, char **argv) {
+    if (argc == 3 && strcmp(argv[1], "--reject") == 0) {
+        for (size_t i = 0; i < sizeof rejected_cases / sizeof rejected_cases[0]; ++i)
+            if (strcmp(argv[2], rejected_cases[i]) == 0) return view_rejected(argv[2]);
+        return 0;
+    }
     UNITY_BEGIN();
     RUN_TEST(test_view_reads_every_field_the_writer_wrote);
     RUN_TEST(test_view_needs_only_four_byte_alignment);

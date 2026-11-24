@@ -37,9 +37,11 @@ typedef struct {
 typedef struct {
     uint16_t a, b;
 } GarmentCone;
-/* One vertex of a corrective shape: rest-space deltas of the position and of the body direction (spec B.5). */
+/* One vertex of a corrective shape: rest-space deltas of the position and of the body direction (spec B.5), and the
+   backstop at the corrective's key, measured like the rest one from the settled drape against the posed body. */
 typedef struct {
     float delta[3], direction[3];
+    ClothBackstop backstop;
 } GarmentCorrective;
 typedef struct GarmentAsset {
     const char *id;
@@ -82,8 +84,9 @@ typedef struct {
        kinematic and skips the solve. */
     float max_distance_scale, max_distance_bias;
     /* The set's corrective_count weights in [0, 1] (index from garment_set_corrective), or NULL for all 0. The
-       reference is skin(rest + sum_k weight_k delta_k); a weight change between frames is blended across the substeps
-       as the joints are, so a ramp over a transition moves the reference smoothly. */
+       reference is skin(rest + sum_k weight_k delta_k), the body direction turns the same way and the backstop blends
+       toward each key's (README, "Correctives"); a weight change between frames is blended across the substeps as the
+       joints are, so a ramp over a transition moves the reference smoothly. */
     const float *corrective_weight;
     /* Fill the stats' strain, max-distance, backstop and held measures (lab, probes, tests); costs a pass per frame. */
     bool measure;
@@ -123,6 +126,9 @@ bool garment_actor_update(GarmentActor *actor, const GarmentSet *set, const nt_s
 /* One piece's cloth and its reference at the frame pose after the last update, for tools that read the solver;
    false for a piece out of range or an actor without an update. */
 bool garment_actor_piece(const GarmentActor *actor, int piece, const ClothState **cloth, const ClothReference **reference);
+/* The backstop (d, R) per vertex the solver used at the frame pose: blended by the corrective weights where a corrective
+   weighs on the piece, else the mesh's; NULL for a piece out of range or an actor without an update. */
+const ClothBackstop *garment_actor_backstop(const GarmentActor *actor, int piece);
 
 /* A negative weight_joint shows the max-distance map; other values are skeleton joint indices. */
 bool garment_actor_debug_lines(const GarmentActor *actor, const nt_skeletal_skeleton_t *skel,

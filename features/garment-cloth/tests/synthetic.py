@@ -41,9 +41,9 @@ def legs():
     return points, np.concatenate([faces, faces + len(left)]), weights
 
 
-def glb(primitives, joints, parents=None):
+def glb(primitives, joints, parents=None, animation=None):
     """GLB bytes: one skinned mesh; each primitive is (material, points, faces, joint ids (n, 4), weights (n, 4),
-    extra float attributes {name: values})."""
+    extra float attributes {name: values}); animation: {joint: (key times (k,), translations (k, 3))}, one clip."""
     parents = parents or [None] * len(joints)
     data = bytearray()
     views, accessors = [], []
@@ -78,6 +78,15 @@ def glb(primitives, joints, parents=None):
            "meshes": [{"primitives": mesh}], "materials": materials, "accessors": accessors, "bufferViews": views,
            "skins": [{"joints": list(range(len(joints))), "inverseBindMatrices": ibm}],
            "buffers": [{"byteLength": len(data)}]}
+    if animation:
+        samplers, channels = [], []
+        for name, (times, moves) in animation.items():
+            samplers.append({"input": add(np.asarray(times, "<f4"), 5126, "SCALAR"),
+                             "output": add(np.asarray(moves, "<f4"), 5126, "VEC3"), "interpolation": "LINEAR"})
+            accessors[samplers[-1]["input"]].update(min=[float(min(times))], max=[float(max(times))])
+            channels.append({"sampler": len(samplers) - 1, "target": {"node": joints.index(name), "path": "translation"}})
+        doc["animations"] = [{"name": "clip", "samplers": samplers, "channels": channels}]
+        doc["buffers"] = [{"byteLength": len(data)}]
     data.extend(b"\0" * (-len(data) % 4))
     text = json.dumps(doc, separators=(",", ":")).encode()
     text += b" " * (-len(text) % 4)

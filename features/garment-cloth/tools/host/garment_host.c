@@ -90,7 +90,13 @@ GH_API GarmentHost *gh_load(const void *blob, uint32_t size, int joint_count, co
         if (!shapes) continue;
         const size_t records = shapes * (size_t)h->meshes[p].vertices;
         if (!(h->corrective[p] = calloc(records, sizeof *h->corrective[p]))) goto fail;
-        if (h->view->pieces[p].corrective) memcpy(h->corrective[p], h->view->pieces[p].corrective, records * sizeof *h->corrective[p]);
+        if (h->view->pieces[p].corrective) {
+            memcpy(h->corrective[p], h->view->pieces[p].corrective, records * sizeof *h->corrective[p]);
+        } else {
+            /* A piece no corrective changes: zero deltas, and at every key the body behind it is the rest one. */
+            for (size_t r = 0; r < records; ++r)
+                h->corrective[p][r].backstop = h->meshes[p].backstop[r % (size_t)h->meshes[p].vertices];
+        }
         h->pieces[p].corrective = h->corrective[p];
     }
     h->set.pieces = h->pieces;
@@ -139,6 +145,14 @@ GH_API bool gh_reference(const GarmentHost *h, int piece, float *out) {
     return true;
 }
 
+/* The backstop the solver used at the frame pose: d and R per vertex, vertices x 2. */
+GH_API bool gh_backstop(const GarmentHost *h, int piece, float *out) {
+    const ClothBackstop *bs = h ? garment_actor_backstop(&h->actor, piece) : NULL;
+    if (!bs || !out) return false;
+    memcpy(out, bs, (size_t)h->meshes[piece].vertices * sizeof *bs);
+    return true;
+}
+
 /* The GPU transfer records of the last rendered update, every piece's vertices in order, 12 floats each; returns the
    record count, or 0 before a rendered update. */
 GH_API int gh_records(const GarmentHost *h, float *out) {
@@ -157,8 +171,8 @@ GH_API bool gh_metrics(const GarmentHost *h, float out[8]) {
     return true;
 }
 
-/* Store a piece's corrective shape `index` (vertices x 6: position delta, body direction delta, rest space); it takes
-   effect at the next update and lasts until the host is freed. */
+/* Store a piece's corrective shape `index` (vertices x 8: position delta, body direction delta, rest space, and the
+   backstop d, R at its key); it takes effect at the next update and lasts until the host is freed. */
 GH_API bool gh_corrective(GarmentHost *h, int piece, int index, const float *shape) {
     if (!h || !shape || piece < 0 || piece >= h->set.piece_count || index < 0 || index >= h->set.corrective_count) return false;
     const size_t n = (size_t)h->meshes[piece].vertices;

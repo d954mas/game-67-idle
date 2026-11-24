@@ -55,10 +55,14 @@ o.corrective("sit", clip="sit", t=2.0)   # the drape in that key, on the seat th
 ```
 
 The game weights it by name: `garment_set_corrective(set, "sit")` once per loaded set, then
-`GarmentInput.corrective_weight[index]` 1 while a clip holding that pose plays, ramped over the transitions.
+`GarmentInput.corrective_weight[index]` 1 while a clip holding that pose plays, ramped over the transitions. Derive
+the weights from the animator's layers by one rule for every path that draws the wearer (play, previews, tools), and
+treat a placement that resets the cloth (a seat, a teleport) as a discontinuity of the pose too: let the new clip take
+full weight at once on that frame, so the reset lands on the corrected reference the bake held.
 
 `python tools/garment/check.py <script>` rebuilds the sidecar in scratch, compares its bytes with the committed one and
-runs the gates (C.3 of the scheme); `garment.cards` draws what the script authored.
+runs the gates (C.3 of the scheme); a complete check writes the outfit's receipt (`<script>.check.json`), which the cook
+verifies instead of running the gates. `garment.cards` draws what the script authored.
 
 ## Cook
 
@@ -66,16 +70,19 @@ runs the gates (C.3 of the scheme); `garment.cards` draws what the script author
 stream of each primitive of the model (the binding grown over the render mesh) and a report; `stage_model` adds the
 stream to a model, `stale(sidecar, root, script, colliders)` names every build input that changed since the sidecar
 was built (files, imported modules, numpy and scipy, the library, the colliders' body, a corrective's runtime), and
-`depfile_text` writes the build's dependencies. `gates.gate_data` and `gates.run` give the cook the gates its stage
-enforces (`gates.enforced_gates(stage)`), the same table `check.py` exits by:
+`depfile_text` writes the build's dependencies. The cook runs no gate: `receipt.verify` checks the receipt `check.py`
+wrote (every hashed input unchanged, every gate the declared stage enforces run, no blocking finding by
+`gates.blocking`, the rule `check.py` exits by) and returns its findings for the report; make the receipt and every file
+it hashes dependencies of the cook:
 
 ```python
-from garment import cook as C, gates as G, model as M, sidecar as S
+from garment import cook as C, model as M, receipt as R, sidecar as S
 
 data = sidecar_path.read_bytes()
 changed = C.stale(S.read(data), GAME, script, "assets/coat.cloth-colliders.json")
 if changed:
     raise SystemExit(f"rebuild the sidecar ({'; '.join(changed)}): python {script}")
+findings = R.verify(R.path_for(script), GAME, declared_stage, "assets/coat.cloth.glb")  # ValueError names why not
 model = M.RenderModel(model_path)
 blob, streams, report = C.cook("coat", data, model, fabrics, colliders, (0.45, 0.35))
 staged_path.write_bytes(C.stage_model(model_path, streams))
@@ -151,11 +158,12 @@ thickness in one substep can pass through cloth without pushing it, and the refe
 static ClothState state;
 static ClothReference ref[CLOTH_VERTICES]; /* skinned position and unit body direction per vertex */
 
-cloth_reset(&state, panel, &fabric, ref, NULL, &shapes);
-cloth_step(&state, panel, &fabric, 1.0F / 180.0F, NULL, ref, NULL, &shapes);
+cloth_reset(&state, panel, &fabric, ref, NULL, NULL, &shapes);
+cloth_step(&state, panel, &fabric, 1.0F / 180.0F, NULL, ref, NULL, NULL, &shapes);
 ```
 
-`NULL` max distance uses the mesh's `r`; pass a runtime array to scale it. `ClothShapes` holds spheres at their current
+`NULL` max distance uses the mesh's `r` and `NULL` backstop the mesh's `(d, R)`; pass runtime arrays to scale `r` or
+to move the backstop with a corrective. `ClothShapes` holds spheres at their current
 and previous substep centres, the cones joining them and the convexes in simulation space. Keep the view and its blob
 alive and immutable through every use of `state`. Reset succeeds when `state.mesh == panel`. An invalid input clears
 `state.frame_valid` and leaves the positions.

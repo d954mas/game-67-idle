@@ -13,6 +13,9 @@ typedef struct GarmentPiece {
     ClothReference frame[CLOTH_VERTICES]; /* Reference at the frame pose. */
     float step[CLOTH_VERTICES][3];        /* Reference at the last substep. */
     float r[CLOTH_VERTICES];              /* Runtime max distance. */
+    /* Backstop at the frame weights, read where frame_blended says a corrective moved it (else the mesh's). */
+    ClothBackstop frame_backstop[CLOTH_VERTICES];
+    bool frame_blended;
 } GarmentPiece;
 
 /* Concurrent actor updates use separate scratch; simulation never calls back into user code. */
@@ -21,6 +24,7 @@ static _Thread_local struct {
     nt_skeletal_mat34_t model[GARMENT_JOINTS_MAX]; /* Chain joints at the evaluated time. */
     nt_skeletal_mat34_t skin[GARMENT_BONES_MAX];
     ClothReference ref[CLOTH_VERTICES];
+    ClothBackstop backstop[CLOTH_VERTICES];
     ClothSphere spheres[CLOTH_SHAPES];
     ClothCone cones[CLOTH_SHAPES];
     ClothConvex convexes[CLOTH_CONVEXES];
@@ -244,33 +248,92 @@ static Blend blend_at(const GarmentActor *a, const float *current, float u) {
     return out;
 }
 
+static float length3(const float p[3]) {
+    return sqrtf(p[0] * p[0] + p[1] * p[1] + p[2] * p[2]);
+}
+
+/* Below this length a blend of unit directions has cancelled (its parts lie more than about 168 degrees apart) and
+   says nothing about where the body is; the writer keeps each corrective's own blend with the rest above it. */
+#define DIRECTION_MIN 0.1F
+/* A coefficient this close to 0 counts as none: 1 - sum of the weights in float. */
+#define COEFFICIENT_MIN 1e-6F
+
+/* Weight of the rest configuration in a blend: 1 - sum of the corrective weights, 0 when they carry it all. */
+static float rest_coefficient(const Blend *blend) {
+    float c = 1.0F;
+    for (int k = 0; k < blend->count; ++k) c -= blend->weight[k];
+    return fabsf(c) < COEFFICIENT_MIN ? 0.0F : c;
+}
+
+/* The backstop of a blend. d and the curvature 1/R (0 for the plane form) blend linearly with the configurations'
+   coefficients, the rest's 1 - sum(w) and each corrective's w, a form defined for a flat body where R is not; a
+   non-positive curvature is the plane form. It is off where any configuration with a nonzero coefficient is off, as
+   the body behind it is unknown there, and a configuration that carries the whole weight gives its own values. */
+static ClothBackstop blend_backstop(ClothBackstop rest, float rest_c, const Blend *blend,
+                                    const GarmentCorrective *const *shape) {
+    int counted = 0;
+    ClothBackstop only = rest;
+    float d = 0.0F, curvature = 0.0F, sole = 0.0F;
+    for (int c = -1; c < blend->count; ++c) {
+        const float w = c < 0 ? rest_c : blend->weight[c];
+        const ClothBackstop bs = c < 0 ? rest : shape[c]->backstop;
+        if (w == 0.0F) continue;
+        if (bs.R <= 0.0F) return (ClothBackstop){bs.d, 0.0F};
+        ++counted;
+        only = bs;
+        sole = w;
+        d += w * bs.d;
+        curvature += w * (isinf(bs.R) ? 0.0F : 1.0F / bs.R);
+    }
+    if (counted == 1 && sole == 1.0F) return only;
+    return (ClothBackstop){fmaxf(d, 0.0F), curvature > 0.0F ? 1.0F / curvature : INFINITY};
+}
+
 /* ref = sum_j w_j S_j (rest + sum_k a_k delta_k) and b = normalize(sum_j w_j R_j (b_rest + sum_k a_k delta_b_k)), at the
-   evaluated joints. */
-static bool evaluate_reference(const GarmentAsset *g, const Blend *blend, ClothReference *out) {
+   evaluated joints. The direction is defined everywhere, so the update never fails on it: where the correctives'
+   blend cancels (shorter than DIRECTION_MIN) the direction of the configuration with the largest coefficient stands
+   in, and where the bones' blend cancels, that direction turned by the vertex's heaviest bone alone. Where a
+   corrective weighs on the piece, backstop gets the blended backstop and *blended is set; else the mesh's holds. */
+static bool evaluate_reference(const GarmentAsset *g, const Blend *blend, ClothReference *out, ClothBackstop *backstop,
+                               bool *blended) {
     const int n = g->mesh->vertices;
     const int shapes = g->corrective ? blend->count : 0;
+    const float rest_c = rest_coefficient(blend);
+    *blended = shapes > 0;
     for (int i = 0; i < n; ++i) {
         const GarmentSkin *v = &g->skin[i];
         float *x = out[i].x, *b = out[i].b;
         const float *rest = g->mesh->rest[i], *d = g->direction[i];
         float corrected[3], turned[3];
         if (shapes > 0) {
+            const GarmentCorrective *shape[GARMENT_CORRECTIVES_MAX];
             memcpy(corrected, rest, sizeof corrected);
             memcpy(turned, d, sizeof turned);
+            int heaviest = -1;
+            float largest = rest_c;
             for (int c = 0; c < shapes; ++c) {
-                const GarmentCorrective *shape = &g->corrective[(size_t)blend->index[c] * (size_t)n + (size_t)i];
+                shape[c] = &g->corrective[(size_t)blend->index[c] * (size_t)n + (size_t)i];
                 for (int k = 0; k < 3; ++k) {
-                    corrected[k] += blend->weight[c] * shape->delta[k];
-                    turned[k] += blend->weight[c] * shape->direction[k];
+                    corrected[k] += blend->weight[c] * shape[c]->delta[k];
+                    turned[k] += blend->weight[c] * shape[c]->direction[k];
+                }
+                if (blend->weight[c] > largest) {
+                    largest = blend->weight[c];
+                    heaviest = c;
                 }
             }
+            if (length3(turned) < DIRECTION_MIN)
+                for (int k = 0; k < 3; ++k) turned[k] = d[k] + (heaviest < 0 ? 0.0F : shape[heaviest]->direction[k]);
+            backstop[i] = blend_backstop(g->mesh->backstop[i], rest_c, blend, shape);
             rest = corrected;
             d = turned;
         }
         memset(x, 0, 3 * sizeof(float));
         memset(b, 0, 3 * sizeof(float));
+        int heaviest = 0;
         for (int j = 0; j < 4; ++j) {
             if (v->weight[j] == 0) continue;
+            if (v->weight[j] > v->weight[heaviest]) heaviest = j;
             const nt_skeletal_mat34_t *m = &scratch.skin[v->bone[j]];
             float influenced[3];
             point(m, rest, influenced);
@@ -278,6 +341,10 @@ static bool evaluate_reference(const GarmentAsset *g, const Blend *blend, ClothR
                 x[k] += v->weight[j] * influenced[k];
                 b[k] += v->weight[j] * (m->r[k][0] * d[0] + m->r[k][1] * d[1] + m->r[k][2] * d[2]);
             }
+        }
+        if (length3(b) < DIRECTION_MIN * length3(d)) {
+            const nt_skeletal_mat34_t *m = &scratch.skin[v->bone[heaviest]];
+            for (int k = 0; k < 3; ++k) b[k] = m->r[k][0] * d[0] + m->r[k][1] * d[1] + m->r[k][2] * d[2];
         }
         if (!normalize(b)) return false;
     }
@@ -426,8 +493,9 @@ static bool simulate(GarmentActor *a, const GarmentSet *set, const nt_skeletal_s
     skin_matrices(a);
     const Blend at_frame = blend_at(a, weights, 1.0F);
     for (int p = 0; p < set->piece_count; ++p) {
-        if (!evaluate_reference(&set->pieces[p], &at_frame, a->pieces[p].frame)) return false;
-        runtime_max_distance(&set->pieces[p], in, a->pieces[p].r);
+        GarmentPiece *s = &a->pieces[p];
+        if (!evaluate_reference(&set->pieces[p], &at_frame, s->frame, s->frame_backstop, &s->frame_blended)) return false;
+        runtime_max_distance(&set->pieces[p], in, s->r);
     }
     if (reset || kinematic) {
         pose_spheres(a, a->spheres);
@@ -437,10 +505,11 @@ static bool simulate(GarmentActor *a, const GarmentSet *set, const nt_skeletal_s
         for (int p = 0; p < set->piece_count; ++p) {
             const GarmentAsset *g = &set->pieces[p];
             GarmentPiece *s = &a->pieces[p];
-            if (!cloth_reset(&s->cloth, g->mesh, &g->material, s->frame, s->r, &shapes)) return false;
+            const ClothBackstop *bs = s->frame_blended ? s->frame_backstop : NULL;
+            if (!cloth_reset(&s->cloth, g->mesh, &g->material, s->frame, s->r, bs, &shapes)) return false;
             for (int i = 0; i < g->mesh->vertices; ++i) memcpy(s->step[i], s->frame[i].x, sizeof s->step[i]);
             if (in->measure) {
-                ClothMetrics mt = cloth_measure(&s->cloth, g->mesh, &g->material, s->frame, s->r, &shapes);
+                ClothMetrics mt = cloth_measure(&s->cloth, g->mesh, &g->material, s->frame, s->r, bs, &shapes);
                 record_measure(stats, &mt);
             }
         }
@@ -468,17 +537,19 @@ static bool simulate(GarmentActor *a, const GarmentSet *set, const nt_skeletal_s
         for (int p = 0; p < set->piece_count; ++p) {
             const GarmentAsset *g = &set->pieces[p];
             GarmentPiece *s = &a->pieces[p];
-            if (!evaluate_reference(g, &at_step, scratch.ref)) return false;
+            bool blended;
+            if (!evaluate_reference(g, &at_step, scratch.ref, scratch.backstop, &blended)) return false;
+            const ClothBackstop *bs = blended ? scratch.backstop : NULL;
             frame.linear_inertia = g->linear_inertia;
             frame.angular_inertia = g->angular_inertia;
-            cloth_step(&s->cloth, g->mesh, &g->material, step, &frame, scratch.ref, s->r, &shapes);
+            cloth_step(&s->cloth, g->mesh, &g->material, step, &frame, scratch.ref, s->r, bs, &shapes);
             if (!s->cloth.frame_valid) {
                 stats->finite = false;
                 return false;
             }
             for (int i = 0; i < g->mesh->vertices; ++i) memcpy(s->step[i], scratch.ref[i].x, sizeof s->step[i]);
             if (k + 1 == steps && in->measure) {
-                ClothMetrics mt = cloth_measure(&s->cloth, g->mesh, &g->material, scratch.ref, s->r, &shapes);
+                ClothMetrics mt = cloth_measure(&s->cloth, g->mesh, &g->material, scratch.ref, s->r, bs, &shapes);
                 record_measure(stats, &mt);
             }
         }
@@ -566,6 +637,12 @@ bool garment_actor_piece(const GarmentActor *a, int piece, const ClothState **cl
     return true;
 }
 
+const ClothBackstop *garment_actor_backstop(const GarmentActor *a, int piece) {
+    if (!a || !a->primed || !a->pieces || piece < 0 || piece >= a->set->piece_count) return NULL;
+    const GarmentPiece *s = &a->pieces[piece];
+    return s->frame_blended ? s->frame_backstop : a->set->pieces[piece].mesh->backstop;
+}
+
 bool garment_actor_debug_lines(const GarmentActor *actor, const nt_skeletal_skeleton_t *skel,
                               const nt_skeletal_mat34_t *pose, unsigned layers, int weight_joint,
                               ClothDebugLine emit, void *user) {
@@ -619,7 +696,8 @@ bool garment_actor_debug_lines(const GarmentActor *actor, const nt_skeletal_skel
             }
             if (layers & CLOTH_DEBUG_WEIGHTS)
                 cloth_debug_mesh(asset->mesh, display, weights, CLOTH_DEBUG_WEIGHTS, emit, user);
-            cloth_debug_reference(asset->mesh, display, piece->frame, piece->r, layers, emit, user);
+            cloth_debug_reference(asset->mesh, display, piece->frame, piece->r,
+                                  piece->frame_blended ? piece->frame_backstop : NULL, layers, emit, user);
         }
         offset += n;
         if (layers & CLOTH_DEBUG_TETHERS) cloth_debug_mesh(asset->mesh, piece->cloth.x, NULL, CLOTH_DEBUG_TETHERS, emit, user);

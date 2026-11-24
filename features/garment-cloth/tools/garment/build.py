@@ -107,19 +107,56 @@ def differences(recorded, current):
     return out
 
 
-def write_record(asset, root, what, producer, rebuild, **extra):
-    """Write `<asset without its last suffix>.provenance.json` for a file this library built: the format of the game's
-    asset records (license, origin, integrity, provenance), every hash taken from the file itself."""
-    asset, root = Path(asset), Path(root)
+def record_path(asset):
+    """`<asset without its last suffix>.provenance.json`, the asset record beside a file."""
+    asset = Path(asset)
+    stem = asset.name[:-len(asset.suffix)] if asset.suffix else asset.name
+    return asset.with_name(stem + ".provenance.json")
+
+
+def source_record(source):
+    """(path, record) of a model's asset record: `<model stem>.provenance.json` beside it, or the folder's
+    `provenance.json` whose `model` or `file` names it. Refused when there is none or it lacks origin or license: a
+    file built from the model inherits them, and nothing else says what it may hold."""
+    source = Path(source).resolve()
+    own = record_path(source)
+    candidates = [own] if own.is_file() else []
+    folder = source.with_name("provenance.json")
+    if not candidates and folder.is_file():
+        doc = json.loads(folder.read_text(encoding="utf-8"))
+        named = [str(doc.get(k, "")).replace("\\", "/") for k in ("model", "file")]
+        if any(n and source.as_posix().endswith("/" + n.lstrip("./")) for n in named):
+            candidates = [folder]
+    if not candidates:
+        raise ValueError(f"{source}: the model has no asset record ({own.name}, or a provenance.json naming it); a file "
+                         "built from it inherits its origin and license")
+    record = json.loads(candidates[0].read_text(encoding="utf-8"))
+    missing = [k for k in ("origin", "license") if not record.get(k)]
+    if missing:
+        raise ValueError(f"{candidates[0]}: the record has no {', '.join(missing)} for the files built from "
+                         f"{source.name} to inherit")
+    return candidates[0], record
+
+
+def write_record(asset, root, what, producer, rebuild, source, **extra):
+    """Write the asset record of a file this library built from `source` (the model it is derived from), in the format
+    of the game's asset records (license, origin, integrity, provenance), every hash taken from the files themselves.
+    A derived file carries what its source carries: origin and license come from the source's record (source_record),
+    which the record names."""
+    asset, root, source = Path(asset), Path(root), Path(source)
+    parent_path, parent = source_record(source)
     data = asset.read_bytes()
     digest = hashlib.sha256(data).hexdigest()
-    relative = asset.resolve().relative_to(root.resolve()).as_posix()
+    def relative(p):
+        p = p.resolve()
+        return p.relative_to(root.resolve()).as_posix() if p.is_relative_to(root.resolve()) else p.as_posix()
     stem = asset.name[:-len(asset.suffix)] if asset.suffix else asset.name
-    record = {"id": stem, "file": relative, "origin": "mine",
-              "license": "Studio-made by script from the inputs its build lists; adds no content beyond them",
+    record = {"id": stem, "file": relative(asset), "origin": parent["origin"], "license": parent["license"],
               "sha256": digest, "bytes": len(data), "integrity": {"sha256": digest, "bytes": len(data)},
-              "what": what, "producer": producer, **extra, "rebuild": rebuild}
-    path = asset.with_name(stem + ".provenance.json")
+              "what": what, "producer": producer, "source": relative(source),
+              "source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(), "source_record": relative(parent_path),
+              **extra, "rebuild": rebuild}
+    path = record_path(asset)
     text = json.dumps(record, indent=1, ensure_ascii=False) + "\n"
     if not path.is_file() or path.read_bytes() != text.encode("utf-8"):
         path.write_bytes(text.encode("utf-8"))

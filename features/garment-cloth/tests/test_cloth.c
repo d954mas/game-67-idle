@@ -40,25 +40,25 @@ static const float toward_back[3] = {0, 0, -1};
 static void test_max_distance_ends_on_its_sphere(void) {
     reference(&fold, fold.rest, toward_back);
     r[3] = 0.1F;
-    TEST_ASSERT_TRUE(cloth_reset(&cloth, &fold, &inert, ref, r, NULL));
+    TEST_ASSERT_TRUE(cloth_reset(&cloth, &fold, &inert, ref, r, NULL, NULL));
     cloth.x[3][0] += 0.3F;
     cloth.x[3][2] += 0.4F;
-    cloth_step(&cloth, &fold, &inert, dt, NULL, ref, r, NULL);
+    cloth_step(&cloth, &fold, &inert, dt, NULL, ref, r, NULL, NULL);
     TEST_ASSERT_TRUE(cloth.frame_valid);
     NEAR(1e-5F, r[3], distance(cloth.x[3], ref[3].x));
-    ClothMetrics m = cloth_measure(&cloth, &fold, &inert, ref, r, NULL);
+    ClothMetrics m = cloth_measure(&cloth, &fold, &inert, ref, r, NULL, NULL);
     TEST_ASSERT_TRUE(m.finite && m.max_distance_excess_m < 1e-5F);
 }
 
 static void test_zero_max_distance_equals_the_reference(void) {
     reference(&fold, fold.rest, toward_back);
-    TEST_ASSERT_TRUE(cloth_reset(&cloth, &fold, &stiff, ref, r, NULL));
+    TEST_ASSERT_TRUE(cloth_reset(&cloth, &fold, &stiff, ref, r, NULL, NULL));
     float moved[4][3];
     memcpy(moved, fold.rest, sizeof moved);
     for (int i = 0; i < 4; ++i) moved[i][1] += 0.02F * (float)(i + 1);
     reference(&fold, (const float (*)[3])moved, toward_back);
     memset(r, 0, sizeof r);
-    cloth_step(&cloth, &fold, &stiff, dt, NULL, ref, r, NULL);
+    cloth_step(&cloth, &fold, &stiff, dt, NULL, ref, r, NULL, NULL);
     TEST_ASSERT_TRUE(cloth.frame_valid);
     for (int i = 0; i < 4; ++i) {
         TEST_ASSERT_EQUAL_MEMORY(ref[i].x, cloth.x[i], sizeof cloth.x[i]);
@@ -74,10 +74,10 @@ static void test_backstop_ends_on_its_sphere_along_b(void) {
     const float b[3] = {0.0F, -0.6F, -0.8F};
     reference(&mesh, mesh.rest, b);
     r[3] = 0.5F;
-    TEST_ASSERT_TRUE(cloth_reset(&cloth, &mesh, &inert, ref, r, NULL));
+    TEST_ASSERT_TRUE(cloth_reset(&cloth, &mesh, &inert, ref, r, NULL, NULL));
     /* Pushed in along b, the vertex comes back to the sphere's nearest point to the reference, d behind it. */
     for (int k = 0; k < 3; ++k) cloth.x[3][k] = ref[3].x[k] + b[k] * 0.06F;
-    cloth_step(&cloth, &mesh, &inert, dt, NULL, ref, r, NULL);
+    cloth_step(&cloth, &mesh, &inert, dt, NULL, ref, r, NULL, NULL);
     float center[3], surface[3];
     for (int k = 0; k < 3; ++k) {
         center[k] = ref[3].x[k] + b[k] * (behind.d + behind.R);
@@ -85,7 +85,7 @@ static void test_backstop_ends_on_its_sphere_along_b(void) {
     }
     NEAR(1e-5F, behind.R, distance(cloth.x[3], center));
     TEST_ASSERT_TRUE(distance(cloth.x[3], surface) < 1e-3F);
-    TEST_ASSERT_TRUE(cloth_measure(&cloth, &mesh, &inert, ref, r, NULL).backstop_depth_m < 1e-5F);
+    TEST_ASSERT_TRUE(cloth_measure(&cloth, &mesh, &inert, ref, r, NULL, NULL).backstop_depth_m < 1e-5F);
 }
 
 static void test_a_shape_holding_the_reference_deeper_than_r_is_reported(void) {
@@ -95,12 +95,12 @@ static void test_a_shape_holding_the_reference_deeper_than_r_is_reported(void) {
     memcpy(sphere.prev, sphere.c, sizeof sphere.prev);
     ClothShapes shapes = {.spheres = &sphere, .sphere_count = 1};
     r[3] = 0.05F;
-    TEST_ASSERT_TRUE(cloth_reset(&cloth, &fold, &stiff, ref, r, &shapes));
-    ClothMetrics held = cloth_measure(&cloth, &fold, &stiff, ref, r, &shapes);
+    TEST_ASSERT_TRUE(cloth_reset(&cloth, &fold, &stiff, ref, r, NULL, &shapes));
+    ClothMetrics held = cloth_measure(&cloth, &fold, &stiff, ref, r, NULL, &shapes);
     TEST_ASSERT_EQUAL_INT(1, held.held_vertices);
     NEAR(1e-5F, sphere.r + stiff.thickness - r[3], held.held_depth_m);
     r[3] = 0.5F;
-    TEST_ASSERT_EQUAL_INT(0, cloth_measure(&cloth, &fold, &stiff, ref, r, &shapes).held_vertices);
+    TEST_ASSERT_EQUAL_INT(0, cloth_measure(&cloth, &fold, &stiff, ref, r, NULL, &shapes).held_vertices);
 }
 
 static void test_tethers_hold(void) {
@@ -108,9 +108,9 @@ static void test_tethers_hold(void) {
     elastic.stretch = 100.0F;
     elastic.iterations = 1;
     reference(&seam, seam.rest, toward_back);
-    TEST_ASSERT_TRUE(cloth_reset(&cloth, &seam, &elastic, ref, r, NULL));
+    TEST_ASSERT_TRUE(cloth_reset(&cloth, &seam, &elastic, ref, r, NULL, NULL));
     cloth.x[2][1] *= 2.0F;
-    cloth_step(&cloth, &seam, &elastic, dt, NULL, ref, r, NULL);
+    cloth_step(&cloth, &seam, &elastic, dt, NULL, ref, r, NULL, NULL);
     ClothTether tether = seam.tether[2];
     NEAR(1e-5F, tether.max_length, distance(cloth.x[2], cloth.x[tether.pin]));
 
@@ -118,13 +118,13 @@ static void test_tethers_hold(void) {
     ClothMesh untethered = seam;
     untethered.tether = NULL;
     float slack[3];
-    TEST_ASSERT_TRUE(cloth_reset(&cloth, &untethered, &elastic, ref, r, NULL));
+    TEST_ASSERT_TRUE(cloth_reset(&cloth, &untethered, &elastic, ref, r, NULL, NULL));
     cloth.x[2][1] = 0.4F;
-    cloth_step(&cloth, &untethered, &elastic, dt, NULL, ref, r, NULL);
+    cloth_step(&cloth, &untethered, &elastic, dt, NULL, ref, r, NULL, NULL);
     memcpy(slack, cloth.x[2], sizeof slack);
-    TEST_ASSERT_TRUE(cloth_reset(&cloth, &seam, &elastic, ref, r, NULL));
+    TEST_ASSERT_TRUE(cloth_reset(&cloth, &seam, &elastic, ref, r, NULL, NULL));
     cloth.x[2][1] = 0.4F;
-    cloth_step(&cloth, &seam, &elastic, dt, NULL, ref, r, NULL);
+    cloth_step(&cloth, &seam, &elastic, dt, NULL, ref, r, NULL, NULL);
     TEST_ASSERT_EQUAL_MEMORY(slack, cloth.x[2], sizeof slack);
 }
 
@@ -138,14 +138,14 @@ static void test_a_cone_sweeping_a_pinned_panel_at_15_mps_leaves_no_vertex_insid
     const ClothCone cone = {0, 1};
     for (int i = 0; i < 2; ++i) memcpy(limb[i].prev, limb[i].c, sizeof limb[i].prev);
     ClothShapes shapes = {.spheres = limb, .sphere_count = 2, .cones = &cone, .cone_count = 1};
-    TEST_ASSERT_TRUE(cloth_reset(&cloth, &panel, &fabric, ref, r, &shapes));
+    TEST_ASSERT_TRUE(cloth_reset(&cloth, &panel, &fabric, ref, r, NULL, &shapes));
     int contacts = 0;
     for (int step = 0; step < 12; ++step) {
         for (int i = 0; i < 2; ++i) {
             memcpy(limb[i].prev, limb[i].c, sizeof limb[i].prev);
             limb[i].c[2] += 15.0F * dt;
         }
-        cloth_step(&cloth, &panel, &fabric, dt, NULL, ref, r, &shapes);
+        cloth_step(&cloth, &panel, &fabric, dt, NULL, ref, r, NULL, &shapes);
         TEST_ASSERT_TRUE(cloth.frame_valid);
         for (int v = 0; v < panel.vertices; ++v) {
             float n[3], t;
@@ -170,7 +170,7 @@ static void test_a_thin_cone_at_15_mps_leaves_the_panel_outside_and_within_max_d
     const ClothCone cone = {0, 1};
     for (int i = 0; i < 2; ++i) memcpy(limb[i].prev, limb[i].c, sizeof limb[i].prev);
     ClothShapes shapes = {.spheres = limb, .sphere_count = 2, .cones = &cone, .cone_count = 1};
-    TEST_ASSERT_TRUE(cloth_reset(&cloth, &panel, &fabric, ref, r, &shapes));
+    TEST_ASSERT_TRUE(cloth_reset(&cloth, &panel, &fabric, ref, r, NULL, &shapes));
     int contacts = 0;
     float pushed = 0.0F;
     for (int step = 0; step < 6; ++step) {
@@ -178,7 +178,7 @@ static void test_a_thin_cone_at_15_mps_leaves_the_panel_outside_and_within_max_d
             memcpy(limb[i].prev, limb[i].c, sizeof limb[i].prev);
             limb[i].c[2] += 15.0F * dt;
         }
-        cloth_step(&cloth, &panel, &fabric, dt, NULL, ref, r, &shapes);
+        cloth_step(&cloth, &panel, &fabric, dt, NULL, ref, r, NULL, &shapes);
         TEST_ASSERT_TRUE(cloth.frame_valid);
         for (int v = 0; v < panel.vertices; ++v) {
             float n[3], t;
@@ -209,9 +209,9 @@ static float compressed_step(float length) {
                                    .face = &face3, .edge = edges3, .max_distance = r3, .backstop = off3};
     const ClothMaterial m = {.density = 0.2F, .stretch = 1e-7F, .bend = 1e12F, .iterations = 1, .compression_limit = 0.2F};
     reference(&edge, edge.rest, toward_back);
-    TEST_ASSERT_TRUE(cloth_reset(&cloth, &edge, &m, ref, r, NULL));
+    TEST_ASSERT_TRUE(cloth_reset(&cloth, &edge, &m, ref, r, NULL, NULL));
     cloth.x[1][0] = length;
-    cloth_step(&cloth, &edge, &m, dt, NULL, ref, r, NULL);
+    cloth_step(&cloth, &edge, &m, dt, NULL, ref, r, NULL, NULL);
     TEST_ASSERT_TRUE(cloth.frame_valid);
     return cloth.x[1][0];
 }
@@ -231,15 +231,15 @@ static void test_a_plane_backstop_puts_a_vertex_pushed_past_it_back_on_the_plane
     const float b[3] = {0.0F, -0.6F, -0.8F};
     reference(&mesh, mesh.rest, b);
     r[3] = 0.5F;
-    TEST_ASSERT_TRUE(cloth_reset(&cloth, &mesh, &inert, ref, r, NULL));
+    TEST_ASSERT_TRUE(cloth_reset(&cloth, &mesh, &inert, ref, r, NULL, NULL));
     for (int k = 0; k < 3; ++k) cloth.x[3][k] = ref[3].x[k] + b[k] * 0.06F + (k == 0 ? 0.03F : 0.0F);
-    cloth_step(&cloth, &mesh, &inert, dt, NULL, ref, r, NULL);
+    cloth_step(&cloth, &mesh, &inert, dt, NULL, ref, r, NULL, NULL);
     float along = 0.0F;
     for (int k = 0; k < 3; ++k) along += (cloth.x[3][k] - ref[3].x[k]) * b[k];
     NEAR(1e-5F, plane.d, along);
     /* The plane pushes along b only: the step across it stays. */
     NEAR(1e-5F, ref[3].x[0] + 0.03F, cloth.x[3][0]);
-    TEST_ASSERT_TRUE(cloth_measure(&cloth, &mesh, &inert, ref, r, NULL).backstop_depth_m < 1e-5F);
+    TEST_ASSERT_TRUE(cloth_measure(&cloth, &mesh, &inert, ref, r, NULL, NULL).backstop_depth_m < 1e-5F);
 }
 
 static void test_reset_leaves_a_seat_through_its_nearest_face_not_along_b(void) {
@@ -257,7 +257,7 @@ static void test_reset_leaves_a_seat_through_its_nearest_face_not_along_b(void) 
     placed[3][2] = 0.0F;
     const float up[3] = {0, 1, 0};
     reference(&fold, (const float (*)[3])placed, up);
-    TEST_ASSERT_TRUE(cloth_reset(&cloth, &fold, &m, ref, r, &shapes));
+    TEST_ASSERT_TRUE(cloth_reset(&cloth, &fold, &m, ref, r, NULL, &shapes));
     NEAR(1e-5F, 0.05F + m.thickness, cloth.x[3][1]);
 }
 
@@ -267,7 +267,7 @@ static void test_reset_gives_the_reference_and_exits_along_minus_b(void) {
     ClothSphere sphere = {.c = {0.02F, 0.01F, 0.97F}, .r = 0.1F};
     memcpy(sphere.prev, sphere.c, sizeof sphere.prev);
     ClothShapes shapes = {.spheres = &sphere, .sphere_count = 1};
-    TEST_ASSERT_TRUE(cloth_reset(&cloth, &fold, &stiff, ref, r, &shapes));
+    TEST_ASSERT_TRUE(cloth_reset(&cloth, &fold, &stiff, ref, r, NULL, &shapes));
     for (int i = 0; i < 3; ++i) TEST_ASSERT_EQUAL_MEMORY(ref[i].x, cloth.x[i], sizeof cloth.x[i]);
     float offset[3], length = 0.0F, along = 0.0F;
     for (int k = 0; k < 3; ++k) {
@@ -295,8 +295,8 @@ static float slide_on_slope(float angle, float mu) {
     memcpy(slope.planes[0], n, sizeof n);
     slope.planes[0][3] = -(n[0] * start[0] + n[1] * start[1] + n[2] * start[2]) + m.thickness;
     ClothShapes shapes = {.convexes = &slope, .convex_count = 1};
-    TEST_ASSERT_TRUE(cloth_reset(&cloth, &fold, &m, ref, r, &shapes));
-    for (int s = 0; s < 180; ++s) cloth_step(&cloth, &fold, &m, dt, NULL, ref, r, &shapes);
+    TEST_ASSERT_TRUE(cloth_reset(&cloth, &fold, &m, ref, r, NULL, &shapes));
+    for (int s = 0; s < 180; ++s) cloth_step(&cloth, &fold, &m, dt, NULL, ref, r, NULL, &shapes);
     TEST_ASSERT_TRUE(cloth.frame_valid);
     float height = n[0] * cloth.x[3][0] + n[1] * cloth.x[3][1] + n[2] * cloth.x[3][2] + slope.planes[0][3];
     NEAR(1e-4F, m.thickness, height);
@@ -325,10 +325,10 @@ static void test_a_vertex_entering_a_convex_through_its_top_leaves_through_the_t
     placed[3][2] = 0.0F;
     reference(&fold, (const float (*)[3])placed, toward_back);
     r[3] = 2.0F;
-    TEST_ASSERT_TRUE(cloth_reset(&cloth, &fold, &m, ref, r, &shapes));
+    TEST_ASSERT_TRUE(cloth_reset(&cloth, &fold, &m, ref, r, NULL, &shapes));
     /* In one substep it falls 0.083 m and ends nearer the underside than the top. */
     cloth.velocity[3][1] = -15.0F;
-    cloth_step(&cloth, &fold, &m, dt, NULL, ref, r, &shapes);
+    cloth_step(&cloth, &fold, &m, dt, NULL, ref, r, NULL, &shapes);
     TEST_ASSERT_TRUE(cloth.frame_valid);
     NEAR(1e-5F, 0.05F + m.thickness, cloth.x[3][1]);
     NEAR(1e-5F, 0.05F, cloth.x[3][0]);
@@ -336,14 +336,14 @@ static void test_a_vertex_entering_a_convex_through_its_top_leaves_through_the_t
 
 static void test_material_restores_signed_fold(void) {
     reference(&fold, fold.rest, toward_back);
-    TEST_ASSERT_TRUE(cloth_reset(&cloth, &fold, &stiff, ref, r, NULL));
+    TEST_ASSERT_TRUE(cloth_reset(&cloth, &fold, &stiff, ref, r, NULL, NULL));
     cloth.x[3][1] = -0.5F;
     cloth.x[3][2] = 0.8660254F;
     float before = atan2f(cloth.x[3][2], -cloth.x[3][1]);
-    cloth_step(&cloth, &fold, &stiff, dt, NULL, ref, r, NULL);
+    cloth_step(&cloth, &fold, &stiff, dt, NULL, ref, r, NULL, NULL);
     float after = atan2f(cloth.x[3][2], -cloth.x[3][1]);
     TEST_ASSERT_TRUE(after > before && fabsf(after - 1.5707963F) < 0.05F);
-    TEST_ASSERT_TRUE(cloth_measure(&cloth, &fold, &stiff, ref, r, NULL).finite);
+    TEST_ASSERT_TRUE(cloth_measure(&cloth, &fold, &stiff, ref, r, NULL, NULL).finite);
 }
 
 static void test_cone_axis_crosses_face_interior(void) {
@@ -380,37 +380,37 @@ static void test_strain_limit_respects_pins_and_slack(void) {
     m.stretch = 100.0F;
     m.iterations = 1;
     reference(&mesh, mesh.rest, toward_back);
-    TEST_ASSERT_TRUE(cloth_reset(&cloth, &mesh, &m, ref, r, NULL));
+    TEST_ASSERT_TRUE(cloth_reset(&cloth, &mesh, &m, ref, r, NULL, NULL));
     cloth.x[2][1] *= 2.0F;
-    cloth_step(&cloth, &mesh, &m, dt, NULL, ref, r, NULL);
-    float initial_strain = cloth_measure(&cloth, &mesh, &m, ref, r, NULL).stretch;
+    cloth_step(&cloth, &mesh, &m, dt, NULL, ref, r, NULL, NULL);
+    float initial_strain = cloth_measure(&cloth, &mesh, &m, ref, r, NULL, NULL).stretch;
     m.max_edge_strain = 0.1F;
     m.strain_passes = 12;
-    TEST_ASSERT_TRUE(cloth_reset(&cloth, &mesh, &m, ref, r, NULL));
+    TEST_ASSERT_TRUE(cloth_reset(&cloth, &mesh, &m, ref, r, NULL, NULL));
     cloth.x[2][1] *= 2.0F;
-    cloth_step(&cloth, &mesh, &m, dt, NULL, ref, r, NULL);
-    ClothMetrics final = cloth_measure(&cloth, &mesh, &m, ref, r, NULL);
+    cloth_step(&cloth, &mesh, &m, dt, NULL, ref, r, NULL, NULL);
+    ClothMetrics final = cloth_measure(&cloth, &mesh, &m, ref, r, NULL, NULL);
     TEST_ASSERT_TRUE(final.finite && final.stretch < initial_strain && final.stretch <= m.max_edge_strain + 0.001F);
     for (int i = 0; i < 2; ++i) TEST_ASSERT_EQUAL_MEMORY(ref[i].x, cloth.x[i], sizeof cloth.x[i]);
 }
 
 static void test_invalid_inputs_are_rejected(void) {
     reference(&fold, fold.rest, toward_back);
-    TEST_ASSERT_TRUE(cloth_reset(&cloth, &fold, &stiff, ref, r, NULL));
+    TEST_ASSERT_TRUE(cloth_reset(&cloth, &fold, &stiff, ref, r, NULL, NULL));
     ref[2].b[2] = 0.5F;
-    cloth_step(&cloth, &fold, &stiff, dt, NULL, ref, r, NULL);
+    cloth_step(&cloth, &fold, &stiff, dt, NULL, ref, r, NULL, NULL);
     TEST_ASSERT_FALSE(cloth.frame_valid);
     reference(&fold, fold.rest, toward_back);
     r[3] = -0.1F;
-    TEST_ASSERT_FALSE(cloth_reset(&cloth, &fold, &stiff, ref, r, NULL));
+    TEST_ASSERT_FALSE(cloth_reset(&cloth, &fold, &stiff, ref, r, NULL, NULL));
     r[3] = 0.1F;
     ClothSphere sphere = {.c = {0, 0, 0}, .r = 0.1F};
     const ClothCone loop = {0, 1};
     ClothShapes shapes = {.spheres = &sphere, .sphere_count = 1, .cones = &loop, .cone_count = 1};
-    TEST_ASSERT_FALSE(cloth_reset(&cloth, &fold, &stiff, ref, r, &shapes));
+    TEST_ASSERT_FALSE(cloth_reset(&cloth, &fold, &stiff, ref, r, NULL, &shapes));
     const ClothFrame spin = {.angular_vel_y = NAN};
-    TEST_ASSERT_TRUE(cloth_reset(&cloth, &fold, &stiff, ref, r, NULL));
-    cloth_step(&cloth, &fold, &stiff, dt, &spin, ref, r, NULL);
+    TEST_ASSERT_TRUE(cloth_reset(&cloth, &fold, &stiff, ref, r, NULL, NULL));
+    cloth_step(&cloth, &fold, &stiff, dt, &spin, ref, r, NULL, NULL);
     TEST_ASSERT_FALSE(cloth.frame_valid);
 }
 

@@ -229,6 +229,13 @@ class Host:
             raise RuntimeError("no reference before the first update")
         return out[:, :3].astype(float), out[:, 3:].astype(float)
 
+    def backstop(self, piece):
+        """(d, R) per vertex the solver used at the frame pose, (vertices, 2): blended by the corrective weights."""
+        out = np.zeros((self.vertices[piece], 2), np.float32)
+        if not self.lib.gh_backstop(self.handle, piece, out.ctypes.data_as(ctypes.POINTER(ctypes.c_float))):
+            raise RuntimeError("no backstop before the first update")
+        return out.astype(float)
+
     def records(self):
         """The shader's transfer records of the last rendered update: (sim vertices, 3, 4)."""
         out = np.zeros((sum(self.vertices), 12), np.float32)
@@ -241,12 +248,12 @@ class Host:
         self.lib.gh_metrics(self.handle, out)
         return dict(zip(METRICS, list(out)))
 
-    def set_corrective(self, piece, index, delta, direction):
-        """Store corrective `index` of a piece: rest-space position and body direction deltas (vertices, 3) each. The
-        runtime evaluates it with its weight from the next update on."""
-        shape = np.ascontiguousarray(np.concatenate([np.reshape(delta, (-1, 3)), np.reshape(direction, (-1, 3))], 1),
-                                     np.float32)
-        if shape.shape != (self.vertices[piece], 6):
+    def set_corrective(self, piece, index, delta, direction, backstop):
+        """Store corrective `index` of a piece: rest-space position and body direction deltas (vertices, 3) each and
+        the backstop (d, R) at its key (vertices, 2). The runtime evaluates it with its weight from the next update on."""
+        shape = np.ascontiguousarray(np.concatenate([np.reshape(delta, (-1, 3)), np.reshape(direction, (-1, 3)),
+                                                     np.reshape(backstop, (-1, 2))], 1), np.float32)
+        if shape.shape != (self.vertices[piece], 8):
             raise ValueError(f"piece {piece} has {self.vertices[piece]} vertices, the shape {len(shape)}")
         if not self.lib.gh_corrective(self.handle, piece, index, shape.ctypes.data_as(ctypes.POINTER(ctypes.c_float))):
             raise ValueError(f"no piece {piece} or corrective {index}")
@@ -268,7 +275,8 @@ def _library(path=None):
         "gh_load": (p, [ctypes.c_char_p, ctypes.c_uint32, i, ctypes.POINTER(ctypes.c_char_p), ctypes.POINTER(ctypes.c_uint16)]),
         "gh_free": (None, [p]), "gh_piece_count": (i, [p]), "gh_piece_vertices": (i, [p, i]),
         "gh_step": (b, [p, f, f, ctypes.c_float, b, b, b, ctypes.POINTER(Convex), i, ctypes.c_float, ctypes.c_float, f]),
-        "gh_positions": (b, [p, i, f]), "gh_reference": (b, [p, i, f]), "gh_records": (i, [p, f]),
+        "gh_positions": (b, [p, i, f]), "gh_reference": (b, [p, i, f]), "gh_backstop": (b, [p, i, f]),
+        "gh_records": (i, [p, f]),
         "gh_metrics": (b, [p, f]), "gh_corrective_count": (i, [p]), "gh_corrective": (b, [p, i, i, f])}
     for name, (restype, argtypes) in signatures.items():
         getattr(lib, name).restype, getattr(lib, name).argtypes = restype, argtypes

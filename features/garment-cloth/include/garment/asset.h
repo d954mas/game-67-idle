@@ -10,7 +10,9 @@
    GARMENT_BLOB_ALIGN from the blob start, so a 4-byte-aligned blob gives every record its alignment. */
 #define GARMENT_BLOB_TAG(a, b, c, d) ((uint32_t)(a) | (uint32_t)(b) << 8 | (uint32_t)(c) << 16 | (uint32_t)(d) << 24)
 #define GARMENT_BLOB_MAGIC GARMENT_BLOB_TAG('G', 'R', 'M', 'T')
-enum { GARMENT_BLOB_VERSION = 3, GARMENT_BLOB_ALIGN = 16, GARMENT_BLOB_OUTFIT = 0xFFFF };
+/* A reader accepts its own version only and rejects a section tag it does not know: a layout change is a new
+   version, never an optional section an older reader would misread. */
+enum { GARMENT_BLOB_VERSION = 4, GARMENT_BLOB_ALIGN = 16, GARMENT_BLOB_OUTFIT = 0xFFFF };
 
 /* Outfit-wide sections carry piece = GARMENT_BLOB_OUTFIT; the others carry their piece index. */
 #define GARMENT_SECTION_STRINGS GARMENT_BLOB_TAG('S', 'T', 'R', 'S')      /* outfit: char, NUL-terminated UTF-8 */
@@ -28,7 +30,8 @@ enum { GARMENT_BLOB_VERSION = 3, GARMENT_BLOB_ALIGN = 16, GARMENT_BLOB_OUTFIT = 
 #define GARMENT_SECTION_MAX_DISTANCE GARMENT_BLOB_TAG('M', 'A', 'X', 'D') /* float, m */
 #define GARMENT_SECTION_BACKSTOP GARMENT_BLOB_TAG('B', 'K', 'S', 'T')     /* ClothBackstop */
 #define GARMENT_SECTION_DIRECTION GARMENT_BLOB_TAG('B', 'D', 'I', 'R')    /* float[3], unit */
-/* GarmentCorrective, corrective-major: (corrective count) x vertices; optional, absent where every delta is zero. */
+/* GarmentCorrective, corrective-major: (corrective count) x vertices; needs CNAM; optional, absent where no corrective
+   changes the piece (every delta zero and every key backstop the rest one). */
 #define GARMENT_SECTION_CORRECTIVES GARMENT_BLOB_TAG('C', 'O', 'R', 'R')
 
 typedef struct {
@@ -55,8 +58,9 @@ typedef struct {
     float inverse_bind[12];
 } GarmentBlobBone;
 
-/* Asserts structure only (magic, version, sizes, counts against the solver limits, offsets, index
-   ranges): values are checked by the cook. The set points into the blob, which must outlive it.
+/* Asserts structure (magic, version, known tags, sizes, counts against the solver limits, offsets, index ranges)
+   and each corrective's key backstop (finite d >= 0, R >= 0 or +inf); other values are checked by the cook. The set
+   points into the blob, which must outlive it.
    NULL for a valid blob of an outfit without cloth. */
 const GarmentSet *garment_asset_view(const void *blob, uint32_t size);
 /* NULL is allowed. */

@@ -22,8 +22,10 @@ void cloth_debug_mesh(const ClothMesh *mesh, const float positions[][3], const f
                       unsigned layers, ClothDebugLine emit, void *user);
 /* REFERENCE draws the reference wire, MAX_DISTANCE each vertex's offset from its reference coloured by its share of
    r (red beyond it), BACKSTOP the body direction from the reference to the backstop surface. */
+/* max_distance and backstop are the runtime ones (NULL: the mesh's), as the solver used them. */
 void cloth_debug_reference(const ClothMesh *mesh, const float positions[][3], const ClothReference *ref,
-                           const float *max_distance, unsigned layers, ClothDebugLine emit, void *user);
+                           const float *max_distance, const ClothBackstop *backstop, unsigned layers, ClothDebugLine emit,
+                           void *user);
 void cloth_debug_cone(const ClothSphere *a, const ClothSphere *b, ClothDebugLine emit, void *user);
 void cloth_debug_bone(const float parent[3], const float joint[3], ClothDebugLine emit, void *user);
 

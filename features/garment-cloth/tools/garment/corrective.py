@@ -1,5 +1,6 @@
 """Corrective shapes of an outfit (spec B.5, C.2, E.1): the runtime's own drape in a key pose, stored as rest-space
-deltas the game weights while the pose holds.
+deltas the game weights while the pose holds, with the backstop at the key: the body behind the corrected reference,
+measured from the settled drape against the posed body by the rule the build applies at rest.
 
 A bake runs the feature's runtime through the garment_host library: reset at rest and settle, ramp the joints into
 the key, raise the convexes (a seat) from below, settle with the pose frozen, and take the drape. One drape is not yet
@@ -26,6 +27,23 @@ from . import model as M
 MAX_PASSES = 24
 FLOOR = np.array([[0.0, 1.0, 0.0, 0.0]])  # the actor stands on y = 0 of its model space
 DRIFT_PERCENTILE = 99
+
+
+def best_pass(scores):
+    """Index of the pass a bake keeps: the smallest drift relative to the fabric thickness, the first among equals."""
+    return min(range(len(scores)), key=lambda k: (scores[k], k))
+
+
+def body_rule(decoded, body, thicknesses):
+    """The backstop rule of the build without its layer rule and overrides (body.backstop on a configuration against a
+    posed body), per piece index: what a bake measures at its key when no outfit gives its own rule."""
+    pins = [np.asarray(p["mesh"]["max_distance"]) == 0 for p in decoded["pieces"]]
+    faces = [np.asarray(p["mesh"]["faces"], int) for p in decoded["pieces"]]
+
+    def maps(piece, points):
+        b, d, R, _, _ = body_maps.backstop(points, faces[piece], pins[piece], body, thicknesses[piece])
+        return b, d, R
+    return maps
 
 
 def state_digest(pieces):
@@ -62,21 +80,25 @@ def drift(host, decoded):
 def bake(blob, index, skeleton, rest, key, convexes, body, thicknesses, max_passes=MAX_PASSES, hold_s=2.0,
          procedure=None, floor=FLOOR, library=None):
     """Bake corrective `index` of a blob in the key pose (both model-space poses in the skeleton's order) among the
-    convexes (plane rows, actor space; the floor stays put, the others rise from below): ([(delta, direction delta)
-    per piece], record). body: the outfit's body posed in the key; thicknesses: each piece's fabric thickness, the
-    drift the corrective must reach; procedure: the spec's bake times (C.2), each overridable."""
+    convexes (plane rows, actor space; the floor stays put, the others rise from below): ([(delta, direction delta,
+    key backstop (d, R)) per piece], record). body: the outfit's body posed in the key (body_rule measures the maps),
+    or a function (piece index, drape points) -> (b, d, R), the build's own rule on that configuration;
+    thicknesses: each piece's fabric thickness, the drift the corrective must reach; procedure: the spec's bake times
+    (C.2), each overridable. Every pass stores its drape with its own body direction and backstop, so the hold the
+    drift is measured in is the one the game gives."""
     procedure = {**dict(settle_in_s=0.5, ramp_s=1.0, rise_s=0.5, settle_s=2.0, hz=H.POSE_HZ), **(procedure or {})}
     decoded = decode(blob)
     rising = [np.asarray(c, float).reshape(-1, 4) for c in convexes]
     fixed = [np.asarray(floor, float).reshape(-1, 4)]
     weights = np.zeros(len(decoded["correctives"]))
     weights[index] = 1.0
-    faces = [np.asarray(p["mesh"]["faces"], int) for p in decoded["pieces"]]
     thickness = np.asarray(thicknesses, float)
+    maps = body if callable(body) else body_rule(decoded, body, thickness)
 
     def shapes_of(drape):
-        directions = [body_maps.directions(x, f, body) for x, f in zip(drape, faces)]
-        return H.deltas(decoded, key, skeleton, drape, directions)
+        measured = [maps(p, x) for p, x in enumerate(drape)]
+        moved = H.deltas(decoded, key, skeleton, drape, [b for b, _, _ in measured])
+        return [(delta, turn, np.column_stack([d, R])) for (delta, turn), (_, d, R) in zip(moved, measured)]
 
     passes = []
     with H.Host(blob, skeleton, library) as host:
@@ -84,24 +106,24 @@ def bake(blob, index, skeleton, rest, key, convexes, body, thicknesses, max_pass
                        settle_in_s=procedure["settle_in_s"], ramp_s=procedure["ramp_s"], rise_s=procedure["rise_s"],
                        settle_s=procedure["settle_s"], hz=procedure["hz"])
         shapes = shapes_of(drape)
-        best = None
+        kept, scores = [], []
         for k in range(max_passes):
-            for p, (delta, turn) in enumerate(shapes):
-                host.set_corrective(p, index, delta, turn)
+            for p, shape in enumerate(shapes):
+                host.set_corrective(p, index, *shape)
             # The hold the game gives a seated placement: a reset onto the corrected reference, the pose frozen.
             host.step(key, 0.0, reset=True, convexes=fixed + rising, weights=weights)
             for _ in range(int(round(hold_s * H.POSE_HZ))):
                 host.step(key, 1 / H.POSE_HZ, convexes=fixed + rising, weights=weights)
             measured = np.asarray(drift(host, decoded))
             passes.append([round(float(v) * 1000, 2) for v in measured])
-            score = float(np.max(measured / thickness))
-            if best is None or score < best[0]:
-                best = (score, shapes, measured)
-            if score <= 1.0:
+            scores.append(float(np.max(measured / thickness)))
+            kept.append((shapes, measured))
+            if scores[-1] <= 1.0:
                 break
             shapes = shapes_of([host.positions(p) for p in range(len(host.vertices))])
-    score, shapes, measured = best
-    record = dict(passes=len(passes), converged=score <= 1.0,
+    chosen = best_pass(scores)
+    score, (shapes, measured) = scores[chosen], kept[chosen]
+    record = dict(passes=len(passes), kept_pass=chosen + 1, converged=score <= 1.0,
                   drift_mm={p["id"]: round(float(v) * 1000, 2) for p, v in zip(decoded["pieces"], measured)},
                   thickness_mm={p["id"]: round(float(t) * 1000, 2) for p, t in zip(decoded["pieces"], thickness)},
                   drift_by_pass_mm=passes, procedure=procedure, hold_s=hold_s)
@@ -145,7 +167,7 @@ def resolve(outfit, pieces, records, request, committed):
     converge stops the build."""
     name = request["name"]
     for p in pieces:
-        p.correctives[name] = (np.zeros_like(p.x), np.zeros_like(p.x))
+        p.correctives[name] = (np.zeros_like(p.x), np.zeros_like(p.x), np.column_stack([p.d, p.R]))
     sc = outfit.sidecar(pieces, records + [dict(name=name)])
     key = json.loads(json.dumps(dict(pieces_sha256=state_digest(sc.pieces), runtime_sha256=H.runtime_sha256(),
                                       inputs=bake_inputs(outfit, request),
@@ -153,8 +175,7 @@ def resolve(outfit, pieces, records, request, committed):
     previous = next((c for c in committed.correctives if c["name"] == name), None) if committed else None
     if previous is not None and previous.get("key") == key and             [p.id for p in committed.pieces] == [p.id for p in pieces]:
         for p in pieces:
-            dx, db = committed.piece(p.id).correctives[name]
-            p.correctives[name] = (dx.astype(float), db.astype(float))
+            p.correctives[name] = tuple(a.astype(float) for a in committed.piece(p.id).correctives[name])
         return previous
     model, glb = outfit.model, outfit.model.glb
     skeleton = H.Skeleton.from_glb(glb)
@@ -167,14 +188,17 @@ def resolve(outfit, pieces, records, request, committed):
     blob = outfit_blob(outfit, sc)
     body = posed_body(outfit.body, glb, model.joints, worlds)
     thicknesses = [outfit.fabrics[p.fabric]["thickness"] for p in sc.pieces]
+
+    def maps(piece, points):
+        return outfit.backstop_at(pieces[piece], points, body)
     shapes, record = bake(blob, sc.corrective_names.index(name), skeleton, H.rest_pose(glb, skeleton), key_pose, convexes,
-                          body, thicknesses, max_passes=request["max_passes"])
+                          maps, thicknesses, max_passes=request["max_passes"])
     if not record["converged"]:
         raise ValueError(f"corrective {name!r} did not converge in {record['passes']} passes: drift "
                          f"{record['drift_mm']} mm against fabric thickness {record['thickness_mm']} mm; the drape is "
                          "not an equilibrium of the runtime (see the shapes and the seat, G7 and G10)")
-    for p, (delta, turn) in zip(pieces, shapes):
-        p.correctives[name] = (delta, turn)
+    for p, shape in zip(pieces, shapes):
+        p.correctives[name] = shape
     return json.loads(json.dumps(dict(name=name, **source, convexes=request["convexes"], floor=FLOOR.tolist(), **record,
                                       key=key)))
 

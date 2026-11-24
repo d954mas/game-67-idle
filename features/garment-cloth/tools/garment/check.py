@@ -2,6 +2,7 @@
 
     python features/garment-cloth/tools/garment/check.py content/garments/<outfit>.py
         [--sidecar PATH] [--gates G1,...,G10] [--stages N] [--clips walk,sit] [--cards DIR] [--report FILE]
+        [--receipt PATH | --no-receipt] [--workers N]
 
 Prints one JSON finding per gate and piece (see gates.py), then a summary line, and exits 1 when an enforced finding
 fails: the same enforcement table the cook applies (gates.ENFORCED_FROM) for the stage the build holds, so for the
@@ -10,10 +11,14 @@ content to-do. --sidecar is the committed file to compare (default: beside the m
 failure's worst frame and one per corrective (the reference at its key without and with it, and the cloth the
 runtime holds on it). A clip name that is not one of the outfit's is refused.
 
+A complete check (every gate, every clip) writes the outfit's receipt (garment.receipt; default
+`content/garments/<outfit>.check.json` beside the script): the gates it ran, their findings and the hash of every input
+they read. The cook verifies that receipt instead of running the gates.
+
 The rebuild keeps a committed corrective whose recorded inputs all match (no host is needed for it) and names every
-input that differs when the committed sidecar is stale. Each corrective is gated at its key with the reference the
-game evaluates there (G4-G8 on rest + delta), and a clip whose manifest entry names a corrective the outfit lacks is
-reported ("correctives")."""
+input that differs when the committed sidecar is stale. A clip whose manifest entry names a corrective of the outfit
+is gated on the corrected reference at weight 1 over every frame, what the game shows; each corrective is also gated
+at its key (the bake's check), and a clip naming a corrective the outfit lacks is reported ("correctives")."""
 import argparse
 import copy
 import json
@@ -26,7 +31,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from garment import build as Bd, cards, gates as G, model as M  # noqa: E402
+from garment import build as Bd, cards, gates as G, model as M, receipt as R  # noqa: E402
 from garment.outfit import Outfit  # noqa: E402
 from garment.sidecar import read  # noqa: E402
 
@@ -112,6 +117,11 @@ def failure_card(outfit, finding, folder):
         name += f"-{finding['corrective']}"
     else:
         matrices = pose_matrices(outfit, worst["clip"], worst["t"])
+        if worst.get("corrective"):
+            # A clip the game plays with a corrective fails on the corrected reference: draw that one.
+            piece = copy.copy(piece)
+            piece.x = piece.x + piece.correctives[worst["corrective"]][0]
+            name += f"-with-{worst['corrective']}"
     name += ".png"
     value = f"{worst['value_mm']} mm" if worst.get("value_mm") is not None else ""
     if finding.get("corrective"):
@@ -152,6 +162,8 @@ def main(argv=None):
     parser.add_argument("--report", type=Path)
     parser.add_argument("--workers", type=int)
     parser.add_argument("--stages", type=int, help="build the script's content up to this stage")
+    parser.add_argument("--receipt", type=Path, help="where a complete check writes its receipt")
+    parser.add_argument("--no-receipt", action="store_true")
     args = parser.parse_args(argv)
     if args.stages is not None:
         os.environ["GARMENT_STAGES"] = str(args.stages)
@@ -172,11 +184,20 @@ def main(argv=None):
             print(json.dumps(dict(card=card)))
     for f in findings:
         print(json.dumps(f))
-    failed = [f for f in findings if f.get("failed") and f["enforced"]]
-    reported = [f for f in findings if f.get("failed") and not f["enforced"]]
+    stage = int(read(data).build["stages"])
+    failed = G.blocking(findings, stage)
+    reported = [f for f in findings if f.get("failed") and f not in failed]
     print(f"{args.script.name}: {len(failed)} enforced failures, {len(reported)} reported", file=sys.stderr)
     if args.report:
         args.report.write_text(json.dumps(findings, indent=1) + "\n", encoding="utf-8")
+    wanted = set(args.gates.split(","))
+    if not args.no_receipt and wanted >= set(G.ALL_GATES) and not args.clips:
+        gates_run = wanted | {f["gate"] for f in findings}
+        path = R.write(args.receipt or R.path_for(args.script), outfit.root, args.script, committed, read(data), stage,
+                       gates_run, [{k: v for k, v in f.items() if k != "card"} for f in findings])
+        print(f"{args.script.name}: receipt {path}", file=sys.stderr)
+    elif not args.no_receipt:
+        print(f"{args.script.name}: a partial check (--gates or --clips) writes no receipt", file=sys.stderr)
     return 1 if failed else 0
 
 

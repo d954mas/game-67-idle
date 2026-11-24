@@ -7,6 +7,10 @@ Each gate returns findings, one per piece (or pair), as plain dicts:
 breaking it there, worst first. `samples` counts what the gate measured; a gate that measured nothing did not run
 (`not_run` gives the reason), and fails where it is enforced.
 
+A clip whose manifest entry names a corrective the outfit has is gated on what the game shows while it plays: the
+corrected reference at weight 1 (rest + delta, its body direction, its key backstop) over every frame of the clip,
+never the plain reference. Each corrective is also gated at its own key, the bake's check of its drape.
+
 Which gates are enforced is one table (`ENFORCED_FROM`), read by `check.py` and the cook alike, so the exit code of a
 check is the cook's decision for the outfit's declared stage. Stage 1 is the content shipped before the professional
 scheme: it is held to what the runtime needs to load it and draw it without tearing (the rebuild, G1, G3, G9 and the
@@ -56,11 +60,20 @@ def enforced_gates(stage):
     return {g for g in ALL_GATES if enforced(g, stage)}
 
 
+def blocking(findings, stage):
+    """The findings that stop the check and the cook of an outfit declared at `stage`: those of a gate the table
+    enforces there that failed, measured nothing or could not be decided. check.py's exit code and the cook's
+    acceptance of a receipt are this one rule."""
+    return [f for f in findings
+            if enforced(f["gate"], stage) and (f.get("failed") or f.get("not_run") or f.get("undecided"))]
+
+
 @dataclass
 class GateData:
     """Everything the gates read, picklable for worker processes: the sidecar bytes, the model path, the body
     (points, faces, weights, complete, rim faces), the body shapes, the fabrics per piece, the clips [(name, path)],
-    the declared stage and, per body vertex, the gap a seat must leave under it (NaN where no garment covers it)."""
+    the declared stage, per body vertex the gap a seat must leave under it (NaN where no garment covers it) and
+    {clip: corrective} for the clips the game plays with a corrective of the outfit."""
     sidecar: bytes
     model: str
     body: tuple
@@ -71,6 +84,7 @@ class GateData:
     seats: dict = field(default_factory=dict)
     stage: int = 1000000
     seat_gap: np.ndarray = None
+    clip_correctives: dict = field(default_factory=dict)
 
 
 def shapes_from(colliders):
@@ -140,6 +154,27 @@ def _frame(record, clip, t, violation, vertices=None):
                                vertices=[int(v) for v in np.asarray(ids).ravel()][:12])
 
 
+def clip_correctives(sc, manifest):
+    """{clip: corrective} of a clip manifest for the correctives the sidecar has: the clips the game plays on the
+    corrected reference (manifest `game.corrective`)."""
+    import json
+    if manifest is None:
+        return {}
+    have = set(sc.corrective_names)
+    clips = json.loads(Path(manifest).read_text(encoding="utf-8"))["animations"]
+    return {c["name"]: c["game"]["corrective"] for c in clips if c.get("game", {}).get("corrective") in have}
+
+
+def configuration(piece, corrective):
+    """(rest points, rest body direction, d, R) of a piece's reference at weight 1 of a corrective, or the plain ones
+    (corrective None), float64."""
+    points, b = piece.points.astype(float), piece.b.astype(float)
+    if corrective is None:
+        return points, b, piece.d.astype(float), piece.R.astype(float)
+    delta, turn, key = piece.correctives[corrective]
+    return points + delta, b + turn, key[:, 0].astype(float), key[:, 1].astype(float)
+
+
 def corrective_specs(sc, clips):
     """A clip spec per corrective of a sidecar, for clip_gates: its key and the record of its bake."""
     paths = dict(clips)
@@ -148,16 +183,20 @@ def corrective_specs(sc, clips):
 
 def clip_gates(data, clip, gates=PER_FRAME):
     """The per-frame gates over one clip (or the rest pose), or over a corrective's corrected reference at its key:
-    {(gate, piece[, corrective]): record}. Every gate asked for gets a record, so one that has nothing to measure here
-    (no body shapes, no layer hit) shows as not run instead of passing."""
+    {(gate, piece[, corrective]): record}. A clip the game plays with a corrective is gated on the corrected
+    reference at weight 1 (`data.clip_correctives`). Every gate asked for gets a record, so one that has nothing to
+    measure here (no body shapes, no layer hit) shows as not run instead of passing."""
     pose = Pose(data)
     times, matrices = pose.matrices(clip)
-    name = clip[0]
-    corrective = name[len(CORRECTIVE):] if name.startswith(CORRECTIVE) else None
-    if corrective is not None:
-        # The reference the game evaluates while the corrective's clip holds: weight 1. A seat is the game's own gate.
+    name = clip_name = clip[0]
+    at_key = name.startswith(CORRECTIVE)
+    corrective = name[len(CORRECTIVE):] if at_key else data.clip_correctives.get(name)
+    if at_key:
+        # The bake's own check of its drape at the key. A seat is the clip's gate, run where the clip itself is.
         gates = tuple(g for g in gates if g != "G10")
-        name = f"{clip[2].get('clip', 'pose')} with {corrective}"
+        name = f"{clip[2].get('clip', 'pose')} with {corrective} at its key"
+    elif corrective is not None:
+        name = f"{name} with {corrective}"
     body_points, body_faces, body_weights, complete = data.body[:4]
     rim_faces = data.body[4] if len(data.body) > 4 else None
     # A G7 sample whose reference is already deeper in the skin than its r is G4's finding, but only where G4 decides.
@@ -170,13 +209,11 @@ def clip_gates(data, clip, gates=PER_FRAME):
         centres.append(np.einsum("fab,b->fa", matrices[:, j, :3, :], np.r_[centre, 1.0]))
         radii.append(radius)
     in_cone = {i for cone in data.shapes["cones"] for i in cone}
-    refs, dirs = {}, {}
+    refs, dirs, rests, backstops = {}, {}, {}, {}
     for p in pose.sc.pieces:
         w = pose.dense[p.id]
-        points, b = p.points.astype(float), p.b.astype(float)
-        if corrective is not None:
-            delta, turn = p.correctives[corrective]
-            points, b = points + delta, b + turn
+        points, b, d, R = configuration(p, corrective)
+        rests[p.id], backstops[p.id] = points, (d, R)
         refs[p.id] = M.skin_points(points, w, matrices)
         dirs[p.id] = M.skin_directions(b, w, matrices)
     for p in pose.sc.pieces:
@@ -234,16 +271,16 @@ def clip_gates(data, clip, gates=PER_FRAME):
                 continue
             r = p.r.astype(float)
             t_fab = float(data.fabrics[p.id]["thickness"])
-            limbs = side_limbs(data.shapes, pose.joints, rest_m[0], p.points.astype(float), r, t_fab)
+            limbs = side_limbs(data.shapes, pose.joints, rest_m[0], rests[p.id], r, t_fab)
             for k, t in enumerate(times):
                 violation = np.zeros(len(r))
                 for limb in limbs:
                     violation = np.maximum(violation, limb.crossing(refs[p.id][k], matrices[k], r, t_fab))
                 _frame(rec, name, t, violation)
-    if "G10" in gates and name in data.seats:
+    if "G10" in gates and clip_name in data.seats:
         # The game's seat check: where a garment covers the body, the posed body must stay above the seat top by the
         # room the runtime keeps for the fabric between them (seat_gap: twice the covering fabric's thickness).
-        planes = np.asarray(data.seats[name], float).reshape(-1, 4)
+        planes = np.asarray(data.seats[clip_name], float).reshape(-1, 4)
         covered = np.flatnonzero(np.isfinite(data.seat_gap)) if data.seat_gap is not None else np.zeros(0, int)
         rec = out[("G10", "body")] = _record("G10", "body")
         posed = M.skin_points(body_points, body_weights, matrices)
@@ -262,8 +299,9 @@ def clip_gates(data, clip, gates=PER_FRAME):
                 continue
             corners = i.faces[hit_face[hit]]
             r_in = np.einsum("nk,nk->n", hit_bary[hit], i.r.astype(float)[corners])
-            # The outer comes toward the inner by at most its backstop distance, and not at all where it is pinned.
-            reach = np.minimum(o.d, o.r).astype(float)[hit]
+            # The outer comes toward the inner by at most its backstop distance (at this configuration), and not at all
+            # where it is pinned.
+            reach = np.minimum(backstops[outer_id][0], o.r.astype(float))[hit]
             # The fabric thickness keeps moving cloth apart; where neither side moves the model's own distance holds
             # and only the order matters.
             moves = (reach + r_in) > 0
@@ -272,8 +310,13 @@ def clip_gates(data, clip, gates=PER_FRAME):
                 inner_point = np.einsum("nk,nkj->nj", hit_bary[hit], refs[inner_id][k][corners])
                 gap = np.einsum("nj,nj->n", inner_point - refs[outer_id][k][hit], dirs[outer_id][k][hit])
                 _frame(rec, name, t, need - gap, vertices=hit)
-    if corrective is not None:
+    if at_key:
         out = {(*key, corrective): dict(rec, corrective=corrective) for key, rec in out.items()}
+    elif corrective is not None:
+        # The worst frame names what it was measured on, so a card can draw the corrected reference in that clip.
+        for rec in out.values():
+            if rec["worst"]:
+                rec["worst"].update(clip=clip_name, corrective=corrective)
     return out
 
 
@@ -609,7 +652,8 @@ def gate_data(data, root, body=None):
                   shapes=shapes_from(colliders), fabrics=fabrics, clips=clips,
                   looks=[str(root / p) for p in check.get("looks", [])],
                   seats={clip: np.asarray(planes, float) for clip, planes in check.get("seats", {}).items()},
-                  stage=int(sc.build["stages"]))
+                  stage=int(sc.build["stages"]),
+                  clip_correctives=clip_correctives(sc, root / check["clips"] if check.get("clips") else None))
     return gd, model, body, sc
 
 

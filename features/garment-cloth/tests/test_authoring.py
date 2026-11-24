@@ -82,11 +82,15 @@ def body_scene():
     return scene
 
 
+MODEL_RECORD = {"id": "model", "origin": "mine", "license": "Studio-made test model"}
+
+
 class Scene:
     def __init__(self, data):
         self.dir = tempfile.TemporaryDirectory()
         self.root = Path(self.dir.name)
         (self.root / "model.glb").write_bytes(data)
+        (self.root / "model.provenance.json").write_text(json.dumps(MODEL_RECORD), encoding="utf-8")
 
     def outfit(self, body=("skin",), **kwargs):
         return Outfit(None, self.root, "model.glb", body=list(body) if isinstance(body, tuple) else body,
@@ -128,7 +132,7 @@ def posed(outfit, matrices):
     per-frame gates then see the reference in that pose."""
     built = outfit.built()
     for p in built.pieces:
-        p.correctives["pose"] = (np.zeros_like(p.points), np.zeros_like(p.points))
+        p.correctives["pose"] = (np.zeros_like(p.points), np.zeros_like(p.points), np.column_stack([p.d, p.R]))
     record = dict(name="pose", pose=dict(joints=JOINTS, matrices=np.asarray(matrices, float).tolist()))
     built.correctives = [record]
     return sc.write(built), (gates.CORRECTIVE + "pose", None, record)
@@ -145,8 +149,9 @@ class TestSidecar(unittest.TestCase):
             p.paint("R", plane, np.inf)
             built = o.built()
             piece = built.piece("skirt")
+            key = np.column_stack([piece.d * 0.5, np.where(piece.R > 0, np.inf, 0.0)]).astype(np.float32)
             piece.correctives["sit"] = (np.where(piece.r[:, None] == 0, 0.0, np.full_like(piece.points, 0.01)),
-                                        np.zeros_like(piece.points))
+                                        np.zeros_like(piece.points), key)
             built.correctives = [dict(name="sit", clip="sit", t=1.5)]
             data = sc.write(built)
             back = sc.read(data)
@@ -154,6 +159,7 @@ class TestSidecar(unittest.TestCase):
             piece = back.piece("skirt")
             self.assertTrue(np.isinf(piece.R).sum() == 3)
             self.assertEqual(list(piece.correctives), ["sit"])
+            np.testing.assert_array_equal(piece.correctives["sit"][2], key)
             self.assertEqual(back.correctives[0]["clip"], "sit")
             self.assertEqual(back.joint_names, JOINTS)
             np.testing.assert_array_equal(back.inverse_bind_matrices()[1], np.eye(4))
@@ -163,6 +169,13 @@ class TestSidecar(unittest.TestCase):
             self.assertEqual(sc.read(path.read_bytes()).piece("skirt").points.tobytes(), piece.points.tobytes())
             self.assertEqual(path.name, "model.cloth.glb")
             record = json.loads(path.with_name("model.cloth.provenance.json").read_text(encoding="utf-8"))
+            # A derived file carries its model's origin and license and names the record it took them from.
+            self.assertEqual((record["origin"], record["license"]), (MODEL_RECORD["origin"], MODEL_RECORD["license"]))
+            self.assertEqual((record["source"], record["source_record"]), ("model.glb", "model.provenance.json"))
+            (scene.root / "model.provenance.json").unlink()
+            with self.assertRaisesRegex(ValueError, "no asset record"):
+                o.write()
+            (scene.root / "model.provenance.json").write_text(json.dumps(MODEL_RECORD), encoding="utf-8")
             self.assertEqual(record["sha256"], Bd.sha256(path))
             self.assertEqual(record["integrity"], dict(sha256=Bd.sha256(path), bytes=path.stat().st_size))
             self.assertTrue(record["license"] and record["origin"])
@@ -296,8 +309,8 @@ class TestMaps(unittest.TestCase):
         self.assertTrue(np.all(p.R[p.pins] == 0))
 
     def test_the_backstop_does_not_depend_on_the_order_the_script_wrote_r(self):
-        # The order trap of the review: a backstop measured while r is small, then r opened by a second gradient,
-        # left R = 0 where the cloth could now reach the body. The build derives the backstop from the final state.
+        # A backstop measured while r is still small would keep R = 0 where a later gradient lets the cloth reach the
+        # body; the build derives it from the final state, so the order of the script's writes cannot matter.
         def build(open_after):
             scene = Scene(cylinder_scene())
             try:
@@ -688,7 +701,7 @@ class TestCook(unittest.TestCase):
         piece = built.piece("skirt")
         free = piece.r[:, None] > 0
         inward = np.where(free, (piece.points * [1, 0, 1]) * -(CLOTH_R - 0.5 * BODY_R) / CLOTH_R, 0.0)
-        piece.correctives["in"] = (inward.astype(np.float32), np.zeros_like(piece.points))
+        piece.correctives["in"] = (inward.astype(np.float32), np.zeros_like(piece.points), np.column_stack([piece.d, piece.R]))
         built.correctives = [dict(name="in", pose=dict(joints=JOINTS, matrices=np.tile(np.eye(4), (3, 1, 1)).tolist()))]
         data = sc.write(built)
         gd = gate_data(self.o, data, complete=True)
@@ -699,6 +712,91 @@ class TestCook(unittest.TestCase):
         self.assertEqual(set(corrected), {("G4", "skirt", "in")})
         self.assertTrue(corrected[("G4", "skirt", "in")]["failed"])
         self.assertEqual(corrected[("G4", "skirt", "in")]["corrective"], "in")
+
+    def test_a_clip_the_game_plays_with_a_corrective_is_gated_on_the_corrected_reference(self):
+        # A held clip (three keys, no motion) whose manifest corrective draws the free cloth halfway into the body:
+        # gated plain it passes; gated as the game plays it, on the corrected reference, every frame fails, and the
+        # plain reference of that clip is not gated at all.
+        from synthetic import glb as write_glb
+        cloth_p, cloth_f = tube(0.0, CLOTH_R, 0.40, 0.90, around=24, rows=12)
+        clip = write_glb([("cloth", cloth_p, cloth_f, *lanes(len(cloth_p), 0), {})], JOINTS,
+                         animation={"left": ([0.0, 0.5, 1.0], np.zeros((3, 3)))})
+        (self.scene.root / "held.glb").write_bytes(clip)
+        skirt(self.o)
+        built = self.o.built()
+        piece = built.piece("skirt")
+        free = piece.r[:, None] > 0
+        inward = np.where(free, (piece.points * [1, 0, 1]) * -(CLOTH_R - 0.5 * BODY_R) / CLOTH_R, 0.0)
+        piece.correctives["in"] = (inward.astype(np.float32), np.zeros_like(piece.points), np.column_stack([piece.d, piece.R]))
+        built.correctives = [dict(name="in", clip="held", t=0.5)]
+        data = sc.write(built)
+        gd = gate_data(self.o, data, complete=True)
+        spec = ("held", self.scene.root / "held.glb")
+        plain = gates.clip_gates(gd, spec, ("G4",))
+        self.assertFalse(plain[("G4", "skirt")]["failed"])
+        self.assertEqual(plain[("G4", "skirt")]["frames"], 3)
+        gd.clip_correctives = {"held": "in"}
+        shown = gates.clip_gates(gd, spec, ("G4",))
+        record = shown[("G4", "skirt")]
+        self.assertEqual((record["frames"], record["frames_failed"]), (3, 3))
+        self.assertEqual((record["worst"]["clip"], record["worst"]["corrective"]), ("held", "in"))
+        self.assertEqual(list(record["clips"]), ["held with in"])
+        # The manifest names the clips: only correctives the sidecar has are mapped.
+        (self.scene.root / "clips.json").write_text(json.dumps({"animations": [
+            {"name": "held", "resource": "held.glb", "game": {"corrective": "in"}},
+            {"name": "other", "resource": "held.glb", "game": {"corrective": "missing"}}]}), encoding="utf-8")
+        self.assertEqual(gates.clip_correctives(sc.read(data), self.scene.root / "clips.json"), {"held": "in"})
+
+    def test_the_layer_gate_reads_the_backstop_of_the_corrected_reference(self):
+        inner = skirt(self.o)
+        outer = self.o.piece("over", 2, "plain")
+        x, f = tube(0.0, 0.16, 0.55, 0.88, around=24, rows=8)
+        outer.set_mesh(x, f)
+        outer.pin(outer.f.y > 0.879)
+        outer.weights_transfer(Surface(inner.x, inner.faces, inner.w, inner.joints))
+        outer.gradient(rate=0.5, cap=0.2)
+        self.o.layer("over", "skirt")
+        built = self.o.built()
+        # A corrective that moves nothing but lets the outer reach toward the inner by 5 cm at its key: the layer
+        # inequality that holds on the rest backstop breaks on the key's.
+        for piece in built.pieces:
+            key = np.column_stack([piece.d, piece.R])
+            if piece.id == "over":
+                key[piece.r > 0, 0] = 0.05
+            piece.correctives["reach"] = (np.zeros_like(piece.points), np.zeros_like(piece.points), key)
+        built.correctives = [dict(name="reach", pose=dict(joints=JOINTS, matrices=np.tile(np.eye(4), (3, 1, 1)).tolist()))]
+        data = sc.write(built)
+        gd = gate_data(self.o, data)
+        self.assertFalse(gates.clip_gates(gd, (gates.REST, None), ("G8",))[("G8", "over>skirt")]["failed"])
+        spec, = gates.corrective_specs(sc.read(data), [])
+        self.assertTrue(gates.clip_gates(gd, spec, ("G8",))[("G8", "over>skirt", "reach")]["failed"])
+
+    def test_the_backstop_rule_at_a_key_is_the_build_rule(self):
+        # Measured on the rest configuration against the rest body, the key rule gives the maps the build wrote,
+        # layer rule and overrides included.
+        inner = skirt(self.o)
+        outer = self.o.piece("over", 2, "plain")
+        x, f = tube(0.0, 0.16, 0.55, 0.88, around=24, rows=8)
+        outer.set_mesh(x, f)
+        outer.pin(outer.f.y > 0.879)
+        outer.weights_transfer(Surface(inner.x, inner.faces, inner.w, inner.joints))
+        outer.gradient(rate=0.5, cap=0.2)
+        outer.paint("R", outer.f.y < 0.6, 0.0)
+        self.o.layer("over", "skirt")
+        for p in self.o.resolve()[0]:
+            b, d, R = self.o.backstop_at(p, p.x, self.o.body)
+            np.testing.assert_array_equal(d, p.d)
+            np.testing.assert_array_equal(R, p.R)
+            np.testing.assert_array_equal(b, p.b)
+
+    def test_seats_given_as_a_function_are_build_inputs(self):
+        (self.scene.root / "seat.json").write_text(json.dumps({"planes": [[0, 1, 0, -0.4]]}), encoding="utf-8")
+
+        def seats(read):
+            return {"sit": json.loads(read("seat.json").read_text(encoding="utf-8"))["planes"]}
+        o = self.scene.outfit(seats=seats)
+        self.assertIn("seat.json", o.inputs)
+        self.assertEqual(o.seats, {"sit": [[0, 1, 0, -0.4]]})
 
     def test_a_seated_clip_without_a_seat_is_refused(self):
         (self.scene.root / "clips.json").write_text(json.dumps({"animations": [
@@ -714,6 +812,70 @@ class TestCook(unittest.TestCase):
         o.corrective("sit", clip="sit", t=1.0, convexes=[])
         o.corrective("walk", clip="walk", t=0.5)
         self.assertEqual([r["convexes"] for r in o.corrective_requests], [[], []])
+
+
+class TestReceipt(unittest.TestCase):
+    """check.py writes the receipt the cook trusts instead of running the gates."""
+
+    SCRIPT = """import sys
+sys.path.insert(0, {tools!r})
+from garment.outfit import Outfit
+FABRIC = {fabric!r}
+o = Outfit(__file__, {root!r}, "model.glb", body=["skin"], fabrics={{"plain": FABRIC}})
+p = o.piece("skirt", 1, "plain")
+p.create("cloth", 120)
+p.pin(p.from_render(~p.render.labelled | (p.render.height <= 0.1)))
+p.weights_transfer(p.render.surface(), nearest=4)
+p.gradient(rate=0.5, cap=0.2)
+o.write()
+"""
+
+    def test_a_check_writes_a_receipt_the_cook_verifies(self):
+        import runpy
+        from garment import check, receipt as R
+        scene = Scene(cylinder_scene())
+        try:
+            script = scene.root / "outfit.py"
+            script.write_text(self.SCRIPT.format(tools=str(HERE.parent / "tools"), fabric=FABRIC, root=str(scene.root)),
+                              encoding="utf-8")
+            (scene.root / "outfit.json").write_text(json.dumps({"stage": 1}), encoding="utf-8")
+            runpy.run_path(str(script), run_name="__main__")
+            self.assertEqual(check.main([str(script), "--workers", "1"]), 0)
+            path = R.path_for(script)
+            first = path.read_bytes()
+            findings = R.verify(path, scene.root, 1, "model.cloth.glb")
+            self.assertIn("G1", {f["gate"] for f in findings})
+            doc = json.loads(first)
+            self.assertTrue({"outfit.py", "model.glb", "model.cloth.glb"} <= set(doc["files"]))
+            self.assertIn("features/garment-cloth/tools/garment/gates.py", doc["modules"])
+            # The same check writes the same bytes.
+            self.assertEqual(check.main([str(script), "--workers", "1"]), 0)
+            self.assertEqual(path.read_bytes(), first)
+            with self.assertRaisesRegex(ValueError, "checked at stage 1"):
+                R.verify(path, scene.root, 2, "model.cloth.glb")
+            # A changed input makes the receipt stale, and the refusal names it.
+            sidecar = scene.root / "model.cloth.glb"
+            kept = sidecar.read_bytes()
+            sidecar.write_bytes(kept + b"\0")
+            with self.assertRaisesRegex(ValueError, "stale .*file model.cloth.glb"):
+                R.verify(path, scene.root, 1, "model.cloth.glb")
+            sidecar.write_bytes(kept)
+            # A recorded failure of a gate the stage enforces is refused; a reported one is not.
+            doc["findings"].append(dict(gate="G1", piece="skirt", failed=True, enforced=True))
+            path.write_text(json.dumps(doc), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "records enforced failures: G1 skirt"):
+                R.verify(path, scene.root, 1, "model.cloth.glb")
+            doc["findings"][-1]["gate"] = "G4"
+            path.write_text(json.dumps(doc), encoding="utf-8")
+            R.verify(path, scene.root, 1, "model.cloth.glb")
+            path.unlink()
+            with self.assertRaisesRegex(ValueError, "no check receipt"):
+                R.verify(path, scene.root, 1, "model.cloth.glb")
+            # A partial check writes none.
+            self.assertEqual(check.main([str(script), "--gates", "G1", "--workers", "1"]), 0)
+            self.assertFalse(path.exists())
+        finally:
+            scene.close()
 
 
 class TestStale(unittest.TestCase):

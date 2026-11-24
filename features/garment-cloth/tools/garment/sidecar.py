@@ -4,7 +4,9 @@ It holds the skeleton nodes of the model's skin (same names, rest transforms and
 skinned mesh `piece:<id>` (`extras`: label, fabric) whose primitive carries
 - POSITION (rest, model space), JOINTS_0 (u16) and WEIGHTS_0 on the model's skin joints;
 - _MAX_DISTANCE r, _BACKSTOP_DISTANCE d, _BACKSTOP_RADIUS R (0 off, +inf the plane form), _BODY_DIRECTION b;
-- one morph target per corrective (POSITION and _BODY_DIRECTION deltas), named by `extras.targetNames`.
+- one morph target per corrective, named by `extras.targetNames`: POSITION and _BODY_DIRECTION deltas, and
+  _BACKSTOP_DISTANCE and _BACKSTOP_RADIUS holding the backstop at the corrective's key as values, not deltas (an
+  R of 0 is off and +inf the plane form, which no delta can carry).
 The root `extras` hold `build` (the hash of every input, see garment.build), `layers` ([outer, inner] piece ids),
 `correctives`: per corrective, in the order every piece's morph targets follow, the record of its bake (name, source
 key pose, convexes, passes, residual drift per piece, the hashes it was baked from), `check` (what the gates read
@@ -24,7 +26,8 @@ MAPS = (("r", "_MAX_DISTANCE"), ("d", "_BACKSTOP_DISTANCE"), ("R", "_BACKSTOP_RA
 @dataclass
 class Piece:
     """One sim mesh as stored: float32 rest points (V, 3), triangles (F, 3), four joint lanes (u16) and weights, the
-    maps r, d, R (V,) and b (V, 3), and correctives {name: (position delta (V, 3), direction delta (V, 3))}."""
+    maps r, d, R (V,) and b (V, 3), and correctives {name: (position delta (V, 3), direction delta (V, 3), backstop
+    (d, R) at the key (V, 2))}."""
     id: str
     label: int
     fabric: str
@@ -142,7 +145,10 @@ def write(sidecar):
         mesh = {"name": f"piece:{p.id}", "primitives": [primitive], "extras": {"label": int(p.label), "fabric": p.fabric}}
         if p.correctives:
             primitive["targets"] = [{"POSITION": buf.add(dx, FLOAT, "VEC3", bounds=True),
-                                     "_BODY_DIRECTION": buf.add(db, FLOAT, "VEC3")} for dx, db in p.correctives.values()]
+                                     "_BODY_DIRECTION": buf.add(db, FLOAT, "VEC3"),
+                                     "_BACKSTOP_DISTANCE": buf.add(np.reshape(bs, (n, 2))[:, :1], FLOAT, "SCALAR"),
+                                     "_BACKSTOP_RADIUS": buf.add(np.reshape(bs, (n, 2))[:, 1:], FLOAT, "SCALAR")}
+                                    for dx, db, bs in p.correctives.values()]
             mesh["weights"] = [0.0] * len(p.correctives)
             mesh["extras"]["targetNames"] = list(p.correctives)
         meshes.append(mesh)
@@ -171,9 +177,9 @@ def _check(p):
             raise ValueError(f"piece {p.id}: {name} has shape {np.shape(getattr(p, name))}, expected {shape}")
     if p.faces.ndim != 2 or p.faces.shape[1] != 3 or p.faces.min() < 0 or p.faces.max() >= n:
         raise ValueError(f"piece {p.id}: triangles must index its {n} points")
-    for name, (dx, db) in p.correctives.items():
-        if np.shape(dx) != (n, 3) or np.shape(db) != (n, 3):
-            raise ValueError(f"piece {p.id}: corrective {name} needs (V, 3) deltas")
+    for name, shape in p.correctives.items():
+        if len(shape) != 3 or np.shape(shape[0]) != (n, 3) or np.shape(shape[1]) != (n, 3) or np.shape(shape[2]) != (n, 2):
+            raise ValueError(f"piece {p.id}: corrective {name} needs (V, 3) deltas and the (V, 2) key backstop")
 
 
 def read(data):
@@ -215,7 +221,12 @@ def read(data):
         targets = prim.get("targets", [])
         if len(names) != len(targets):
             raise ValueError(f"{mesh['name']}: every morph target needs a name")
-        correctives = {name: (accessor(t["POSITION"]), accessor(t["_BODY_DIRECTION"])) for name, t in zip(names, targets)}
+        if any(set(t) != {"POSITION", "_BODY_DIRECTION", "_BACKSTOP_DISTANCE", "_BACKSTOP_RADIUS"} for t in targets):
+            raise ValueError(f"{mesh['name']}: a corrective target holds the position and direction deltas and the key "
+                             "backstop")
+        correctives = {name: (accessor(t["POSITION"]), accessor(t["_BODY_DIRECTION"]),
+                              np.concatenate([accessor(t["_BACKSTOP_DISTANCE"]), accessor(t["_BACKSTOP_RADIUS"])], 1))
+                       for name, t in zip(names, targets)}
         pieces.append(Piece(id=mesh["name"][len("piece:"):], label=int(mesh["extras"]["label"]),
                             fabric=mesh["extras"]["fabric"], points=accessor(a["POSITION"]),
                             faces=accessor(prim["indices"]).reshape(-1, 3).astype(np.int64),

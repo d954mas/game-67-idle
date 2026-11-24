@@ -104,17 +104,19 @@ typedef struct {
 } ClothMetrics;
 
 /* All points are in one Y-up meter space and sampled at the substep end. max_distance is the runtime r of every
-   vertex (NULL uses the mesh's); a vertex with r = 0 is kinematic this substep and sits on its reference. */
+   vertex (NULL uses the mesh's); a vertex with r = 0 is kinematic this substep and sits on its reference. backstop is
+   the runtime (d, R) of every vertex (NULL uses the mesh's): a corrective moves the body behind the reference too. */
 bool cloth_frame_valid(const ClothMesh *mesh, const ClothMaterial *m, float dt, const ClothReference *ref,
-                       const float *max_distance, const ClothShapes *shapes);
+                       const float *max_distance, const ClothBackstop *backstop, const ClothShapes *shapes);
 /* x = reference and v = 0. A free vertex inside a shape leaves along -b, the side of the body its direction names,
    since there is no previous position to judge the side by; inside a convex it leaves through the nearest face. */
 bool cloth_reset(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, const ClothReference *ref,
-                 const float *max_distance, const ClothShapes *shapes);
+                 const float *max_distance, const ClothBackstop *backstop, const ClothShapes *shapes);
 /* NULL frame: an inertial frame without fictitious forces; NULL shapes: nothing to collide with. */
 void cloth_step(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, float dt, const ClothFrame *frame,
-                const ClothReference *ref, const float *max_distance, const ClothShapes *shapes);
-ClothMetrics cloth_measure(const ClothState *s, const ClothMesh *mesh, const ClothMaterial *m,
-                           const ClothReference *ref, const float *max_distance, const ClothShapes *shapes);
+                const ClothReference *ref, const float *max_distance, const ClothBackstop *backstop,
+                const ClothShapes *shapes);
+ClothMetrics cloth_measure(const ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, const ClothReference *ref,
+                           const float *max_distance, const ClothBackstop *backstop, const ClothShapes *shapes);
 
 #endif

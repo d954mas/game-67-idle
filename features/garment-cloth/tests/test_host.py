@@ -26,9 +26,10 @@ MATERIAL = dict(density=0.33, stretch=8e-6, bend=450.0, drag=0.4, thickness=THIC
                 weft_max_strain=0.18, friction=0.4, compression_limit=0.25)
 
 
-def sheet_over_cylinder(correctives=()):
-    """A 0.4 m sheet 6 mm above a cylinder of radius 0.1 along Z, pinned along the cylinder's top line, on one joint;
-    with corrective names, each a zero shape to store a bake in."""
+def sheet_over_cylinder(correctives=(), rate=0.5):
+    """A 0.4 m sheet 6 mm above a cylinder of radius 0.1 along Z, pinned along the cylinder's top line, on one joint,
+    free to leave its reference by rate x its distance from the pins; with corrective names, each a shape that changes
+    nothing (zero deltas, the rest backstop at the key) to store a bake in."""
     n = 9
     xs = np.linspace(-0.2, 0.2, n)
     points = np.array([(x, 0.11, z) for z in xs for x in xs])
@@ -36,7 +37,7 @@ def sheet_over_cylinder(correctives=()):
              for a, b, c, d in [(j * n + i, j * n + i + 1, (j + 1) * n + i, (j + 1) * n + i + 1)]
              for t in ((a, c, d), (a, d, b))]
     pins = [j * n + n // 2 for j in range(n)]
-    r = 0.5 * np.abs(points[:, 0])
+    r = rate * np.abs(points[:, 0])
     toward = -points * [1, 1, 0]
     direction = toward / np.linalg.norm(toward, axis=1, keepdims=True)
     # The backstop is the cylinder: d is the gap to its surface, R its radius.
@@ -45,7 +46,9 @@ def sheet_over_cylinder(correctives=()):
     mesh = cook_mesh("sheet", points, faces, pins, wearable=True, tether_slack=1.12, max_distance=r, backstop=backstop)
     skin = dict(bone=np.zeros((len(points), 4), int), weight=np.tile([1.0, 0, 0, 0], (len(points), 1)))
     piece = dict(id="sheet", mesh=mesh, skin=skin, direction=direction, material=MATERIAL, render_vertices=len(points),
-                 linear_inertia=0.45, angular_inertia=0.35, correctives=np.zeros((len(correctives), len(points), 6)))
+                 linear_inertia=0.45, angular_inertia=0.35,
+                 correctives=np.concatenate([np.zeros((len(correctives), len(points), 6)),
+                                             np.broadcast_to(backstop, (len(correctives), len(points), 2))], 2))
     identity = np.eye(4)[:3].ravel()
     return encode("cylinder", [piece], bones=[("root", identity)],
                   spheres=[(0, (0, 0, -0.3), 0.1), (0, (0, 0, 0.3), 0.1)], cones=[(0, 1)], correctives=correctives)
@@ -116,17 +119,21 @@ class TestHost(unittest.TestCase):
         free = (piece["mesh"]["max_distance"] > 0)[:, None]
         delta = np.where(free, [0.0, 0.05, 0.0], 0.0)
         pose = turned(0.3)
+        key_backstop = np.asarray(piece["mesh"]["backstop"], float) * [2.0, 1.0]
         with Host(blob, self.skeleton, LIBRARY) as host:
             self.assertEqual(host.corrective_count, 1)
-            host.set_corrective(0, 0, delta, np.zeros_like(delta))
+            host.set_corrective(0, 0, delta, np.zeros_like(delta), key_backstop)
             host.step(pose, 0.0, reset=True, weights=[1.0])
             x, b = host.reference(0)
             np.testing.assert_allclose(x, (piece["mesh"]["rest"] + delta) @ pose[0, :3, :3].T, atol=1e-6)
             np.testing.assert_allclose(b, piece["direction"] @ pose[0, :3, :3].T, atol=1e-6)
+            # At weight 1 the solver holds the key's backstop, as stored.
+            np.testing.assert_array_equal(host.backstop(0), key_backstop.astype(np.float32))
             # Lifted clear of the cylinder, the reset puts the cloth on that reference.
             np.testing.assert_allclose(host.positions(0), x, atol=1e-6)
             host.step(pose, 0.0, reset=True, weights=[0.0])
             np.testing.assert_allclose(host.reference(0)[0], piece["mesh"]["rest"] @ pose[0, :3, :3].T, atol=1e-6)
+            np.testing.assert_array_equal(host.backstop(0), piece["mesh"]["backstop"])
 
     def test_a_drape_stored_as_a_corrective_is_the_reference_at_its_key(self):
         blob = sheet_over_cylinder(["drape"])
@@ -136,27 +143,81 @@ class TestHost(unittest.TestCase):
             drape = bake(host, turned(0.0), key, fixed=[[0, 1, 0, 0.3]], settle_s=1.0)
             shapes = deltas(decoded, key, self.skeleton, drape, [C.body_maps.directions(drape[0],
                             decoded["pieces"][0]["mesh"]["faces"], cylinder_body(key))])
-            host.set_corrective(0, 0, *shapes[0])
+            host.set_corrective(0, 0, *shapes[0], decoded["pieces"][0]["mesh"]["backstop"])
             host.step(key, 0.0, reset=True, weights=[1.0])
             np.testing.assert_allclose(host.reference(0)[0], drape[0], atol=1e-5)
             np.testing.assert_allclose(host.positions(0), drape[0], atol=1e-5)
 
     def test_a_bake_repeats_until_its_drape_is_an_equilibrium(self):
-        blob = sheet_over_cylinder(["drape"])
+        # A small max distance holds the first drape short of where the fabric hangs: each pass moves the reference
+        # onto the drape and the cloth falls further, so the bake needs more than one pass.
+        blob = sheet_over_cylinder(["drape"], rate=0.05)
         key = turned(0.5)
         shapes, record = C.bake(blob, 0, self.skeleton, turned(0.0), key, [], cylinder_body(key), [THICKNESS],
                                 floor=[[0, 1, 0, 0.3]], procedure=dict(settle_s=1.0), library=LIBRARY)
         self.assertTrue(record["converged"])
-        self.assertLessEqual(record["drift_mm"]["sheet"], THICKNESS * 1000)
+        self.assertGreater(record["passes"], 1)
         self.assertEqual(record["passes"], len(record["drift_by_pass_mm"]))
-        # Reset onto the stored corrective and held, the cloth stays within the fabric's thickness of it.
+        self.assertEqual(record["kept_pass"], record["passes"])
+        self.assertLessEqual(record["drift_mm"]["sheet"], THICKNESS * 1000)
+        # The key backstop is measured on the drape: the sheet hangs closer to the cylinder than at rest.
+        rest_d = decode(blob)["pieces"][0]["mesh"]["backstop"][:, 0]
+        free = decode(blob)["pieces"][0]["mesh"]["max_distance"] > 0
+        self.assertLess(float(shapes[0][2][free, 0].mean()), float(rest_d[free].mean()))
+        # An independent hold, twice as long as the bake's: reset onto the stored corrective, the cloth stays within
+        # the fabric's thickness of it, on the stored backstop.
         with Host(blob, self.skeleton, LIBRARY) as host:
             host.set_corrective(0, 0, *shapes[0])
             host.step(key, 0.0, reset=True, convexes=[[[0, 1, 0, 0.3]]], weights=[1.0])
-            for _ in range(60):
+            np.testing.assert_array_equal(host.backstop(0), shapes[0][2].astype(np.float32))
+            for _ in range(120):
                 host.step(key, 1 / 30, convexes=[[[0, 1, 0, 0.3]]], weights=[1.0])
             gap = np.linalg.norm(host.positions(0) - host.reference(0)[0], axis=1)
             self.assertLessEqual(float(np.percentile(gap, 99)), THICKNESS)
+        # The same bake with one pass does not converge, and says so: the outfit refuses such a record.
+        _, once = C.bake(blob, 0, self.skeleton, turned(0.0), key, [], cylinder_body(key), [THICKNESS],
+                         floor=[[0, 1, 0, 0.3]], procedure=dict(settle_s=1.0), library=LIBRARY, max_passes=1)
+        self.assertFalse(once["converged"])
+        self.assertEqual((once["passes"], once["kept_pass"]), (1, 1))
+        self.assertGreater(once["drift_mm"]["sheet"], THICKNESS * 1000)
+
+    def test_a_bake_keeps_its_best_pass(self):
+        self.assertEqual(C.best_pass([3.0, 1.5, 2.0]), 1)
+        self.assertEqual(C.best_pass([2.0, 1.0, 1.0]), 1)
+        self.assertEqual(C.best_pass([0.5]), 0)
+
+    def test_the_inverse_recovers_split_weights_under_rotation(self):
+        # Two joints turned differently and vertices split over them: the blended linear part is not a rotation, and
+        # the inverse must still give back the rest-space deltas a drape was made of.
+        n = 9
+        rng = np.random.default_rng(7)
+        points = np.c_[rng.uniform(-0.2, 0.2, (n, 2)), rng.uniform(-0.05, 0.05, n)]
+        direction = rng.normal(size=(n, 3))
+        direction /= np.linalg.norm(direction, axis=1, keepdims=True)
+        split = rng.uniform(0.2, 0.8, n)
+        bone = np.zeros((n, 4), int)
+        bone[:, 1] = 1
+        weight = np.zeros((n, 4))
+        weight[:, 0], weight[:, 1] = split, 1 - split
+        decoded = dict(bones=[("a", np.eye(4)[:3].ravel()), ("b", np.eye(4)[:3].ravel())],
+                       pieces=[dict(skin=dict(bone=bone, weight=weight), direction=direction,
+                                    mesh=dict(rest=points, max_distance=np.full(n, 0.1)))])
+        skeleton = Skeleton(["a", "b"], [-1, 0])
+        c, s = np.cos(0.6), np.sin(0.6)
+        pose = np.tile(np.eye(4), (2, 1, 1))
+        pose[0, :3, :3] = [[c, -s, 0], [s, c, 0], [0, 0, 1]]
+        pose[1, :3, :3] = [[1, 0, 0], [0, np.cos(-1.1), -np.sin(-1.1)], [0, np.sin(-1.1), np.cos(-1.1)]]
+        pose[1, :3, 3] = [0.05, 0.3, -0.1]
+        delta = rng.uniform(-0.03, 0.03, (n, 3))
+        turn = rng.normal(size=(n, 3)) * 0.3 + direction
+        turn = turn / np.linalg.norm(turn, axis=1, keepdims=True) - direction
+        m = np.einsum("v,ij->vij", split, pose[0]) + np.einsum("v,ij->vij", 1 - split, pose[1])
+        settled = np.einsum("vij,vj->vi", m[:, :3, :3], points + delta) + m[:, :3, 3]
+        dirs = np.einsum("vij,vj->vi", m[:, :3, :3], direction + turn)
+        dirs /= np.linalg.norm(dirs, axis=1, keepdims=True)
+        (got_delta, got_turn), = deltas(decoded, pose, skeleton, [settled], [dirs])
+        np.testing.assert_allclose(got_delta, delta, atol=1e-9)
+        np.testing.assert_allclose(got_turn, turn, atol=1e-9)
 
     def test_an_outfit_bakes_a_corrective_into_its_sidecar(self):
         import json
@@ -189,7 +250,7 @@ class TestHost(unittest.TestCase):
             self.assertIn("colliders.json", o.inputs)
             self.assertEqual(data.corrective_names, ["lean"])
             self.assertTrue(np.all(data.piece("skirt").r[data.piece("skirt").r > 0] == np.float32(0.05)))
-            delta, _ = data.piece("skirt").correctives["lean"]
+            delta, _, _ = data.piece("skirt").correctives["lean"]
             self.assertTrue(np.all(delta[data.piece("skirt").r == 0] == 0))
             self.assertGreater(float(np.abs(delta).max()), 0.01)
             from garment.cook import stale

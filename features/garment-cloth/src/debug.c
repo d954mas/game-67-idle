@@ -73,9 +73,11 @@ static void arc(const float center[3], float r, const float axis[3], const float
 }
 
 void cloth_debug_reference(const ClothMesh *mesh, const float positions[][3], const ClothReference *ref,
-                           const float *max_distance, unsigned layers, ClothDebugLine emit, void *user) {
+                           const float *max_distance, const ClothBackstop *backstop, unsigned layers, ClothDebugLine emit,
+                           void *user) {
     if (!mesh || !positions || !ref || !emit) return;
     const float *r = max_distance ? max_distance : mesh->max_distance;
+    const ClothBackstop *backstops = backstop ? backstop : mesh->backstop;
     if (layers & CLOTH_DEBUG_REFERENCE) {
         for (int e = 0; e < mesh->edges; ++e)
             emit(user, CLOTH_DEBUG_REFERENCE, ref[mesh->edge[e].a].x, ref[mesh->edge[e].b].x, reference_color);
@@ -86,7 +88,7 @@ void cloth_debug_reference(const ClothMesh *mesh, const float positions[][3], co
             const float rgb[] = {fminf(1.0F, share), 0.3F * (1.0F - fminf(1.0F, share)), share > 1.0F ? 0.0F : 1.0F - share};
             emit(user, CLOTH_DEBUG_MAX_DISTANCE, ref[i].x, positions[i], rgb);
         }
-        const ClothBackstop bs = mesh->backstop[i];
+        const ClothBackstop bs = backstops[i];
         if ((layers & CLOTH_DEBUG_BACKSTOP) && bs.R > 0.0F && r[i] > 0.0F) {
             float surface[3];
             for (int k = 0; k < 3; ++k) surface[k] = ref[i].x[k] + ref[i].b[k] * fmaxf(bs.d, 0.003F);

@@ -212,7 +212,8 @@ static void test_shared_asset_instances_keep_their_own_state(void) {
 }
 
 /* The panel with one corrective that lifts the free corner off the arm and turns its body direction toward +X. */
-static const GarmentCorrective lift[] = {{{0, 0, 0}, {0, 0, 0}}, {{0, 0, 0}, {0, 0, 0}}, {{0, 0.2F, 0.3F}, {1, 0, 1}}};
+static const GarmentCorrective lift[] = {{{0, 0, 0}, {0, 0, 0}, {0, 0}}, {{0, 0, 0}, {0, 0, 0}, {0, 0}},
+                                         {{0, 0.2F, 0.3F}, {1, 0, 1}, {0, 0}}};
 static const char *const lift_names[] = {"sit"};
 static const GarmentAsset lifted = {.id = "panel", .mesh = &mesh, .skin = skin, .direction = direction, .corrective = lift,
                                     .material = {.density = 0.2F, .stretch = 0.03F, .iterations = 1, .friction = 0.5F}};
@@ -305,6 +306,163 @@ static void test_a_corrective_weight_outside_zero_to_one_is_refused(void) {
     }
 }
 
+/* The panel's pinned shoulder vertex carries a corrective: a kinematic vertex sits on the reference of every
+   substep, so it shows the weight the actor used at the last substep of a frame. The runtime takes this asset as
+   it is; the writer would refuse a kinematic delta. */
+static const GarmentCorrective pin_lift[] = {{{0, 0.18F, 0}, {0, 0, 0}, {0, 0}}, {{0, 0, 0}, {0, 0, 0}, {0, 0}},
+                                             {{0, 0, 0}, {0, 0, 0}, {0, 0}}};
+static const GarmentAsset pin_lifted = {.id = "panel", .mesh = &mesh, .skin = skin, .direction = direction,
+                                        .corrective = pin_lift, .material = {.density = 0.2F, .stretch = 0.03F, .iterations = 1}};
+static const GarmentSet pin_corrected = {.id = "arm", .bones = bones, .bone_count = 2, .pieces = &pin_lifted,
+                                         .piece_count = 1, .corrective_names = lift_names, .corrective_count = 1};
+
+static float pinned_lift(GarmentActor *actor, const nt_skeletal_mat34_t *pose, const float *weight, bool reset, float dt) {
+    const GarmentInput in = {.pose = pose, .world = identity_world, .dt = dt, .reset = reset, .max_distance_scale = 1.0F,
+                             .corrective_weight = weight};
+    TEST_ASSERT_TRUE(garment_actor_update(actor, &pin_corrected, &rig, &in));
+    const ClothState *cloth = NULL;
+    TEST_ASSERT_TRUE(garment_actor_piece(actor, 0, &cloth, NULL));
+    return cloth->x[0][1] / pin_lift[0].delta[1];
+}
+
+/* A weight change from 0 to 1 over a frame of 6.5 substeps: the last substep runs at 12/13 of the frame, so the
+   reference it used carries 12/13 of the shape, not all of it and not none. */
+static void test_a_weight_change_blends_across_the_substeps(void) {
+    nt_skeletal_mat34_t pose[2];
+    arm(0.0F, pose);
+    const float none = 0.0F, full = 1.0F;
+    NEAR(1e-6F, 0.0F, pinned_lift(&actors[0], pose, &none, true, 0.0F));
+    NEAR(1e-5F, 12.0F / 13.0F, pinned_lift(&actors[0], pose, &full, false, 13.0F / 360.0F));
+    TEST_ASSERT_EQUAL_UINT(6, actors[0].stats.steps);
+    /* The next frame starts where this one's weights ended (1) and stays there. */
+    NEAR(1e-6F, 1.0F, pinned_lift(&actors[0], pose, &full, false, 6.0F / 180.0F));
+}
+
+/* NULL weights after given ones are a ramp to 0 across the substeps, not a jump. */
+static void test_null_weights_after_given_ones_ramp_to_zero(void) {
+    nt_skeletal_mat34_t pose[2];
+    arm(0.0F, pose);
+    const float full = 1.0F;
+    NEAR(1e-6F, 1.0F, pinned_lift(&actors[0], pose, &full, true, 0.0F));
+    NEAR(1e-5F, 1.0F / 13.0F, pinned_lift(&actors[0], pose, NULL, false, 13.0F / 360.0F));
+    TEST_ASSERT_TRUE(actors[0].corrective_weight[0] == 0.0F);
+}
+
+/* A new outfit (another set) binds the actor again: the weights the last outfit left are gone, and the actor starts
+   from the reference at the weights it is given, without a blend from the old ones. */
+static void test_an_outfit_switch_resets_the_weights(void) {
+    static const GarmentSet other = {.id = "arm", .bones = bones, .bone_count = 2, .pieces = &pin_lifted, .piece_count = 1,
+                                     .corrective_names = lift_names, .corrective_count = 1};
+    nt_skeletal_mat34_t pose[2];
+    arm(0.0F, pose);
+    const float full = 1.0F;
+    NEAR(1e-6F, 1.0F, pinned_lift(&actors[0], pose, &full, true, 0.0F));
+    const GarmentInput in = {.pose = pose, .world = identity_world, .dt = 13.0F / 360.0F, .max_distance_scale = 1.0F};
+    TEST_ASSERT_TRUE(garment_actor_update(&actors[0], &other, &rig, &in));
+    TEST_ASSERT_EQUAL_UINT(0, actors[0].stats.steps);
+    TEST_ASSERT_TRUE(actors[0].corrective_weight[0] == 0.0F);
+    const ClothState *cloth = NULL;
+    TEST_ASSERT_TRUE(garment_actor_piece(&actors[0], 0, &cloth, NULL));
+    NEAR(1e-6F, 0.0F, cloth->x[0][1]);
+    /* Back on the first outfit with a weight: it binds again and starts there at once. */
+    NEAR(1e-6F, 1.0F, pinned_lift(&actors[0], pose, &full, false, 13.0F / 360.0F));
+}
+
+/* Two correctives and a free vertex with a backstop at rest (d 0.01, R 0.2): one key has R 0.1, the other the plane
+   form, and their body directions turn the rest one toward +X and -X. */
+static const ClothBackstop backed_backstop[] = {{0, 0}, {0, 0}, {0.01F, 0.2F}};
+static const ClothMesh backed_mesh = {.vertices = 3, .faces = 1, .edges = 3, .rest = rest, .inv_area = inv_area,
+                                      .face = &face, .edge = edges, .tether = tethers, .max_distance = max_distance,
+                                      .backstop = backed_backstop};
+static const GarmentCorrective pair[] = {
+    {{0, 0, 0}, {0, 0, 0}, {0, 0}}, {{0, 0, 0}, {0, 0, 0}, {0, 0}}, {{0.1F, 0, 0}, {1, 0, 1}, {0.02F, 0.1F}},
+    {{0, 0, 0}, {0, 0, 0}, {0, 0}}, {{0, 0, 0}, {0, 0, 0}, {0, 0}}, {{0, 0.1F, 0}, {-1, 0, 1}, {0.03F, INFINITY}}};
+static const char *const pair_names[] = {"sit", "sit_side_l"};
+static const GarmentAsset paired = {.id = "panel", .mesh = &backed_mesh, .skin = skin, .direction = direction,
+                                    .corrective = pair, .material = {.density = 0.2F, .stretch = 0.03F, .iterations = 1}};
+static const GarmentSet two = {.id = "arm", .bones = bones, .bone_count = 2, .pieces = &paired, .piece_count = 1,
+                               .corrective_names = pair_names, .corrective_count = 2};
+
+static const ClothReference *two_at(const float weights[2], const ClothBackstop **used) {
+    nt_skeletal_mat34_t pose[2];
+    arm(0.0F, pose);
+    const GarmentInput in = {.pose = pose, .world = identity_world, .reset = true, .max_distance_scale = 1.0F,
+                             .corrective_weight = weights};
+    TEST_ASSERT_TRUE(garment_actor_update(&actors[0], &two, &rig, &in));
+    const ClothReference *ref = NULL;
+    TEST_ASSERT_TRUE(garment_actor_piece(&actors[0], 0, NULL, &ref));
+    *used = garment_actor_backstop(&actors[0], 0);
+    TEST_ASSERT_NOT_NULL(*used);
+    return ref;
+}
+
+/* Both at once: the deltas add with their weights, d blends linearly and so does the curvature 1/R (the plane form is
+   curvature 0); a key that carries the whole weight gives its own backstop exactly. */
+static void test_two_correctives_at_once_add_and_blend_the_backstop(void) {
+    const ClothBackstop *bs = NULL;
+    const float both[2] = {0.5F, 0.25F};
+    const ClothReference *ref = two_at(both, &bs);
+    NEAR(1e-6F, rest[2][0] + 0.05F, ref[2].x[0]);
+    NEAR(1e-6F, rest[2][1] + 0.025F, ref[2].x[1]);
+    NEAR(1e-6F, 0.25F * 0.01F + 0.5F * 0.02F + 0.25F * 0.03F, bs[2].d);
+    NEAR(1e-5F, 1.0F / (0.25F / 0.2F + 0.5F / 0.1F), bs[2].R);
+    const float only_plane[2] = {0.0F, 1.0F};
+    two_at(only_plane, &bs);
+    TEST_ASSERT_TRUE(bs[2].d == 0.03F && isinf(bs[2].R));
+    const float only_first[2] = {1.0F, 0.0F};
+    two_at(only_first, &bs);
+    TEST_ASSERT_TRUE(bs[2].d == 0.02F && bs[2].R == 0.1F);
+    /* At weight 0 the mesh's own backstop holds. */
+    const float none[2] = {0.0F, 0.0F};
+    two_at(none, &bs);
+    TEST_ASSERT_EQUAL_PTR(backed_backstop, bs);
+}
+
+/* A key whose body has a hole behind the vertex (R = 0) turns the backstop off wherever that key weighs. */
+static void test_a_key_without_a_body_behind_turns_the_backstop_off(void) {
+    static const GarmentCorrective open[] = {{{0, 0, 0}, {0, 0, 0}, {0, 0}}, {{0, 0, 0}, {0, 0, 0}, {0, 0}},
+                                             {{0, 0, 0}, {0, 0, 0}, {0.02F, 0}}};
+    static const GarmentAsset holed = {.id = "panel", .mesh = &backed_mesh, .skin = skin, .direction = direction,
+                                       .corrective = open, .material = {.density = 0.2F, .stretch = 0.03F, .iterations = 1}};
+    static const GarmentSet one = {.id = "arm", .bones = bones, .bone_count = 2, .pieces = &holed, .piece_count = 1,
+                                   .corrective_names = lift_names, .corrective_count = 1};
+    nt_skeletal_mat34_t pose[2];
+    arm(0.0F, pose);
+    const float weight = 0.2F;
+    const GarmentInput in = {.pose = pose, .world = identity_world, .reset = true, .max_distance_scale = 1.0F,
+                             .corrective_weight = &weight};
+    TEST_ASSERT_TRUE(garment_actor_update(&actors[0], &one, &rig, &in));
+    TEST_ASSERT_TRUE(garment_actor_backstop(&actors[0], 0)[2].R == 0.0F);
+}
+
+/* Directions that cancel never fail the update: two keys turning the rest direction to +X and -X at equal weights
+   take the first key's direction (the first of the largest coefficients). */
+static void test_cancelling_corrective_directions_take_the_heaviest_one(void) {
+    const ClothBackstop *bs = NULL;
+    const float half[2] = {0.5F, 0.5F};
+    const ClothReference *ref = two_at(half, &bs);
+    NEAR(1e-6F, 1.0F, ref[2].b[0]);
+    NEAR(1e-6F, 0.0F, ref[2].b[2]);
+}
+
+/* Directions that the bones cancel never fail the update either: a vertex split evenly over two bones turned half a
+   turn apart takes its direction from the heaviest bone (the first of equals). */
+static void test_cancelling_bone_directions_take_the_heaviest_bone(void) {
+    static const GarmentSkin split[] = {{.weight = {1}}, {.weight = {1}}, {.bone = {0, 1}, .weight = {0.5F, 0.5F}}};
+    static const float sideways[][3] = {{0, 0, -1}, {0, 0, -1}, {1, 0, 0}};
+    static const GarmentAsset torn = {.id = "panel", .mesh = &mesh, .skin = split, .direction = sideways,
+                                      .material = {.density = 0.2F, .stretch = 0.03F, .iterations = 1}};
+    static const GarmentSet outfit = {.id = "arm", .bones = bones, .bone_count = 2, .pieces = &torn, .piece_count = 1};
+    nt_skeletal_mat34_t pose[2];
+    arm(0.0F, pose);
+    pose[1] = (nt_skeletal_mat34_t){.r = {{-1, 0, 0, 1}, {0, -1, 0, 0}, {0, 0, 1, 0}}};
+    const GarmentInput in = {.pose = pose, .world = identity_world, .reset = true, .max_distance_scale = 1.0F};
+    TEST_ASSERT_TRUE(garment_actor_update(&actors[0], &outfit, &rig, &in));
+    const ClothReference *ref = NULL;
+    TEST_ASSERT_TRUE(garment_actor_piece(&actors[0], 0, NULL, &ref));
+    NEAR(1e-6F, 1.0F, ref[2].b[0]);
+}
+
 static void test_missing_joint_or_bad_input_is_refused(void) {
     nt_skeletal_mat34_t pose[2];
     arm(0.0F, pose);
@@ -337,5 +495,12 @@ int main(void) {
     RUN_TEST(test_corrective_weights_blend_linearly);
     RUN_TEST(test_a_reset_with_a_corrective_puts_the_cloth_on_the_corrected_reference);
     RUN_TEST(test_a_corrective_weight_outside_zero_to_one_is_refused);
+    RUN_TEST(test_a_weight_change_blends_across_the_substeps);
+    RUN_TEST(test_null_weights_after_given_ones_ramp_to_zero);
+    RUN_TEST(test_an_outfit_switch_resets_the_weights);
+    RUN_TEST(test_two_correctives_at_once_add_and_blend_the_backstop);
+    RUN_TEST(test_a_key_without_a_body_behind_turns_the_backstop_off);
+    RUN_TEST(test_cancelling_corrective_directions_take_the_heaviest_one);
+    RUN_TEST(test_cancelling_bone_directions_take_the_heaviest_bone);
     return UNITY_END();
 }

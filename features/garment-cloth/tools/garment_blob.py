@@ -9,7 +9,7 @@ import struct
 import numpy as np
 
 MAGIC = int.from_bytes(b"GRMT", "little")
-VERSION = 3
+VERSION = 4
 ALIGN = 16
 OUTFIT = 0xFFFF
 HEADER = struct.Struct("<IHHIIHH")
@@ -48,7 +48,7 @@ EDGE = _record([("a", "<i4", 0), ("b", "<i4", 4), ("c", "<i4", 8), ("d", "<i4", 
 TETHER = _record([("pin", "<i4", 0), ("max_length", "<f4", 4)], 8)
 SKIN = _record([("bone", ("<u2", (4,)), 0), ("weight", ("<f4", (4,)), 8)], 24)
 BACKSTOP = _record([("d", "<f4", 0), ("R", "<f4", 4)], 8)
-CORRECTIVE = _record([("delta", ("<f4", (3,)), 0), ("direction", ("<f4", (3,)), 12)], 24)
+CORRECTIVE = _record([("delta", ("<f4", (3,)), 0), ("direction", ("<f4", (3,)), 12), ("backstop", BACKSTOP, 24)], 32)
 
 # name: (tag, record, outfit-wide)
 SECTIONS = {
@@ -192,28 +192,35 @@ def _mesh(check, mesh, records):
     return n
 
 
-def _correctives(check, shapes, count, n, kinematic, direction):
-    """The CORR records of one piece, or None where every delta is zero (the runtime then skips the piece)."""
+def _correctives(check, shapes, count, n, kinematic, direction, backstop):
+    """The CORR records of one piece: per corrective and vertex the position and body direction deltas and the
+    backstop (d, R) at the key. None where no corrective changes the piece (every delta zero, every key backstop the
+    rest one): the runtime then skips it. A failure names the corrective and the vertex."""
     if shapes is None or count == 0:
         check(shapes is None or not np.size(shapes), "correctives", "need corrective names on the outfit")
         return None
     shapes = single(shapes)
-    check(shapes.shape == (count, n, 6), "correctives", f"need shape {(count, n, 6)}, got {shapes.shape}")
-    check.each(np.isfinite(shapes).reshape(count * n, 6), "correctives", "must be finite")
+    check(shapes.shape == (count, n, 8), "correctives", f"need shape {(count, n, 8)} (delta, direction, d, R), got "
+                                                        f"{shapes.shape}")
     for k in range(count):
-        delta, turn = shapes[k, :, :3], shapes[k, :, 3:]
+        delta, turn, key = shapes[k, :, :3], shapes[k, :, 3:6], shapes[k, :, 6:]
         field = f"correctives[{k}]"
-        check.each((delta[kinematic] == 0).all(1) & (turn[kinematic] == 0).all(1), field,
+        check.each(np.isfinite(shapes[k, :, :7]), field, "must be finite (R may be +inf, the plane form)")
+        check.each(~kinematic | ((delta == 0).all(1) & (turn == 0).all(1)), field,
                    "must not move a kinematic vertex (max distance 0)")
         corrected = direction.astype(np.float64) + turn
         check.each(np.abs(np.linalg.norm(corrected, axis=1) - 1) <= 1e-3, f"{field}.direction",
                    "must keep the corrected body direction a unit vector")
         check.each(np.linalg.norm(direction + 0.5 * turn, axis=1) >= BLEND_DIRECTION_MIN, f"{field}.direction",
                    "must not reverse the body direction")
-    if not shapes.any():
+        check.each((key[:, 0] >= 0) & (key[:, 1] >= 0) & ~np.isnan(key[:, 1]), f"{field}.backstop",
+                   "needs a finite non-negative d and R >= 0 (+inf is the plane form)")
+    rest = np.stack([backstop["d"], backstop["R"]], axis=1)
+    if not shapes[:, :, :6].any() and (shapes[:, :, 6:] == rest[None]).all():
         return None
     out = np.zeros(count * n, CORRECTIVE)
-    out["delta"], out["direction"] = shapes[:, :, :3].reshape(-1, 3), shapes[:, :, 3:].reshape(-1, 3)
+    out["delta"], out["direction"] = shapes[:, :, :3].reshape(-1, 3), shapes[:, :, 3:6].reshape(-1, 3)
+    out["backstop"]["d"], out["backstop"]["R"] = shapes[:, :, 6].ravel(), shapes[:, :, 7].ravel()
     return out
 
 
@@ -237,7 +244,8 @@ def _piece(check, piece, strings, bone_count, corrective_count=0):
     check.each(np.isfinite(direction).all(axis=1) & (np.abs(np.linalg.norm(direction, axis=1) - 1) <= 1e-3),
                "direction", "must be a finite unit vector")
     records["direction"] = direction
-    shapes = _correctives(check, piece.get("correctives"), corrective_count, n, records["max_distance"] == 0, direction)
+    shapes = _correctives(check, piece.get("correctives"), corrective_count, n, records["max_distance"] == 0, direction,
+                          records["backstop"])
     if shapes is not None:
         records["correctives"] = shapes
     head = np.zeros(1, PIECE)
@@ -296,8 +304,8 @@ def encode(outfit_id, pieces, bones=(), spheres=(), cones=(), correctives=()):
     radius) and cones (sphere a, sphere b), shared by every piece; correctives the names of the outfit's corrective
     shapes; a piece is a dict of id, mesh (rest, inv_area, faces, edges, tethers, max_distance, backstop as (d, R)),
     skin (bone, weight), direction, material, render_vertices, inertia weights and, with corrective names,
-    "correctives": (names, vertices, 6) rest-space position and body direction deltas (None: all zero). An outfit
-    without cloth has no pieces and no bones."""
+    "correctives": (names, vertices, 8) rest-space position and body direction deltas and the backstop (d, R) at each
+    key (None: no corrective changes the piece). An outfit without cloth has no pieces and no bones."""
     strings = _Strings()
     outfit = _Check(str(outfit_id))
     header_id = strings.add(outfit_id, outfit, "id")
@@ -327,18 +335,33 @@ def encode(outfit_id, pieces, bones=(), spheres=(), cones=(), correctives=()):
 
 
 def decode(data):
-    """Read a blob back into numpy records: the inverse of encode, for tools and tests."""
+    """Read a blob back into numpy records: the inverse of encode, for tools and tests. It refuses what the C view
+    asserts on: another version, an unknown or repeated section, corrective shapes without corrective names or with
+    another count than names x vertices, and an invalid key backstop."""
     data = bytes(data)
     magic, version, header_size, size, outfit_id, piece_count, count = HEADER.unpack_from(data)
     if magic != MAGIC or version != VERSION or header_size != HEADER.size or size != len(data):
-        raise ValueError("not a garment blob of this version")
+        raise ValueError(f"not a garment blob of version {VERSION}")
     found = {}
     for i in range(count):
         tag, piece, stride, start, length = SECTION.unpack_from(data, header_size + i * SECTION.size)
         name = TAGS.get(tag)
         if name is None or stride != SECTIONS[name][1].itemsize or start + stride * length > size:
             raise ValueError(f"invalid garment blob section {tag:#x}")
+        if (name, piece) in found:
+            raise ValueError(f"garment blob section {name} of piece {piece} appears twice")
         found[name, piece] = np.frombuffer(data, SECTIONS[name][1], length, start)
+    names = found.get(("corrective_names", OUTFIT), np.zeros(0, "<u4"))
+    for p in range(piece_count):
+        shapes = found.get(("correctives", p))
+        if shapes is None:
+            continue
+        if not len(names) or len(shapes) != len(names) * len(found["rest", p]):
+            raise ValueError(f"piece {p}: corrective shapes need {len(names)} corrective names x "
+                             f"{len(found['rest', p])} vertices, got {len(shapes)} records")
+        key = shapes["backstop"]
+        if not (np.isfinite(key["d"]) & (key["d"] >= 0) & (key["R"] >= 0)).all():
+            raise ValueError(f"piece {p}: a corrective's key backstop needs a finite d >= 0 and R >= 0")
     strings = found["strings", OUTFIT].tobytes()
 
     def text(offset):
@@ -351,7 +374,9 @@ def decode(data):
         shapes = found.get(("correctives", p))
         n = len(found["rest", p])
         pieces.append(dict(
-            correctives=None if shapes is None else np.concatenate([shapes["delta"], shapes["direction"]], 1).reshape(-1, n, 6),
+            correctives=None if shapes is None else np.concatenate(
+                [shapes["delta"], shapes["direction"], shapes["backstop"]["d"][:, None], shapes["backstop"]["R"][:, None]],
+                1).reshape(-1, n, 8),
             id=text(int(head["id"])),
             mesh=dict(rest=found["rest", p], inv_area=found["inv_area", p], faces=found["faces", p],
                       edges=found["edges", p], tethers=found.get(("tethers", p)), max_distance=found["max_distance", p],
@@ -361,7 +386,6 @@ def decode(data):
             render_vertices=int(head["render_vertices"]), linear_inertia=head["linear_inertia"].item(),
             angular_inertia=head["angular_inertia"].item()))
     bones = found.get(("bones", OUTFIT), np.zeros(0, BONE))
-    names = found.get(("corrective_names", OUTFIT), np.zeros(0, "<u4"))
     return dict(id=text(outfit_id), bones=[(text(int(b["name"])), b["inverse_bind"].copy()) for b in bones],
                 correctives=[text(int(n)) for n in names],
                 spheres=found.get(("spheres", OUTFIT), np.zeros(0, SPHERE)),

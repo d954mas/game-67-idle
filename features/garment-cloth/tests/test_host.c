@@ -77,7 +77,7 @@ static void test_the_host_steps_the_solver_it_is_built_from(void) {
 
     const float pose[12] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0};
     TEST_ASSERT_TRUE(gh_step(host, pose, NULL, 0.0F, true, true, true, &floor, 1, 1.0F, 0.0F, NULL));
-    TEST_ASSERT_TRUE(cloth_reset(&direct, mesh, &piece->material, ref, NULL, &shapes));
+    TEST_ASSERT_TRUE(cloth_reset(&direct, mesh, &piece->material, ref, NULL, NULL, &shapes));
     shapes.convex_move = still;
     unsigned substeps = 0;
     float metrics[8];
@@ -85,7 +85,7 @@ static void test_the_host_steps_the_solver_it_is_built_from(void) {
         TEST_ASSERT_TRUE(gh_step(host, pose, NULL, 1.0F / 30.0F, false, true, true, &floor, 1, 1.0F, 0.0F, NULL));
         TEST_ASSERT_TRUE(gh_metrics(host, metrics));
         for (; substeps < (unsigned)metrics[1]; ++substeps)
-            cloth_step(&direct, mesh, &piece->material, 1.0F / 180.0F, &frame, ref, NULL, &shapes);
+            cloth_step(&direct, mesh, &piece->material, 1.0F / 180.0F, &frame, ref, NULL, NULL, &shapes);
         TEST_ASSERT_TRUE(direct.frame_valid);
         TEST_ASSERT_TRUE(gh_positions(host, 0, &host_x[0][0]));
         for (int i = 0; i < mesh->vertices; ++i)

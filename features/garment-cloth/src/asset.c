@@ -1,6 +1,7 @@
 #include "garment/asset.h"
 #include "core/nt_assert.h"
 
+#include <math.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
@@ -20,7 +21,9 @@ _Static_assert(sizeof(GarmentSkin) == 24 && offsetof(GarmentSkin, weight) == 8, 
 _Static_assert(sizeof(GarmentSphere) == 20 && offsetof(GarmentSphere, center) == 4 && offsetof(GarmentSphere, radius) == 16,
                "sphere layout");
 _Static_assert(sizeof(GarmentCone) == 4, "cone layout");
-_Static_assert(sizeof(GarmentCorrective) == 24 && offsetof(GarmentCorrective, direction) == 12, "corrective layout");
+_Static_assert(sizeof(GarmentCorrective) == 32 && offsetof(GarmentCorrective, direction) == 12 &&
+                   offsetof(GarmentCorrective, backstop) == 24,
+               "corrective layout");
 
 enum { STRINGS, BONES, SPHERES, CONES, CORRECTIVE_NAMES, PIECE, REST, INV_AREA, FACES, EDGES, TETHERS, SKIN,
        MAX_DISTANCE, BACKSTOP, DIRECTION, CORRECTIVES, KINDS };
@@ -164,6 +167,9 @@ const GarmentSet *garment_asset_view(const void *blob, uint32_t size) {
             NT_ASSERT(e->a >= 0 && (uint32_t)e->a < n && e->b >= 0 && (uint32_t)e->b < n && e->c >= 0 && (uint32_t)e->c < n &&
                       e->d >= -1 && e->d < (int)n);
         }
+        const GarmentCorrective *shape = records(&b, shapes);
+        for (uint32_t i = 0; i < count_of(shapes); ++i)
+            NT_ASSERT(isfinite(shape[i].backstop.d) && shape[i].backstop.d >= 0.0F && shape[i].backstop.R >= 0.0F);
         const ClothTether *tether = records(&b, tethers);
         for (uint32_t i = 0; i < count_of(tethers); ++i) NT_ASSERT(tether[i].pin >= -1 && tether[i].pin < (int)n);
         const GarmentSkin *skin = records(&b, section(&b, p, SKIN, true));
@@ -179,7 +185,7 @@ const GarmentSet *garment_asset_view(const void *blob, uint32_t size) {
         };
         view->pieces[p] = (GarmentAsset){
             .id = string(&b, piece->id), .mesh = &view->meshes[p], .skin = skin,
-            .direction = records(&b, section(&b, p, DIRECTION, true)), .corrective = records(&b, shapes),
+            .direction = records(&b, section(&b, p, DIRECTION, true)), .corrective = shape,
             .material = piece->material,
             .render_vertices = piece->render_vertices, .linear_inertia = piece->linear_inertia,
             .angular_inertia = piece->angular_inertia,

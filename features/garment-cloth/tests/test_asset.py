@@ -1,4 +1,5 @@
 import copy
+import struct
 import sys
 import unittest
 from pathlib import Path
@@ -13,16 +14,20 @@ from garment.cook import cook_mesh
 IDENTITY = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0]
 
 
-def lift(direction, kinematic, turn):
-    """A corrective of a piece: position deltas on its free vertices and body directions turned by `turn` rad about +Y,
-    as rest-space deltas."""
+def lift(direction, kinematic, turn, backstop):
+    """A corrective of a piece: position deltas on its free vertices, body directions turned by `turn` rad about +Y as
+    rest-space deltas, and a key backstop that differs from the rest one (the second key has a plane form)."""
     direction = np.asarray(direction, float)
     c, s = np.cos(turn), np.sin(turn)
     turned = direction @ np.array([[c, 0, -s], [0, 1, 0], [s, 0, c]])
-    shape = np.zeros((len(direction), 6))
+    shape = np.zeros((len(direction), 8))
     shape[:, :3] = [0.01, 0.02 + turn, -0.03]
-    shape[:, 3:] = turned - direction
-    shape[kinematic] = 0
+    shape[:, 3:6] = turned - direction
+    rest = np.asarray(backstop, float)
+    shape[:, 6] = 1.5 * rest[:, 0]
+    shape[:, 7] = np.where(rest[:, 1] > 0, 0.75 * rest[:, 1] if turn > 0 else np.inf, 0.0)
+    shape[kinematic, :6] = 0
+    shape[kinematic, 6:] = np.asarray(backstop, float)[kinematic]
     return shape
 
 
@@ -46,11 +51,11 @@ def synthetic():
                          skin=dict(bone=[[0, 1, 0, 0], [1, 0, 0, 0], [1, 1, 0, 0], [0, 0, 1, 1]],
                                    weight=[[1, 0, 0, 0], [0.75, 0.25, 0, 0], [1 / 3, 2 / 3, 0, 0], [0.5, 0, 0.5, 0]]),
                          direction=[[0, 0, 1], [0, 0.6, 0.8], [1, 0, 0], [0, -1, 0]],
-                         correctives=np.stack([lift([[0, 0, 1], [0, 0.6, 0.8], [1, 0, 0], [0, -1, 0]], [0, 1], turn)
-                                               for turn in (0.3, -1.1)])),
+                         correctives=np.stack([lift([[0, 0, 1], [0, 0.6, 0.8], [1, 0, 0], [0, -1, 0]], [0, 1], turn,
+                                                    panel["backstop"]) for turn in (0.3, -1.1)])),
                     dict(id="sash", mesh=sash, material=dict(density=0.3, iterations=1),
                          skin=dict(bone=[[2, 2, 2, 2]] * 3, weight=[[1, 0, 0, 0]] * 3), direction=[[0, 0, 1]] * 3,
-                         correctives=np.zeros((2, 3, 6))),
+                         correctives=np.zeros((2, 3, 8))),
                 ], correctives=["sit", "sit_side_l"])
 
 
@@ -75,8 +80,10 @@ class TestBlob(unittest.TestCase):
         self.assertEqual(again, data)
         self.assertEqual(back["correctives"], ["sit", "sit_side_l"])
         np.testing.assert_array_equal(back["pieces"][0]["correctives"], single(garment["pieces"][0]["correctives"]))
-        # A piece whose correctives are all zero carries no section: the runtime skips it.
+        # A piece no corrective changes (zero deltas, the rest backstop at every key) carries no section: the runtime
+        # skips it.
         self.assertIsNone(back["pieces"][1]["correctives"])
+        self.assertTrue(np.isinf(back["pieces"][0]["correctives"][1, 2, 7]))
         panel, source = back["pieces"][0], garment["pieces"][0]
         np.testing.assert_array_equal(panel["mesh"]["rest"], single(source["mesh"]["rest"]))
         np.testing.assert_array_equal(panel["skin"]["weight"], single(source["skin"]["weight"]))
@@ -129,9 +136,28 @@ class TestBlob(unittest.TestCase):
             (lambda g, p: p["correctives"].__setitem__((1, 3, slice(3, 6)), [0, 2, 0]),
              "panel: correctives[1].direction[3] must not reverse"),
             (lambda g, p: p.__setitem__("correctives", p["correctives"][:1]), "panel: correctives need shape"),
-            (lambda g, p: p["correctives"].__setitem__((0, 2, 0), np.nan), "panel: correctives[2] must be finite"),
+            (lambda g, p: p["correctives"].__setitem__((1, 2, 0), np.nan), "panel: correctives[1][2] must be finite"),
+            (lambda g, p: p["correctives"].__setitem__((1, 3, 6), np.inf), "panel: correctives[1][3] must be finite"),
+            (lambda g, p: p["correctives"].__setitem__((0, 3, 6), -0.001), "panel: correctives[0].backstop[3]"),
+            (lambda g, p: p["correctives"].__setitem__((1, 2, 7), np.nan), "panel: correctives[1].backstop[2]"),
         ]
         self.assert_rejected(cases)
+
+    def test_writer_errors_name_the_vertex_of_the_whole_piece(self):
+        # Kinematic vertices 1 and 3: an error at vertex 3 is reported as vertex 3, not as the second kinematic one.
+        mesh = cook_mesh("hem", [[-0.5, 0, 0], [0.5, 0, 0], [0, 1, 0.1], [0, 0.3, 1]], [[0, 1, 2], [1, 0, 3]], [1, 3],
+                         wearable=True, max_distance=[0.05, 0, 0.05, 0])
+        shapes = np.zeros((2, 4, 8))
+        shapes[1, 3, 0] = 0.01
+        piece = dict(id="hem", mesh=mesh, material=dict(density=0.3, iterations=1), direction=[[0, 0, 1]] * 4,
+                     skin=dict(bone=[[0, 0, 0, 0]] * 4, weight=[[1, 0, 0, 0]] * 4), correctives=shapes)
+        with self.assertRaisesRegex(ValueError, r"^hems/hem: correctives\[1\]\[3\] must not move a kinematic"):
+            encode("hems", [piece], bones=[("Root", IDENTITY)], correctives=["a", "b"])
+
+    def test_reader_refuses_what_the_view_asserts_on(self):
+        for name, blob in rejected_blobs().items():
+            with self.subTest(name), self.assertRaises(ValueError):
+                decode(blob)
 
     def test_outfit_shapes_are_checked(self):
         self.assert_rejected([
@@ -169,7 +195,57 @@ class TestBlob(unittest.TestCase):
                 build(garment)
 
 
+def drop_section(data, tag, piece):
+    """The blob without one section entry: its table shrinks, the payload stays where it is."""
+    header = garment_blob.HEADER.unpack_from(data)
+    count, table = header[6], garment_blob.HEADER.size
+    entries = [garment_blob.SECTION.unpack_from(data, table + i * garment_blob.SECTION.size) for i in range(count)]
+    kept = [e for e in entries if (e[0], e[1]) != (int.from_bytes(tag, "little"), piece)]
+    assert len(kept) == count - 1
+    out = bytearray(data)
+    garment_blob.HEADER.pack_into(out, 0, *header[:6], count - 1)
+    for i, e in enumerate(kept):
+        garment_blob.SECTION.pack_into(out, table + i * garment_blob.SECTION.size, *e)
+    out[table + len(kept) * garment_blob.SECTION.size:table + count * garment_blob.SECTION.size] = bytes(garment_blob.SECTION.size)
+    return bytes(out)
+
+
+def section_entry(data, tag, piece):
+    """(table offset, entry) of one section."""
+    count, table = garment_blob.HEADER.unpack_from(data)[6], garment_blob.HEADER.size
+    for i in range(count):
+        at = table + i * garment_blob.SECTION.size
+        entry = garment_blob.SECTION.unpack_from(data, at)
+        if (entry[0], entry[1]) == (int.from_bytes(tag, "little"), piece):
+            return at, entry
+    raise KeyError(tag)
+
+
+def rejected_blobs():
+    """{case: blob} the reader must refuse, each one change of the synthetic blob."""
+    data = build(synthetic())
+    out = {}
+    old = bytearray(data)
+    struct.pack_into("<H", old, 4, garment_blob.VERSION - 1)
+    out["older-version"] = bytes(old)
+    unknown = bytearray(data)
+    at, entry = section_entry(data, b"TETH", 0)
+    garment_blob.SECTION.pack_into(unknown, at, int.from_bytes(b"XTRA", "little"), *entry[1:])
+    out["unknown-tag"] = bytes(unknown)
+    out["shapes-without-names"] = drop_section(data, b"CNAM", garment_blob.OUTFIT)
+    short = bytearray(data)
+    at, entry = section_entry(data, b"CORR", 0)
+    garment_blob.SECTION.pack_into(short, at, *entry[:4], entry[4] - 1)
+    out["shape-count"] = bytes(short)
+    bad = bytearray(data)
+    struct.pack_into("<f", bad, entry[3] + 28, float("nan"))
+    out["key-backstop"] = bytes(bad)
+    return out
+
+
 def c_float(value):
+    if np.isinf(value):
+        return "INFINITY" if value > 0 else "-INFINITY"
     return float(value).hex() + "F"
 
 
@@ -212,7 +288,8 @@ def emit_expected(out, garment, blob_path, empty_path):
         if piece["correctives"] is not None:
             shapes = f"{s}_corrective"
             out.write(f"static const GarmentCorrective {shapes}[] = {{" + ",".join(
-                f"{{{c_floats(v[:3])},{c_floats(v[3:])}}}" for v in piece["correctives"].reshape(-1, 6)) + "};\n")
+                f"{{{c_floats(v[:3])},{c_floats(v[3:6])},{{{c_float(v[6])},{c_float(v[7])}}}}}"
+                for v in piece["correctives"].reshape(-1, 8)) + "};\n")
         material = ",".join(f".{k}={v}" if isinstance(v, int) else f".{k}={c_float(v)}" for k, v in piece["material"].items())
         rows.append(f'{{"{piece["id"]}",&{s}_mesh,{s}_skin,{s}_direction,{shapes},{{{material}}},{piece["render_vertices"]},'
                     f'{c_float(piece["linear_inertia"])},{c_float(piece["angular_inertia"])}}}')
@@ -229,6 +306,7 @@ def emit_expected(out, garment, blob_path, empty_path):
     for c_name, py_name in limits:
         out.write(f'_Static_assert({c_name} == {getattr(garment_blob, py_name)}, "garment_blob.py {py_name} differs from {c_name}");\n')
     out.write(f'#define GARMENT_FIXTURE_BLOB "{blob_path.as_posix()}"\n#define GARMENT_FIXTURE_EMPTY "{empty_path.as_posix()}"\n')
+    out.write("static const char *const rejected_cases[] = {" + ",".join(f'"{n}"' for n in rejected_blobs()) + "};\n")
 
 
 if __name__ == "__main__":
@@ -236,7 +314,11 @@ if __name__ == "__main__":
         header, blob, empty = (Path(p).resolve() for p in sys.argv[2:5])
         blob.write_bytes(build(synthetic()))
         empty.write_bytes(encode("plain", []))
+        # A blob the view must refuse per case, beside the fixture: <fixture stem>.<case>.garment.
+        for name, data in rejected_blobs().items():
+            blob.with_name(f"{blob.stem}.{name}.garment").write_bytes(data)
         with header.open("w", encoding="ascii", newline="\n") as out:
+            out.write("#include <math.h>\n")
             emit_expected(out, synthetic(), blob, empty)
     else:
         unittest.main()

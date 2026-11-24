@@ -68,7 +68,7 @@
     {
       "id": "garment-cloth",
       "source": "features/garment-cloth",
-      "version": "4.0.0",
+      "version": "5.0.0",
       "compatibility": "validated with one fixture per constraint: max distance, backstop, tethers, swept cones, convexes with friction, reset and joint interpolation"
     },
     {

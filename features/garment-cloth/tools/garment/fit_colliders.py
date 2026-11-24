@@ -5,7 +5,8 @@ the outfit's clips, and write the set (garment.colliders.v1).
 
 The script runs into scratch first (as check.py does), so the fit sees the sim meshes and maps of the stage it builds;
 the segments are the rig's body segments (joint pairs). Every reference sample that fails G4 is G4's, not a shape's.
-The fit needs the declared complete body; the set's asset record (`<out>.provenance.json`) is written beside it."""
+The fit needs the declared complete body; the set's asset record (`<out>.provenance.json`) is written beside it and
+inherits origin and license from the body's own record."""
 import hashlib
 import json
 import sys
@@ -29,6 +30,7 @@ def main(argv=None):
         raise SystemExit(f"{script}: the fit needs the outfit's declared complete body (B.3); the script builds on the "
                          f"fallback body {sc.build['body']}")
     body_file = outfit.root / sc.build["body"]
+    Bd.source_record(body_file)
     rig = C.Rig.from_glb(outfit.model.glb)
     pieces = []
     for p, authored in zip(sc.pieces, outfit.pieces):
@@ -44,7 +46,7 @@ def main(argv=None):
                     what="The outfit's body shapes for garment-cloth (garment.colliders.v1): spheres on body joints in rest "
                          "model space and the round cones joining them, fitted by garment.colliders.fit.",
                     producer="features/garment-cloth/tools/garment/fit_colliders.py",
-                    rebuild=f"python features/garment-cloth/tools/garment/fit_colliders.py {' '.join(argv)}",
+                    rebuild=f"python features/garment-cloth/tools/garment/fit_colliders.py {' '.join(argv)}", source=body_file,
                     fitted_on=dict(script=script.as_posix(), body=sc.build["body"], body_sha256=C.sha256(body_file),
                                    segments=segments_path.as_posix(), segments_sha256=C.sha256(segments_path),
                                    sidecar_sha256=hashlib.sha256(data).hexdigest(), library=Bd.LIBRARY_VERSION))

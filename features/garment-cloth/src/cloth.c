@@ -47,7 +47,7 @@ static bool shapes_valid(const ClothShapes *sh, float thickness) {
 }
 
 static bool inputs_valid(const ClothMesh *mesh, const ClothMaterial *m, const ClothReference *ref,
-                         const float *max_distance, const ClothShapes *shapes) {
+                         const float *max_distance, const ClothBackstop *backstop, const ClothShapes *shapes) {
     NT_ASSERT(mesh && mesh->vertices >= 3 && mesh->vertices <= CLOTH_VERTICES && m);
     if (!ref) return false;
     const float *r = max_distance ? max_distance : mesh->max_distance;
@@ -55,18 +55,19 @@ static bool inputs_valid(const ClothMesh *mesh, const ClothMaterial *m, const Cl
         float length2 = glm_vec3_norm2((float *)ref[i].b);
         if (!finite_point(ref[i].x) || !isfinite(length2) || fabsf(length2 - 1.0F) > 0.002F || !isfinite(r[i]) ||
             r[i] < 0.0F) return false;
+        if (backstop && !(isfinite(backstop[i].d) && backstop[i].d >= 0.0F && backstop[i].R >= 0.0F)) return false;
     }
     return shapes_valid(shapes, m->thickness);
 }
 
 /* Mesh and material are cooked and trusted; only the per-frame inputs are checked. */
 bool cloth_frame_valid(const ClothMesh *mesh, const ClothMaterial *m, float dt, const ClothReference *ref,
-                       const float *max_distance, const ClothShapes *shapes) {
+                       const float *max_distance, const ClothBackstop *backstop, const ClothShapes *shapes) {
     NT_ASSERT(mesh && m);
     if (!isfinite(dt) || dt <= 0) return false;
     float scale = m->density / (dt * dt);
     if (!isfinite(scale) || !isfinite(m->stretch * scale) || !isfinite(m->bend * scale)) return false;
-    return inputs_valid(mesh, m, ref, max_distance, shapes);
+    return inputs_valid(mesh, m, ref, max_distance, backstop, shapes);
 }
 
 static inline float fast_atan_unit(float z) {
@@ -492,10 +493,11 @@ static float backstop_depth(const float x[3], const ClothReference *ref, ClothBa
     return depth;
 }
 
-static void project_backstop(ClothState *s, const ClothMesh *mesh, const float *w, const ClothReference *ref) {
+static void project_backstop(ClothState *s, const ClothMesh *mesh, const float *w, const ClothReference *ref,
+                             const ClothBackstop *bs) {
     for (int i = 0; i < mesh->vertices; ++i) {
         vec3 push;
-        if (w[i] != 0.0F && backstop_depth(s->x[i], &ref[i], mesh->backstop[i], push) > 0.0F)
+        if (w[i] != 0.0F && backstop_depth(s->x[i], &ref[i], bs[i], push) > 0.0F)
             glm_vec3_add(s->x[i], push, s->x[i]);
     }
 }
@@ -584,12 +586,14 @@ static void kinematic_weights(const ClothMesh *mesh, const float *r, float *w) {
    constraints cannot all hold, the fabric keeps its limit and the excess beyond max distance, which the measures
    report, shows the defect instead of a torn triangle. */
 void cloth_step(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, float dt, const ClothFrame *frame,
-                const ClothReference *ref, const float *max_distance, const ClothShapes *shapes) {
+                const ClothReference *ref, const float *max_distance, const ClothBackstop *backstop,
+                const ClothShapes *shapes) {
     if (!s) return;
     s->frame_valid = s->mesh == mesh && frame_motion_valid(frame) &&
-                     cloth_frame_valid(mesh, m, dt, ref, max_distance, shapes);
+                     cloth_frame_valid(mesh, m, dt, ref, max_distance, backstop, shapes);
     if (!s->frame_valid) return;
     const float *r = max_distance ? max_distance : mesh->max_distance;
+    const ClothBackstop *bs = backstop ? backstop : mesh->backstop;
     StepWork *wk = &work;
     float (*x_prev)[3] = wk->x_prev;
     float *w = wk->w;
@@ -660,7 +664,7 @@ void cloth_step(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, fl
             float s_scale = e->kind == CLOTH_EDGE_WEFT ? weft_s : (e->kind == CLOTH_EDGE_DIAG ? diag_s : 1.0F);
             stretch(s, e, w, m->stretch * s_scale * scale, m->compression_limit, &s->stretch_lambda[i]);
         }
-        project_backstop(s, mesh, w, ref);
+        project_backstop(s, mesh, w, ref, bs);
         bool last = pass == m->iterations - 1;
         project_shapes(s, mesh, w, (const float (*)[3])x_prev, &wk->bp, m->thickness, mu, last, wk->normal);
         project_convexes(s, mesh, w, (const float (*)[3])x_prev, wk, move, m->thickness, mu, wk->normal);
@@ -671,7 +675,7 @@ void cloth_step(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, fl
         if (limit_strain_pass(s, mesh, m, w, (const float (*)[3])wk->normal, pass % 2 != 0)) moved = true;
         else break;
     if (moved) {
-        project_backstop(s, mesh, w, ref);
+        project_backstop(s, mesh, w, ref, bs);
         project_shapes(s, mesh, w, (const float (*)[3])x_prev, &wk->bp, m->thickness, mu, true, NULL);
         project_convexes(s, mesh, w, (const float (*)[3])x_prev, wk, move, m->thickness, mu, NULL);
     }
@@ -715,11 +719,11 @@ static void exit_convex_nearest(float p[3], const ConvexPlanes *cv, float thickn
 }
 
 bool cloth_reset(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, const ClothReference *ref,
-                 const float *max_distance, const ClothShapes *shapes) {
+                 const float *max_distance, const ClothBackstop *backstop, const ClothShapes *shapes) {
     if (!s) return false;
     s->mesh = NULL;
     s->frame_valid = false;
-    if (!inputs_valid(mesh, m, ref, max_distance, shapes)) return false;
+    if (!inputs_valid(mesh, m, ref, max_distance, backstop, shapes)) return false;
     const float *r = max_distance ? max_distance : mesh->max_distance;
     StepWork *wk = &work;
     build_broadphase(shapes, m->thickness, &wk->bp);
@@ -742,11 +746,12 @@ bool cloth_reset(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, c
     return true;
 }
 
-ClothMetrics cloth_measure(const ClothState *s, const ClothMesh *mesh, const ClothMaterial *m,
-                           const ClothReference *ref, const float *max_distance, const ClothShapes *shapes) {
-    if (!s || !s->frame_valid || s->mesh != mesh || !inputs_valid(mesh, m, ref, max_distance, shapes))
+ClothMetrics cloth_measure(const ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, const ClothReference *ref,
+                           const float *max_distance, const ClothBackstop *backstop, const ClothShapes *shapes) {
+    if (!s || !s->frame_valid || s->mesh != mesh || !inputs_valid(mesh, m, ref, max_distance, backstop, shapes))
         return (ClothMetrics){0};
     const float *r = max_distance ? max_distance : mesh->max_distance;
+    const ClothBackstop *bs = backstop ? backstop : mesh->backstop;
     StepWork *wk = &work;
     build_broadphase(shapes, m->thickness, &wk->bp);
     prepare_convexes(shapes, wk);
@@ -758,7 +763,7 @@ ClothMetrics cloth_measure(const ClothState *s, const ClothMesh *mesh, const Clo
                                           glm_vec3_distance((float *)s->x[i], (float *)ref[i].x) - r[i]);
         vec3 push;
         if (r[i] > 0.0F)
-            out.backstop_depth_m = fmaxf(out.backstop_depth_m, backstop_depth(s->x[i], &ref[i], mesh->backstop[i], push));
+            out.backstop_depth_m = fmaxf(out.backstop_depth_m, backstop_depth(s->x[i], &ref[i], bs[i], push));
         float held = 0.0F;
         for (int bi = 0; bi < wk->bp.count; ++bi) {
             vec3 normal;
