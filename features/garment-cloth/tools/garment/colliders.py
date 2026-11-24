@@ -14,12 +14,17 @@ the body. The rule, per segment of the body (a joint pair: rig data, never outfi
    segment or the end of the limb, which the volume does not count.
 3. Reach (gate G7). No shape may hold a reference vertex of any garment piece deeper than that vertex's max distance
    r, in any frame of any clip: sd(ref, shape) >= thickness - r, so a pin (r = 0) stays outside the shape plus the
-   thickness, as the runtime measures it. A cone that fails gives way: it is cut back from its ends (the radius at a
-   new end interpolated, so the cut cone lies inside the old one and can only hold less), or it is split along its
-   section's long direction into two cones that each cover their half, and each is cut in turn (spec X3). Of the cut
-   single and the cut pair, the one that keeps more of the segment's skin area held wins, the single on a tie; a cone
-   no cut can clear is dropped. Shapes do not interact in G7 (the union holds a vertex iff one shape does), so each
-   segment is decided alone.
+   thickness, as the runtime measures it. G7 is evaluated on the reference samples that pass G4: a sample that is
+   itself inside the skin deeper than r (sd(ref, skin + thickness) < -r; a pin inside the skin at all) is content to
+   fix, listed by `g4_failing`, and no shape is shrunk around it.
+4. Give way. A cone that fails G7 is replaced by the cone that leaves the least skin outside (the skin area times its
+   depth outside, so a millimetre of thinning costs a millimetre, not the whole ring) among those that pass: on the
+   cover's axis, each end cut back by 0 to half the length in tenths, each end radius no larger than the cover's
+   there. Thinning costs least, so a cone thins before it shortens; the full length wins a tie. The section split
+   along its long direction gives two halves, each covered and given way the same (spec X3); the pair replaces the
+   single cone when it brings the skin closer on average by more than the thinnest fabric is thick, a gain the cloth
+   could show. A cone nothing passes for is left out. Shapes do not interact in G7 (the union holds a vertex iff
+   one shape does), so each segment is decided alone.
 
 All positions are rest model space, metres, Y up. A shape's spheres ride one joint: a rest centre c is posed by that
 joint's skin matrix (joint world x inverse bind)."""
@@ -39,8 +44,9 @@ SCHEMA = "garment.colliders.v1"
 REST = "rest"
 # The runtime's limit on spheres and on cones per outfit (garment_blob.SHAPES_MAX).
 SHAPES_MAX = 64
-# A cut is searched in steps of this fraction of the cone's length.
-CUT_STEPS = 100
+# Radii are searched on this many steps; a cut in tenths of the length, up to half from each end.
+STEPS = 40
+CUTS = np.linspace(0.0, 0.5, 6)
 # The fit clears every reference vertex by the runtime's float resolution at body scale, so the runtime's float32
 # measure and joint matrices a hair off rigid agree with the fit.
 RESOLUTION_M = 1e-6
@@ -52,16 +58,23 @@ def round_cone_distance(points, a, b, ra, rb):
     p = np.asarray(points, float)
     a, b = np.asarray(a, float), np.asarray(b, float)
     pa = p - a
-    da = np.linalg.norm(pa, axis=-1) - ra
-    db = np.linalg.norm(p - b, axis=-1) - rb
     ba = b - a
-    len2 = np.sum(ba * ba, axis=-1)
-    dr = ra - rb
-    proper = (len2 > 1e-12) & (dr * dr < len2)
-    length = np.sqrt(np.maximum(len2, 1e-24))
-    u = ba / length[..., None]
+    length = np.sqrt(np.sum(ba * ba, axis=-1))
+    u = ba / np.maximum(length, 1e-12)[..., None]
     y = np.sum(pa * u, axis=-1)
     x = np.linalg.norm(pa - y[..., None] * u, axis=-1)
+    return profile_distance(y, x, length, ra, rb)
+
+
+def profile_distance(y, x, length, ra, rb):
+    """The same distance from a point's axial coordinate y (from sphere a toward b) and its distance x from the axis:
+    a round cone is axially symmetric."""
+    da = np.hypot(x, y) - ra
+    db = np.hypot(x, y - length) - rb
+    len2 = length * length
+    dr = ra - rb
+    proper = (len2 > 1e-12) & (dr * dr < len2)
+    length = np.maximum(length, 1e-12)
     side = np.sqrt(np.maximum(len2 - dr * dr, 0.0))
     s = (-x * dr + y * side) / length
     mid = (x * side + y * dr) / length - ra
@@ -343,24 +356,64 @@ def halves(points, cone):
     return radial @ vectors[:, -1] >= 0
 
 
-class Reach:
-    """Every reference vertex of every piece in every clip frame, seen from one joint's rest frame, with its allowance
-    m = r - thickness: a shape riding that joint holds the vertex too deep when sd < -m (gate G7)."""
+def references(pieces, matrices):
+    """The reference points of every piece, concatenated: (frames, vertices, 3)."""
+    return np.concatenate([np.zeros((len(matrices), 0, 3))] + [M.skin_points(p.rest, p.weights, matrices)
+                                                               for p in pieces], axis=1)
 
-    def __init__(self, rig, pieces, clips):
+
+def g4_failing(body, pieces, clips):
+    """Per clip, (frames, vertices of all pieces): True where the reference is inside the posed skin deeper than its
+    max distance allows (gate G4: sd(ref, skin + thickness) < -r; a pin, r = 0, inside the skin at all). The side is
+    the closest skin point's interpolated normal; a closest point on a hole's rim has no known side and passes."""
+    from garment_proxy import closest_surface_points
+    from . import sim
+    rim = np.zeros(len(body.surface.points), bool)
+    rim[sim.boundary_edges(body.surface.welded).ravel()] = True
+    rim_face = rim[body.surface.welded].any(1)
+    r = np.concatenate([np.zeros(0)] + [p.r for p in pieces])
+    t = np.concatenate([np.zeros(0)] + [np.full(len(p.r), p.thickness) for p in pieces])
+    out = []
+    for _, _, matrices in clips:
+        refs = references(pieces, matrices)
+        skin = M.skin_points(body.points, body.weights, matrices)
+        fail = np.zeros(refs.shape[:2], bool)
+        for f in range(len(matrices) if refs.shape[1] else 0):
+            tri = skin[f][body.faces]
+            normals = np.zeros_like(skin[f])
+            for col in range(3):
+                np.add.at(normals, body.faces[:, col], np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0]))
+            face, bary, distance = closest_surface_points(refs[f], skin[f], body.faces)
+            closest = np.einsum("nk,nkj->nj", bary, tri[face])
+            normal = np.einsum("nk,nkj->nj", bary, normals[body.faces[face]])
+            sd = np.where(np.einsum("nj,nj->n", refs[f] - closest, normal) < 0, -distance, distance)
+            fail[f] = ~rim_face[face] & np.where(r > 0, sd - t < -r, sd < 0)
+        out.append(fail)
+    return out
+
+
+class Reach:
+    """The reference samples G7 is evaluated on (every vertex of every piece in every clip frame that passes G4), seen
+    from one joint's rest frame, with its allowance m = r - thickness: a shape riding that joint holds the vertex too
+    deep when sd < -m."""
+
+    def __init__(self, rig, pieces, clips, g4):
         self.rig = rig
         self.matrices = np.concatenate([m for _, _, m in clips])
-        self.refs = np.concatenate([np.concatenate([np.zeros((len(m), 0, 3))] + [
-            M.skin_points(p.rest, p.weights, m) for p in pieces], axis=1) for _, _, m in clips])
-        self.allowance = np.concatenate([np.zeros(0)] + [p.r - p.thickness for p in pieces]) - RESOLUTION_M
+        refs = np.concatenate([references(pieces, m) for _, _, m in clips])
+        allowance = np.concatenate([np.zeros(0)] + [p.r - p.thickness for p in pieces]) - RESOLUTION_M
+        keep = ~np.concatenate(g4)
+        self.frame = np.broadcast_to(np.arange(len(self.matrices))[:, None], keep.shape)[keep]
+        self.refs = refs[keep]
+        self.allowance = np.broadcast_to(allowance, keep.shape)[keep]
         self._cache = {}
 
     def seen_from(self, joint):
-        """(points (frames * vertices, 3), allowance per point) in the joint's rest frame."""
+        """(points (samples, 3), allowance per sample) in the joint's rest frame."""
         if joint not in self._cache:
-            inverse = np.linalg.inv(self.matrices[:, self.rig.index(joint)])
-            q = np.einsum("fab,fvb->fva", inverse[:, :3, :3], self.refs) + inverse[:, None, :3, 3]
-            self._cache = {joint: (q.reshape(-1, 3), np.tile(self.allowance, len(q)))}
+            inverse = np.linalg.inv(self.matrices[:, self.rig.index(joint)])[self.frame]
+            q = np.einsum("nab,nb->na", inverse[:, :3, :3], self.refs) + inverse[:, :3, 3]
+            self._cache = {joint: (q, self.allowance)}
         return self._cache[joint]
 
 
@@ -368,52 +421,82 @@ def _failing(cone, q, m):
     return cone.distance(q) + m < 0
 
 
-def _give_way(cone, q, m, points, area):
-    """The cut (ca, cb) of a cone that passes every point of q (allowance m) and keeps the most of the points' area
-    held: (kept area, cut cone or None, ca, cb). The candidates are the points the uncut cone fails, since a cut cone
-    lies inside it.
+def _outside(cones, points, area):
+    """The skin left outside a set of cones: sum of area x depth outside the nearest one."""
+    if not cones:
+        return float(np.inf)
+    return float(np.sum(area * np.maximum(np.min([c.distance(points) for c in cones], axis=0), 0.0)))
 
-    The round cone is the union of the balls (c(l), r(l)), l in [0, 1], with c and r linear, so a point fails exactly
-    on the l where |q - c(l)| < r(l) - m: an interval, since that distance is convex in l. A cut [ca, 1 - cb] passes the
-    point when it misses the interval: ca >= its top or 1 - cb <= its bottom. For each ca on a grid, the least cb then
-    follows exactly."""
+
+def _give_way(cone, q, m, points, area):
+    """Rule 4 for one cone: the passing cone on its axis, cut by CUTS at each end and with end radii no larger than the
+    cover's there, that leaves the least skin outside; the full length and then the larger cone on a tie; None when
+    none passes. A smaller pair of radii gives a cone inside the larger one, so for each ra on a grid the largest
+    passing rb is found by bisection. The samples are first thinned to the nearest one (x + m least) in each half
+    millimetre along the axis, and the winner is checked against all of them."""
     bad = _failing(cone, q, m)
     if not bad.any():
-        return float(area[cone.distance(points) <= 1e-9].sum()), cone, 0.0, 0.0
-    q, m = q[bad], m[bad]
-    d, dr = cone.b - cone.a, cone.rb - cone.ra
-    A = d @ d - dr * dr
-    if A <= 1e-12:
-        return 0.0, None, 1.0, 0.0
-    w = q - cone.a
-    B = -2 * (w @ d) - 2 * (cone.ra - m) * dr
-    root = np.sqrt(np.maximum(B * B - 4 * A * (np.sum(w * w, axis=1) - (cone.ra - m) ** 2), 0.0))
-    low, high = np.clip((-B - root) / (2 * A), 0, 1), np.clip((-B + root) / (2 * A), 0, 1)
-    # Numerical slack on the open interval: a cut on its boundary would leave the point on the shape's surface.
-    low, high = low - 1e-6, high + 1e-6
-    best = (0.0, None, 1.0, 0.0)
-    for ca in np.linspace(0, 1, CUT_STEPS + 1):
-        rest = high > ca
-        cb = float(np.max(1 - low[rest], initial=0.0))
-        if ca + cb > 1:
-            continue
-        cut = cone.cut(ca, cb)
-        kept = float(area[cut.distance(points) <= 1e-9].sum())
-        if kept > best[0] and not _failing(cut, q, m).any():
-            best = (kept, cut, float(ca), cb)
-    return best
+        return cone
+    length = float(np.linalg.norm(cone.b - cone.a))
+    u = (cone.b - cone.a) / length
+    rel = q[bad] - cone.a
+    y = rel @ u
+    x = np.linalg.norm(rel - np.outer(y, u), axis=1)
+    m = m[bad]
+    order = np.lexsort((x + m, np.round(y / 5e-4)))
+    first = np.r_[True, np.diff(np.round(y[order] / 5e-4)) != 0]
+    near = order[first]
+    best = None
+    for ca in CUTS:
+        for cb in CUTS:
+            part = cone.cut(ca, cb)
+            a0, l0 = ca * length, (1 - ca - cb) * length
+
+            def fails(ra, rb, k=near):
+                return bool(np.any(profile_distance(y[k] - a0, x[k], l0, ra, rb) + m[k] < 0))
+
+            if fails(0.0, 0.0):
+                continue
+            for ra in np.linspace(0.0, part.ra, STEPS + 1):
+                if fails(ra, 0.0):
+                    break
+                lo, hi = 0.0, part.rb
+                if fails(ra, hi):
+                    for _ in range(30):
+                        mid = 0.5 * (lo + hi)
+                        lo, hi = (mid, hi) if not fails(ra, mid) else (lo, mid)
+                else:
+                    lo = hi
+                candidate = Cone(part.a, part.b, ra, lo)
+                key = (_outside([candidate], points, area), ca + cb, -(ra * ra + ra * lo + lo * lo))
+                if best is None or key < best[0]:
+                    best = (key, candidate, a0, l0)
+    if best is None:
+        return None
+    _, found, a0, l0 = best
+    scale = 1.0
+    # The thinned samples stand for their half millimetre; if one they hid still fails, the cone shrinks to pass it.
+    while np.any(profile_distance(y - a0, x, l0, found.ra * scale, found.rb * scale) + m < 0):
+        scale *= 0.98
+        if scale < 1e-3:
+            return None
+    return Cone(found.a, found.b, found.ra * scale, found.rb * scale)
 
 
-def fit(body, rig, segments, pieces, clips):
+def fit(body, rig, segments, pieces, clips, g4=None):
     """The collider set of one body model by the rule of this module's docstring.
 
     body: garment.body.Body (its skin weights on the rig's joints); rig: Rig; segments: [Segment]; pieces: [Piece] of
-    every garment worn on this body; clips: clip_poses(...) output, the rest pose included. Returns a ColliderSet whose
-    log names, per segment, its vertices, the covering cone, the reference vertices it held and what it gave up."""
+    every garment worn on this body; clips: clip_poses(...) output, the rest pose included; g4: g4_failing(...) when
+    already computed. Returns a ColliderSet whose log lists first the G4 failures per clip that the fit did not fit
+    around, then per segment its vertices, the covering cone, the samples it held and what it gave up."""
     owner = belonging(body, rig, segments)
     area = vertex_areas(body.points, body.faces)
-    reach = Reach(rig, pieces, clips)
-    spheres, cones, log = [], [], []
+    g4 = g4_failing(body, pieces, clips) if g4 is None else g4
+    reach = Reach(rig, pieces, clips, g4)
+    thickness = min((p.thickness for p in pieces), default=0.0)
+    spheres, cones = [], []
+    log = [dict(g4_failing={name: int(f.sum()) for (name, _, _), f in zip(clips, g4) if f.any()})]
     for k, seg in enumerate(segments):
         mine = owner == k
         started = time.time()
@@ -433,29 +516,22 @@ def fit(body, rig, segments, pieces, clips):
         if not held.any():
             chosen, entry["decision"] = [whole], "cover"
         else:
-            single = _give_way(whole, q, m, points, weight)
+            single = [c for c in [_give_way(whole, q, m, points, weight)] if c is not None]
             first = halves(points, whole)
             pair = []
-            if first.sum() >= 2 and (~first).sum() >= 2:
-                pair = [_give_way(cover(points[h], rig.position(seg.joints[0]), rig.position(seg.joints[1])), q, m,
-                                  points[h], weight[h]) for h in (first, ~first)]
-            union = 0.0
-            if pair and any(c[1] is not None for c in pair):
-                inside = np.zeros(len(points), bool)
-                for c in pair:
-                    if c[1] is not None:
-                        inside |= c[1].distance(points) <= 1e-9
-                union = float(weight[inside].sum())
-            if union > single[0] + 1e-12:
-                chosen = [c[1] for c in pair if c[1] is not None]
-                entry["decision"] = "split"
-                entry["cuts"] = [[round(c[2], 2), round(c[3], 2)] if c[1] is not None else "dropped" for c in pair]
-            elif single[1] is not None:
-                chosen, entry["decision"] = [single[1]], "cut"
-                entry["cuts"] = [[round(single[2], 2), round(single[3], 2)]]
-            else:
-                chosen, entry["decision"] = [], "dropped"
-            entry["kept_share"] = round(max(union, single[0]) / float(weight.sum()), 3)
+            for h in (first, ~first) if first.sum() >= 2 and (~first).sum() >= 2 else ():
+                half = _give_way(cover(points[h], rig.position(seg.joints[0]), rig.position(seg.joints[1])), q, m,
+                                 points[h], weight[h])
+                pair += [half] if half is not None else []
+            # A second shape is worth its cost only where it brings the skin closer than the cloth is thick.
+            gain = (_outside(single, points, weight) - _outside(pair, points, weight)) / float(weight.sum())
+            chosen = pair if gain > thickness else single
+            entry["decision"] = ("split" if chosen is pair else "given way") + (
+                "" if not chosen else f", length kept {np.mean([np.linalg.norm(c.b - c.a) for c in chosen]) / np.linalg.norm(whole.b - whole.a):.2f}")
+        entry["radii_mm"] = [[round(c.ra * 1000, 1), round(c.rb * 1000, 1)] for c in chosen]
+        outside = np.min([c.distance(points) for c in chosen], axis=0) if chosen else np.full(len(points), np.inf)
+        entry["skin_outside"] = dict(share=round(float(weight[outside > 1e-9].sum() / weight.sum()), 3),
+                                     depth_p90_mm=round(float(np.percentile(np.maximum(outside, 0), 90)) * 1000, 1))
         for n, c in enumerate(chosen):
             stem = seg.name if len(chosen) == 1 else f"{seg.name}/{n + 1}"
             spheres += [Sphere(f"{stem}.a", seg.joints[0], c.a, c.ra), Sphere(f"{stem}.b", seg.joints[0], c.b, c.rb)]
@@ -465,25 +541,35 @@ def fit(body, rig, segments, pieces, clips):
     return ColliderSet(spheres, cones, log)
 
 
-def g7(shapes, rig, pieces, clips):
+def g7(shapes, rig, pieces, clips, g4=None):
     """Gate G7 of a set over the clips: per piece {clip: {worst_mm, frames, vertices}}, and per piece the vertices
-    held in any frame. A vertex is held when sd(ref, shapes) < thickness - r."""
+    held in any frame. A vertex is held when sd(ref, shapes) < thickness - r; with g4 (g4_failing), only samples that
+    pass G4 count, and each piece also lists its G4-failing vertices."""
     out = {p.id: dict(clips={}, held=set()) for p in pieces}
+    starts = np.cumsum([0] + [len(p.r) for p in pieces])
+    if g4 is not None:
+        for k, p in enumerate(pieces):
+            failing = np.concatenate([f[:, starts[k]:starts[k + 1]] for f in g4]).any(0)
+            out[p.id]["g4_vertices"] = int(failing.sum())
     if not shapes.spheres:
-        return {k: dict(clips={}, held_vertices=0, worst_mm=0.0) for k in out}
-    for name, _, matrices in clips:
+        return {k: dict({n: x for n, x in v.items() if n != "held"}, clips={}, held_vertices=0, worst_mm=0.0)
+                for k, v in out.items()}
+    for c, (name, _, matrices) in enumerate(clips):
         centres = shapes.posed(rig, matrices)
-        for p in pieces:
+        for k, p in enumerate(pieces):
             ref = M.skin_points(p.rest, p.weights, matrices)
             sd, _ = shapes.distance(ref, centres)
             violation = p.thickness - sd - p.r
             bad = violation > 0
+            if g4 is not None:
+                bad &= ~g4[c][:, starts[k]:starts[k + 1]]
+                violation = np.where(bad, violation, 0.0)
             if bad.any():
                 vertices = np.flatnonzero(bad.any(0))
                 out[p.id]["held"] |= set(vertices.tolist())
                 out[p.id]["clips"][name] = dict(worst_mm=round(float(violation.max()) * 1000, 1),
                                                 frames=int(bad.any(1).sum()), vertices=len(vertices))
-    return {k: dict(clips=v["clips"], held_vertices=len(v["held"]),
+    return {k: dict({n: x for n, x in v.items() if n != "held"}, held_vertices=len(v["held"]),
                     worst_mm=max([c["worst_mm"] for c in v["clips"].values()], default=0.0)) for k, v in out.items()}
 
 
@@ -583,16 +669,16 @@ def proud(shapes, body):
     return dict(all=stats(mm[keep]), segments=segments, rim_share=round(float(rim.mean()), 3))
 
 
-def report(shapes, body, rig, pieces, clips, hz=5.0):
+def report(shapes, body, rig, pieces, clips, hz=5.0, g4=None):
     """The measures of a set on a body model (spec C.3 reports and G7):
     - per piece, the body surface under it (footprint), loose and fitted zones apart: share of area outside every
       shape and the depth outside (p50, p90, max mm), at rest and over the clip frames (sampled at most `hz`);
     - how far the shapes stand proud of the skin at rest (proud);
-    - G7 per piece and clip, over every key frame (g7);
+    - G7 per piece and clip, over every key frame, on the samples that pass G4 (g7; g4: g4_failing when computed);
     - the count of spheres and cones."""
     s = samples(body)
     out = dict(spheres=len(shapes.spheres), cones=len(shapes.cones), proud=proud(shapes, body),
-               g7=g7(shapes, rig, pieces, clips), pieces={})
+               g7=g7(shapes, rig, pieces, clips, g4_failing(body, pieces, clips) if g4 is None else g4), pieces={})
     zones = {}
     for p in pieces:
         under, loose, rim = footprint(body, p, s["points"])

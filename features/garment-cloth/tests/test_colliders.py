@@ -1,6 +1,7 @@
 """The collider fit on synthetic limbs whose answer is known: a round limb is covered by a cone of its own radius, an
-elliptic one by the circle of its long axis with the difference standing proud, a fitted reference vertex makes the
-covering cone give way until gate G7 passes, and the asset reads back as written."""
+elliptic one by the circle of its long axis with the difference standing proud, a fitted reference vertex thins the
+cone's near end while its far end and length stay, a reference inside the skin itself (a G4 failure) leaves the fit
+alone, a segment list without arms gives no arm shapes, and the asset reads back as written."""
 import math
 import sys
 import tempfile
@@ -82,29 +83,47 @@ class CoverTest(unittest.TestCase):
 
 
 class ReachTest(unittest.TestCase):
-    def test_a_fitted_vertex_inside_the_covering_cone_makes_it_give_way_until_g7_passes(self):
+    def test_a_fitted_vertex_near_the_hip_thins_the_hip_end_and_the_cone_keeps_its_length_and_knee(self):
         body = limb(0.06, 0.06)
-        # 2 mm inside the cone near the hip, free by 0.5 mm only; the other two corners stand clear of the leg.
+        # 2 mm inside the cover near the hip, free by 0.5 mm only; the other two corners stand clear of the leg.
         cloth = [piece([(0.058, Y1 - 0.03, 0.0), (0.2, Y1, 0.0), (0.2, Y1 - 0.1, 0.0)], [0.0005, 0.0, 0.0])]
         whole = C.fit(body, RIG, SEGMENTS, [], CLIPS)
         self.assertEqual(held(whole, cloth), 1)
         shapes = C.fit(body, RIG, SEGMENTS, cloth, CLIPS)
         self.assertEqual(held(shapes, cloth), 0)
-        log = shapes.log[0]
-        self.assertIn(log["decision"], ("cut", "split"))
-        self.assertGreater(log["kept_share"], 0.8)
+        self.assertEqual(shapes.log[1]["decision"], "given way, length kept 1.00")
+        hip, knee = shapes.spheres
+        self.assertLess(hip.radius, 0.06 - 0.001)
+        self.assertAlmostEqual(knee.radius, 0.06, delta=1e-4)
+        self.assertAlmostEqual(abs(hip.center[1] - knee.center[1]), Y1 - Y0, delta=1e-9)
 
-    def test_an_elliptic_limb_under_cloth_on_its_flat_side_splits_rather_than_loses_its_length(self):
-        body = limb(0.08, 0.05)
-        middle = 0.5 * (Y0 + Y1)
-        cloth = [piece([(0.0, middle, 0.055), (0.2, Y1, 0.2), (0.2, Y0, 0.2)], [0.001, 0.0, 0.0])]
+    def test_a_reference_inside_the_skin_deeper_than_its_reach_does_not_change_the_fit(self):
+        body = limb(0.06, 0.06)
+        # 40 mm inside the leg with 5 mm of reach: a G4 failure, content to fix, not a reason to shrink the leg.
+        cloth = [piece([(0.02, 0.3, 0.0), (0.2, Y1, 0.0), (0.2, Y0, 0.0)], [0.005, 0.0, 0.0])]
+        alone = C.fit(body, RIG, SEGMENTS, [], CLIPS)
         shapes = C.fit(body, RIG, SEGMENTS, cloth, CLIPS)
-        self.assertEqual(held(shapes, cloth), 0)
-        self.assertEqual(shapes.log[0]["decision"], "split")
-        self.assertEqual(len(shapes.cones), 2)
-        self.assertGreater(shapes.log[0]["kept_share"], 0.99)
-        centres = shapes.posed(RIG, CLIPS[0][2])
-        self.assertLessEqual(shapes.distance(body.points[None], centres)[0].max(), 1e-9)
+        self.assertEqual(shapes.log[0]["g4_failing"], {C.REST: 1, "step": 1})
+        for s, t in zip(alone.spheres, shapes.spheres):
+            np.testing.assert_allclose(s.center, t.center)
+            self.assertEqual(s.radius, t.radius)
+        self.assertEqual(C.g7(shapes, RIG, cloth, CLIPS, C.g4_failing(body, cloth, CLIPS))["panel"]["held_vertices"], 0)
+
+    def test_a_segment_list_without_arms_gives_no_arm_shapes(self):
+        leg, arm = limb(0.06, 0.06), limb(0.04, 0.04)
+        points = np.concatenate([leg.points, arm.points + [0.4, 0.6, 0.0]])
+        weights = np.zeros((len(points), 4))
+        weights[:len(leg.points), 0] = 1
+        weights[len(leg.points):, 2] = 1
+        joints = JOINTS + ["arm", "hand"]
+        body = Body(points, np.concatenate([leg.faces, arm.faces + len(leg.points)]),
+                    np.concatenate([leg.normals, arm.normals]), weights, joints, complete=False)
+        rig = C.Rig(joints, [(0, Y1, 0), (0, Y0, 0), (0.4, Y1 + 0.6, 0), (0.4, Y0 + 0.6, 0)])
+        clips = [(C.REST, np.zeros(1), np.stack([np.eye(4)] * 4)[None])]
+        shapes = C.fit(body, rig, SEGMENTS, [], clips)
+        self.assertEqual({s.bone for s in shapes.spheres}, {"hip"})
+        both = C.segments_from({"segments": [{"name": "thigh", "joints": JOINTS}, {"name": "arm", "joints": ["arm", "hand"]}]})
+        self.assertEqual({s.bone for s in C.fit(body, rig, both, [], clips).spheres}, {"hip", "arm"})
 
 
 class FileTest(unittest.TestCase):
