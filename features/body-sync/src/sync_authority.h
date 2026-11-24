@@ -23,6 +23,16 @@
 #include "stub_wire.h"
 #include "sync_policy.h"
 
+/* A state the host took of a guest's body: where, the sender's tick, the host's tick. The ring
+   keeps enough of them to span a contact claim's grace at the full state rate of a flying body
+   under the slowest honest path (README "Contact claims"). */
+enum { SYNC_AUTHORITY_POSES = 12 };
+typedef struct sync_authority_pose {
+    float position[3];
+    float step[3]; /* metres a tick from the state before it in the ring; 0 for the first */
+    uint32_t tick, host_tick;
+} sync_authority_pose_t;
+
 typedef struct sync_authority_body {
     bool bound;
     uint16_t generation;
@@ -69,11 +79,13 @@ typedef struct sync_authority_body {
     bool claim_take;     /* guest: the pending claim is a take (sync_authority_take) */
     bool take_refused;   /* guest: a take of it was refused and no move to this seat came since */
     uint8_t number_lag; /* guest: sync_number_lag_t, what the host's number is against b->number */
-    /* Host: the owner's newest state the shell took, for the end of its ownership. */
-    bool has_pose;
+    /* Host: the owner's newest states the shell took, a ring of SYNC_AUTHORITY_POSES of one
+       ownership (seat and number): the only evidence of where its contacts can be, since the
+       velocities it declares are its own word. Kept past the ownership's end for its claims. */
     uint8_t pose_seat;
-    float pose_position[3];
-    float pose_speed;
+    uint16_t pose_number;
+    uint8_t pose_count, pose_next;
+    sync_authority_pose_t poses[SYNC_AUTHORITY_POSES];
 } sync_authority_body_t;
 
 /* Guest: what its release did to the host's number, until it hears a newer one. */
@@ -112,8 +124,13 @@ typedef struct sync_authority_ended {
     uint8_t how;   /* sync_authority_end_t */
     bool has_pose; /* the host took a state of that ownership from the seat */
     uint32_t tick; /* the host's `now` at the end */
-    float position[3]; /* the seat's last state the host took, and its speed (m/s) */
-    float speed;
+    /* The seat's last state the host took, its step from the one before (metres a tick), the
+       host's `now` then and the fastest travel its taken states showed (metres a tick): the
+       evidence left once another ownership's states replaced the ring. */
+    float position[3];
+    float step[3];
+    uint32_t pose_tick;
+    float travel;
 } sync_authority_ended_t;
 
 typedef struct sync_authority {
@@ -195,9 +212,14 @@ body_sync_result_t sync_authority_set_data(sync_authority_t *a, body_sync_id_t i
 /* A local body's bytes, or a copy's newest received. */
 uint32_t sync_authority_data(const sync_authority_t *a, body_sync_id_t id, void *out, uint32_t capacity);
 
-/* Host: the shell took a state of the body from its owner `seat`: the pose its ownership's end
-   keeps for that seat's contact claims. */
-void sync_authority_received_pose(sync_authority_body_t *b, uint8_t seat, const float position[3], float speed);
+/* Host: the shell took a state of the body from its owner `seat` stamped with that sender's
+   `tick`, at the host's `now`: the evidence of that ownership's contact claims. A state of
+   another ownership starts the ring over. The time from the state before it is the sender's
+   span, but no less than the host's own span less `jitter_ticks` (the spread its playback delay
+   already absorbs), and at least a tick: a sender stamping its states close together cannot
+   shorten the host's clock past the jitter it is granted anyway. */
+void sync_authority_received_pose(sync_authority_body_t *b, uint8_t seat, uint32_t tick, uint32_t now, uint32_t jitter_ticks,
+                                  const float position[3]);
 /* The shell stored a newer state of the body: what a take inherits from it. */
 void sync_authority_received(sync_authority_body_t *b, uint8_t hold, body_sync_id_t holder, uint8_t flags);
 /* The newest data bytes received for a copy. */
@@ -279,6 +301,32 @@ body_sync_result_t sync_authority_reclaim(sync_authority_t *a, body_sync_id_t id
    read, NULL while the seat owns the agent or for STALE. */
 body_sync_contact_verdict_t sync_authority_check_contact(const sync_authority_t *a, uint8_t seat, body_sync_id_t agent, uint16_t number,
                                                          uint32_t grace_ticks, const sync_authority_ended_t **ended);
+/* What the host's world says around a contact claim, for sync_authority_contact_measure: the
+   target's box and speed (m/s), the agent's box less its position (where it sits around a pose),
+   and the limits. */
+typedef struct sync_contact_scene {
+    float target_lo[3], target_hi[3];
+    float agent_lo[3], agent_hi[3];
+    float target_speed;
+    uint32_t tick_hz;
+    float max_speed;
+    float slack_ticks;     /* a state may cross slower than the claim behind it: the playback delay and a tick */
+    uint32_t window_ticks; /* how old a taken state may be and still place the contact: the claim's grace */
+} sync_contact_scene_t;
+
+/* Host: a contact claim measured on what the host itself took of `seat`'s ownership of the
+   agent (`ended` from sync_authority_check_contact, NULL for a current one), never on the
+   velocity the owner declares. A contact lies on the path the taken states show: between two
+   consecutive ones, or on from a state along the step that led to it (a contact turns a body
+   only at the contact) for the ticks to the next one, or after the last for the ticks since it
+   was taken plus slack. *gap is the agent's box from the target's along the nearest of those
+   paths of the window; *reach is SYNC_POLICY_TAKE_SLOP_M, the target's travel over that time
+   and SYNC_POLICY_CONTACT_BEND_MS2's bend of the path, the time at most
+   SYNC_POLICY_EVIDENCE_AGE_MAX_S; *approach_max the agent's fastest travel of the window (at
+   most max_speed) plus the target's speed. False when the host took no state of that ownership
+   in the window: it has no evidence of the contact, and the claim is a missed effect. */
+bool sync_authority_contact_measure(const sync_authority_t *a, body_sync_id_t agent, uint8_t seat, const sync_authority_ended_t *ended,
+                                    const sync_contact_scene_t *scene, float *gap, float *reach, float *approach_max);
 /* The number a contact claim of a local body names (body_sync_contact_number). */
 bool sync_authority_contact_number(const sync_authority_t *a, const sync_authority_body_t *b, uint16_t *number);
 

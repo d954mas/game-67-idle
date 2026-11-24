@@ -1,4 +1,5 @@
 #include <math.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "sync_authority.h"
@@ -254,17 +255,55 @@ static void test_contact_of_a_body_owned_now(void) {
 static void test_contact_after_a_voluntary_release(void) {
     contact_start();
     uint16_t n = own_by_take(&guest, 1);
-    float at[3] = {1.0f, 2.0f, 3.0f};
-    sync_authority_received_pose(sync_authority_body(&host, A), 1, at, 4.0f);
+    const float before[3] = {1.0f, 2.0f, 0.0f}, at[3] = {1.0f, 2.0f, 3.0f};
+    sync_authority_received_pose(sync_authority_body(&host, A), 1, 10, host.now, 0, before);
+    sync_authority_received_pose(sync_authority_body(&host, A), 1, 12, host.now + 2u, 0, at);
     TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_release(&guest, A));
     deliver(&guest, 1, &host, BODY_SYNC_SEAT_HOST);
     TEST_ASSERT_EQUAL_UINT8(BODY_SYNC_SEAT_HOST, sync_authority_body(&host, A)->seat);
     const sync_authority_ended_t *ended;
     TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_OK, sync_authority_check_contact(&host, 1, A, n, GRACE, &ended));
     TEST_ASSERT_NOT_NULL(ended);
-    TEST_ASSERT_TRUE_MESSAGE(ended->has_pose && ended->position[2] == 3.0f && ended->speed == 4.0f, "the end lost the seat's last state");
+    TEST_ASSERT_TRUE_MESSAGE(ended->has_pose && ended->position[2] == 3.0f && fabsf(ended->travel - 1.5f) < 1e-5f, "the end lost the seat's last state");
     TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_STALE, check(1, sync_authority_body(&host, A)->number)); /* the host's number now */
     expect_grace(1, n, "a voluntary end");
+}
+
+/* The travel the host credits a seat is what its taken states show: a sender stamping two states a
+   tick apart that the host took twelve ticks apart travelled over twelve less the jitter granted;
+   the ring keeps the fastest of its last SYNC_AUTHORITY_POSES; a state of another seat starts it
+   over. */
+static float ring_travel(const sync_authority_body_t *b) {
+    float fastest = 0.0f;
+    uint32_t first = (b->pose_next + SYNC_AUTHORITY_POSES - b->pose_count) % SYNC_AUTHORITY_POSES;
+    for (uint32_t i = 1; i < b->pose_count; i++) {
+        const float *d = b->poses[(first + i) % SYNC_AUTHORITY_POSES].step;
+        float t = sqrtf(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+        fastest = t > fastest ? t : fastest;
+    }
+    return fastest;
+}
+
+static void test_pose_travel_is_what_the_host_took(void) {
+    sync_authority_body_t *b = calloc(1, sizeof(*b));
+    const float p0[3] = {0.0f, 0.0f, 0.0f}, p1[3] = {2.0f, 0.0f, 0.0f};
+    TEST_ASSERT_TRUE(ring_travel(b) == 0.0f);
+    sync_authority_received_pose(b, 1, 100, 500, 2, p0);
+    TEST_ASSERT_TRUE(ring_travel(b) == 0.0f); /* one state shows no travel */
+    sync_authority_received_pose(b, 1, 101, 512, 2, p1);
+    TEST_ASSERT_TRUE(fabsf(ring_travel(b) - 0.2f) < 1e-6f); /* 12 ticks seen, 2 of jitter */
+    sync_authority_received_pose(b, 1, 111, 513, 2, p0);
+    TEST_ASSERT_TRUE(fabsf(ring_travel(b) - 0.2f) < 1e-6f); /* the sender's longer span counts */
+    sync_authority_received_pose(b, 1, 111, 513, 2, p1);
+    TEST_ASSERT_TRUE(fabsf(ring_travel(b) - 2.0f) < 1e-6f); /* no span reads as one tick */
+    for (uint32_t i = 0; i < SYNC_AUTHORITY_POSES; i++) {
+        sync_authority_received_pose(b, 1, 120 + i, 520 + i, 2, p0);
+    }
+    TEST_ASSERT_TRUE(ring_travel(b) == 0.0f); /* the jump left the ring */
+    sync_authority_received_pose(b, 2, 5, 530, 2, p1);
+    TEST_ASSERT_EQUAL_UINT8(1, b->pose_count);
+    TEST_ASSERT_EQUAL_UINT8(2, b->pose_seat);
+    free(b);
 }
 
 /* After a voluntary end another seat takes the body: the past flight's claim keeps its grace,
@@ -613,6 +652,7 @@ int main(int argc, char **argv) {
     RUN_TEST(test_a_seat_that_left_keeps_the_carrier);
     RUN_TEST(test_contact_of_a_body_owned_now);
     RUN_TEST(test_contact_after_a_voluntary_release);
+    RUN_TEST(test_pose_travel_is_what_the_host_took);
     RUN_TEST(test_contact_after_a_take_by_another_seat);
     RUN_TEST(test_contact_after_a_flight_returns);
     RUN_TEST(test_contact_of_a_retake_before_the_release_is_heard);

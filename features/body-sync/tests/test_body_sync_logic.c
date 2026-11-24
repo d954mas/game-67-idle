@@ -348,7 +348,9 @@ static void test_impact_limits(void) {
 static void test_claim_keys(void) {
     stand_claim_keys_t *keys = calloc(1, sizeof(*keys));
     const stand_claim_key_t k = {.agent = ID(5, 1), .target = ID(4, 2), .number = 7, .seat = 1};
+    TEST_ASSERT_FALSE(stand_claim_keys_has(keys, k));
     TEST_ASSERT_TRUE(stand_claim_keys_add(keys, k));
+    TEST_ASSERT_TRUE(stand_claim_keys_has(keys, k));
     TEST_ASSERT_FALSE(stand_claim_keys_add(keys, k));
     stand_claim_key_t other = k;
     other.number = 8;

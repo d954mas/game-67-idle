@@ -268,12 +268,19 @@ bool stand_impact_accepts(float gap, float reach, float approach_max, float clai
     return gap <= reach && claimed_speed <= approach_max * STAND_IMPACT_SPEED_SCALE + STAND_IMPACT_SPEED_SLACK;
 }
 
-bool stand_claim_keys_add(stand_claim_keys_t *keys, stand_claim_key_t key) {
+bool stand_claim_keys_has(const stand_claim_keys_t *keys, stand_claim_key_t key) {
     for (uint32_t i = 0; i < keys->count; i++) {
         const stand_claim_key_t *k = &keys->keys[i];
         if (k->agent == key.agent && k->target == key.target && k->number == key.number && k->seat == key.seat) {
-            return false;
+            return true;
         }
+    }
+    return false;
+}
+
+bool stand_claim_keys_add(stand_claim_keys_t *keys, stand_claim_key_t key) {
+    if (stand_claim_keys_has(keys, key)) {
+        return false;
     }
     keys->keys[keys->next] = key;
     keys->next = (keys->next + 1u) % STAND_CLAIM_KEYS_MAX;

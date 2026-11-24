@@ -113,13 +113,15 @@ typedef enum body_sync_contact_verdict {
 
 /* The host's own world around a contact claim, metres and m/s; the game sets its thresholds. */
 typedef struct body_sync_contact {
-    /* Between the boxes of the agent and the target: the agent where the host shows it or where
-       its newest state puts it, whichever is nearer. INFINITY when the verdict is STALE. */
+    /* Between the boxes of the agent and the target, the agent along the nearest path its taken
+       states show (README "Contact claims"). INFINITY when the verdict is STALE or the host took
+       no state of that ownership within the grace. */
     float gap;
-    /* How far apart they may be after a real touch: the take evidence's reach over a round trip,
-       a playback delay and a tick (sync_policy_take_reach). */
+    /* How far apart they may be after a real touch along that path: the take slop, the target's
+       travel and the path's bend over its time. */
     float reach;
-    /* The faster of the agent's shown and sent speeds plus the target's shown speed. */
+    /* The agent's fastest travel between its taken states, at most max_speed, plus the target's
+       shown speed. */
     float approach_max;
     /* The verdict read an ownership that ended, `ended_age_ticks` of the host's ticks ago. */
     bool ended;

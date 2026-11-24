@@ -20,6 +20,7 @@ void tearDown(void) {}
 static float plant_reach = 1.0f, plant_approach = 1.0f;
 static body_sync_scene_t scene;
 static body_sync_scenario_t scenario;
+static bool third_player; /* the next make() gives the breakables a third player and a rock for it */
 
 enum { MODE_HOST, MODE_INTERACTION };
 
@@ -46,6 +47,15 @@ static body_sync_stand_t *make(const char *text, int mode) {
     if (strcmp(scenario.scene, "mannequin") == 0) {
         add_rocks(&scene);
     }
+    if (third_player) {
+        scene.players[scene.player_count++] = (body_sync_player_desc_t){.position = {0.2f, 0.87f, -1.2f}, .yaw = 1.5707963f};
+        body_sync_body_desc_t rock = body_sync_body_default(BODY_SYNC_SHAPE_SPHERE, (const float[3]){0.12f, 0.0f, 0.0f}, 2.0f,
+                                                            (const float[3]){0.8f, 0.12f, -1.2f});
+        snprintf(rock.name, sizeof(rock.name), "rock2");
+        rock.flags = BODY_SYNC_BODY_GRABBABLE;
+        TEST_ASSERT_TRUE(body_sync_scene_add(&scene, &rock) != UINT32_MAX);
+        third_player = false;
+    }
     body_sync_stand_config_t config = {.scene = &scene, .scenario = &scenario};
     if (mode == MODE_INTERACTION) {
         config.override_authority = true;
@@ -67,10 +77,19 @@ static body_sync_id_t id_of(const char *name) {
 
 static const body_sync_guest_metrics_t *guest(body_sync_stand_t *stand) { return &body_sync_stand_report(stand)->guests[0]; }
 
+/* Every claim a seat's host parsed lands in exactly one bucket. */
+static void buckets_add_up(const body_sync_report_t *report) {
+    for (uint32_t g = 0; g < report->guest_count; g++) {
+        const body_sync_guest_metrics_t *m = &report->guests[g];
+        TEST_ASSERT_EQUAL_UINT32(m->claims, m->claims_overflow + m->claims_repeat + m->claims_rejected + m->claims_idle + m->claim_effects);
+    }
+}
+
 static void all_pass(const body_sync_report_t *report) {
     for (uint32_t i = 0; i < report->check_count; i++) {
         TEST_ASSERT_TRUE_MESSAGE(report->checks[i].passed, report->checks[i].detail);
     }
+    buckets_add_up(report);
 }
 
 static bool knocked_on_host(body_sync_stand_t *stand, const char *name) {
@@ -196,6 +215,131 @@ static void forged_far_claim_is_rejected(int mode) {
 static void test_forged_far_claim_is_rejected_host(void) { forged_far_claim_is_rejected(MODE_HOST); }
 static void test_forged_far_claim_is_rejected_interaction(void) { forged_far_claim_is_rejected(MODE_INTERACTION); }
 
+/* A guest that really flings its flying rock straight up at 40 m/s (its states then declare that
+   speed, and the host sees the rock rise) still cannot claim the crate metres to its side: the
+   contact must lie on the path the host's own taken states show. */
+static void flung_far_claim_is_rejected(int mode) {
+    body_sync_stand_t *stand = make(glass_text, mode);
+    body_sync_id_t rock = id_of("rock"), crate = id_of("crate");
+    uint16_t number = tick_to_flight(stand, rock);
+    for (int i = 0; i < 4; i++) {
+        TEST_ASSERT_TRUE(body_sync_stand_tick(stand));
+    }
+    b3BodyId body = stand_testing_world(stand, 1)->slots[body_sync_id_slot(rock)].body;
+    b3Vec3 v = b3Body_GetLinearVelocity(body);
+    b3Body_SetLinearVelocity(body, (b3Vec3){v.x, v.y + 40.0f, v.z});
+    body_sync_contact_t c = {.approach_max = 0.0f};
+    for (int i = 0; i < 30 && !(c.approach_max > 20.0f); i++) {
+        TEST_ASSERT_TRUE(body_sync_stand_tick(stand));
+        body_sync_check_contact(stand_testing_sync(stand, 0), 1, rock, number, crate, &c);
+    }
+    /* The speed bound alone would pass the claim now. */
+    TEST_ASSERT_TRUE_MESSAGE(c.approach_max > 20.0f, "the host did not see the fling");
+    send_claim(stand, rock, number, crate, 6.5f);
+    TEST_ASSERT_TRUE(body_sync_stand_tick(stand));
+    TEST_ASSERT_TRUE_MESSAGE(on_host(stand, "crate"), "a flung rock's claim broke the crate");
+    TEST_ASSERT_EQUAL_UINT32(1, guest(stand)->claims_rejected);
+    buckets_add_up(body_sync_stand_report(stand));
+    body_sync_stand_destroy(stand);
+}
+static void test_flung_far_claim_is_rejected_host(void) { flung_far_claim_is_rejected(MODE_HOST); }
+static void test_flung_far_claim_is_rejected_interaction(void) { flung_far_claim_is_rejected(MODE_INTERACTION); }
+
+/* A claim of the glass the rock is about to meet, at a speed no throw the host saw gives: refused
+   by the speed bound alone (the gap is within the reach then). */
+static void test_inflated_claim_speed_is_rejected(void) {
+    body_sync_stand_t *stand = make(glass_text, MODE_HOST);
+    body_sync_id_t rock = id_of("rock"), glass = id_of("glass");
+    uint16_t number = tick_to_flight(stand, rock);
+    body_sync_contact_t c = {.gap = INFINITY};
+    for (int i = 0; i < 120 && !(c.gap <= c.reach); i++) {
+        TEST_ASSERT_TRUE(body_sync_stand_tick(stand));
+        TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_OK, body_sync_check_contact(stand_testing_sync(stand, 0), 1, rock, number, glass, &c));
+    }
+    TEST_ASSERT_TRUE_MESSAGE(c.gap <= c.reach, "the rock never came within reach of the glass");
+    send_claim(stand, rock, number, glass, 60.0f);
+    TEST_ASSERT_TRUE(body_sync_stand_tick(stand));
+    TEST_ASSERT_TRUE_MESSAGE(on_host(stand, "glass"), "a claim at 60 m/s broke the glass");
+    TEST_ASSERT_EQUAL_UINT32(1, guest(stand)->claims_rejected);
+    body_sync_stand_destroy(stand);
+}
+
+static const char *two_seats_text = "scenario claims\nscene breakables\nseed 17\nguests 2\nsettle 10s\n"
+                                    "net g1 rtt 100ms jitter 20ms loss 2%\nnet g2 rtt 100ms jitter 20ms loss 2%\n"
+                                    "p1 grab rock as lift\np1 wait 400ms\np1 throw glass speed 7 as throw\n"
+                                    "p2 grab rock2 as lift2\np2 wait 400ms\np2 throw glass speed 7 as throw2\n"
+                                    "expect effects_once\nexpect no_stuck\n";
+
+/* Two seats throw at one glass: it breaks once, whichever claim the host takes first. */
+static void test_two_seats_claim_one_target(void) {
+    third_player = true;
+    body_sync_stand_t *stand = make(two_seats_text, MODE_HOST);
+    const body_sync_report_t *report = body_sync_stand_run(stand);
+    all_pass(report);
+    TEST_ASSERT_FALSE(on_host(stand, "glass"));
+    TEST_ASSERT_EQUAL_UINT32(1, report->guests[0].claim_effects + report->guests[1].claim_effects);
+    body_sync_stand_destroy(stand);
+}
+
+/* Seat 2 floods the host with claims every tick; seat 1's honest throw still breaks the glass,
+   and only seat 2's overflow counts. */
+static void test_a_flood_starves_only_its_own_seat(void) {
+    third_player = true;
+    body_sync_stand_t *stand = make("scenario claims\nscene breakables\nseed 17\nguests 2\nsettle 10s\n"
+                                    "net g1 rtt 100ms jitter 20ms loss 2%\nnet g2 rtt 100ms jitter 20ms loss 2%\n"
+                                    "p1 grab rock as lift\np1 wait 400ms\np1 throw glass speed 7 as throw\n",
+                                    MODE_HOST);
+    body_sync_id_t glass = id_of("glass"), rock2 = id_of("rock2");
+    tick_to_flight(stand, id_of("rock"));
+    bool applied = false;
+    for (int t = 0; t < 300 && !applied; t++) {
+        stand_record_t r = {.type = STAND_REC_IMPACT, .target = glass, .body = rock2, .speed = 6.5f};
+        uint8_t bytes[STAND_RECORD_MAX];
+        for (uint16_t n = 0; n < 300; n++) {
+            r.number = (uint16_t)(t * 300 + n);
+            uint32_t size = stand_record_encode(&r, bytes, sizeof(bytes));
+            TEST_ASSERT_TRUE(stand_testing_record(stand, 2, bytes, size));
+        }
+        TEST_ASSERT_TRUE(body_sync_stand_tick(stand));
+        applied = body_sync_stand_report(stand)->guests[0].claim_effects >= 1;
+    }
+    const body_sync_report_t *report = body_sync_stand_report(stand);
+    TEST_ASSERT_TRUE_MESSAGE(applied, "seat 1's claim was starved");
+    TEST_ASSERT_EQUAL_UINT32(0, report->guests[0].claims_overflow);
+    TEST_ASSERT_TRUE(report->guests[1].claims_overflow > 0);
+    buckets_add_up(report);
+    body_sync_stand_destroy(stand);
+}
+
+/* Honest throws under loss and jitter: the host accepts their claims, however many states the
+   network lost. At most one throw in twelve may lose all the states that show its flight (a
+   missed effect, README "Contact claims"). */
+static void loss_sweep(const char *net) {
+    for (int mode = MODE_HOST; mode <= MODE_INTERACTION; mode++) {
+        for (int walk = 0; walk < 2; walk++) {
+            uint32_t claims = 0, effects = 0;
+            for (int seed = 1; seed <= 12; seed++) {
+                char text[512];
+                snprintf(text, sizeof(text),
+                         "scenario sweep\nscene breakables\nseed %d\nguests 1\nsettle 10s\nnet g1 %s\n"
+                         "p1 grab rock as lift\np1 wait 400ms\n%sp1 throw glass speed 7 as throw\nexpect result lift granted\n",
+                         seed, net, walk ? "p1 walk 2.3 0\n" : "");
+                body_sync_stand_t *stand = make(text, mode);
+                const body_sync_report_t *report = body_sync_stand_run(stand);
+                buckets_add_up(report);
+                claims += report->guests[0].claims;
+                effects += report->guests[0].claim_effects;
+                body_sync_stand_destroy(stand);
+            }
+            char why[128];
+            snprintf(why, sizeof(why), "%s %s walk %d: %u of %u claims applied", net, mode ? "interaction" : "host", walk, effects, claims);
+            TEST_ASSERT_TRUE_MESSAGE(claims >= 11 && effects + 1 >= claims, why);
+        }
+    }
+}
+static void test_loss_sweep_150ms(void) { loss_sweep("rtt 150ms jitter 60ms loss 10%"); }
+static void test_loss_sweep_100ms(void) { loss_sweep("rtt 100ms jitter 20ms loss 2%"); }
+
 /* The honest claim, sent twice more under its key once it applied: counted as repeats, applied
    once. A claim the parser refuses is counted and costs the seat nothing. */
 static void test_resent_claim_applies_once(void) {
@@ -226,14 +370,24 @@ static void test_resent_claim_applies_once(void) {
 }
 
 int main(int argc, char **argv) {
+    bool sweep = false;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--plant-claim-approach-scale0") == 0) {
             plant_approach = 0.0f;
         } else if (strcmp(argv[i], "--plant-claim-reach-unbounded") == 0) {
             plant_reach = INFINITY;
+        } else if (strcmp(argv[i], "--plant-claim-approach-unbounded") == 0) {
+            plant_approach = INFINITY;
+        } else if (strcmp(argv[i], "--sweep") == 0) {
+            sweep = true;
         }
     }
     UNITY_BEGIN();
+    if (sweep) {
+        RUN_TEST(test_loss_sweep_100ms);
+        RUN_TEST(test_loss_sweep_150ms);
+        return UNITY_END();
+    }
     RUN_TEST(test_guest_throw_breaks_glass_host);
     RUN_TEST(test_guest_throw_breaks_glass_interaction);
     RUN_TEST(test_guest_throw_knocks_dummy_host);
@@ -243,5 +397,10 @@ int main(int argc, char **argv) {
     RUN_TEST(test_forged_far_claim_is_rejected_host);
     RUN_TEST(test_forged_far_claim_is_rejected_interaction);
     RUN_TEST(test_resent_claim_applies_once);
+    RUN_TEST(test_flung_far_claim_is_rejected_host);
+    RUN_TEST(test_flung_far_claim_is_rejected_interaction);
+    RUN_TEST(test_inflated_claim_speed_is_rejected);
+    RUN_TEST(test_two_seats_claim_one_target);
+    RUN_TEST(test_a_flood_starves_only_its_own_seat);
     return UNITY_END();
 }

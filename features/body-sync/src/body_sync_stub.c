@@ -206,9 +206,9 @@ bool body_sync_contact_number(const body_sync_t *s, body_sync_id_t id, uint16_t 
 
 static float length3(const float v[3]) { return sqrtf(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]); }
 
-/* The stub drives a copy to the newest pose it received within the step, so its copy trails
-   the guest by a tick only. The agent is measured where the host shows it and where its newest
-   state puts it, or for an ended ownership where that seat's last state the host took put it. */
+/* The stub drives a copy to the newest pose it received within the step: a state crosses no
+   slower than the claim behind it but by a tick. The agent is measured where the host's last
+   taken state of that ownership put it (body_sync_real.c says why not its declared velocity). */
 body_sync_contact_verdict_t body_sync_check_contact(const body_sync_t *s, uint8_t seat, body_sync_id_t agent, uint16_t number,
                                                     body_sync_id_t target, body_sync_contact_t *out) {
     body_sync_contact_t scratch;
@@ -222,36 +222,18 @@ body_sync_contact_verdict_t body_sync_check_contact(const body_sync_t *s, uint8_
     }
     out->ended = ended != NULL;
     out->ended_age_ticks = ended ? s->authority.now - ended->tick : 0u;
-    b3AABB a = b3Body_ComputeAABB(g->body), b = b3Body_ComputeAABB(t->body);
-    b3Vec3 at = b3Body_GetPosition(g->body);
-    const float alo[3] = {a.lowerBound.x, a.lowerBound.y, a.lowerBound.z}, ahi[3] = {a.upperBound.x, a.upperBound.y, a.upperBound.z};
-    const float blo[3] = {b.lowerBound.x, b.lowerBound.y, b.lowerBound.z}, bhi[3] = {b.upperBound.x, b.upperBound.y, b.upperBound.z};
-    b3Vec3 va = b3Body_GetLinearVelocity(g->body), vb = b3Body_GetLinearVelocity(t->body);
-    float shown = length3((const float[3]){va.x, va.y, va.z}), sent = g->has_in ? length3(g->in.velocity) : 0.0f;
-    float agent_speed = sent > shown ? sent : shown, target_speed = length3((const float[3]){vb.x, vb.y, vb.z});
-    /* Where the agent is measured: shown, and its newest state; or the ended ownership's last. */
-    float at3[3] = {at.x, at.y, at.z}, places[2][3] = {{at.x, at.y, at.z}, {at.x, at.y, at.z}};
-    int first = 0, places_n = g->has_in ? 2 : 1;
-    if (g->has_in) {
-        memcpy(places[1], g->in.position, sizeof(places[1]));
-    }
-    if (ended) {
-        agent_speed = ended->has_pose ? ended->speed : 0.0f;
-        memcpy(places[1], ended->position, sizeof(places[1]));
-        first = 1;
-        places_n = ended->has_pose ? 2 : 1;
-    }
-    for (int w = first; w < places_n; w++) {
-        float lo[3], hi[3];
-        for (int i = 0; i < 3; i++) {
-            lo[i] = alo[i] + places[w][i] - at3[i];
-            hi[i] = ahi[i] + places[w][i] - at3[i];
-        }
-        float d = sync_policy_box_gap(blo, bhi, lo, hi);
-        out->gap = d < out->gap ? d : out->gap;
-    }
-    out->reach = sync_policy_take_reach(agent_speed, target_speed, s->dt);
-    out->approach_max = agent_speed + target_speed;
+    b3Vec3 vb = b3Body_GetLinearVelocity(t->body), at = b3Body_GetPosition(g->body);
+    b3AABB box = b3Body_ComputeAABB(g->body), tb = b3Body_ComputeAABB(t->body);
+    sync_contact_scene_t scene = {.target_lo = {tb.lowerBound.x, tb.lowerBound.y, tb.lowerBound.z},
+                                  .target_hi = {tb.upperBound.x, tb.upperBound.y, tb.upperBound.z},
+                                  .agent_lo = {box.lowerBound.x - at.x, box.lowerBound.y - at.y, box.lowerBound.z - at.z},
+                                  .agent_hi = {box.upperBound.x - at.x, box.upperBound.y - at.y, box.upperBound.z - at.z},
+                                  .target_speed = length3((const float[3]){vb.x, vb.y, vb.z}),
+                                  .tick_hz = s->config.tick_hz,
+                                  .max_speed = s->limits.max_speed,
+                                  .slack_ticks = 1.0f,
+                                  .window_ticks = 2u}; /* the tick a state crosses in and the one the claim is judged in */
+    sync_authority_contact_measure(&s->authority, agent, seat, ended, &scene, &out->gap, &out->reach, &out->approach_max);
     return verdict;
 }
 
@@ -324,7 +306,7 @@ static void store_in(body_sync_t *s, uint32_t slot, uint8_t from, uint32_t tick,
     e->in_tick = tick;
     e->in_ordered = true;
     if (is_host(s)) {
-        sync_authority_received_pose(auth_of(s, slot), from, b->position, length3(b->velocity));
+        sync_authority_received_pose(auth_of(s, slot), from, tick, s->authority.now, 1u, b->position);
     }
     sync_authority_received(auth_of(s, slot), b->hold, b->holder, b->flags);
     sync_authority_received_data(auth_of(s, slot), b->data_size, b->data);

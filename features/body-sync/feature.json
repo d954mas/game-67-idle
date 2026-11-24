@@ -32,7 +32,7 @@
     "cmake_targets": ["body_sync", "body_sync_stub", "body_sync_parts", "body_sync_stand_logic", "body_sync_stand", "body_sync_stand_stub", "body_sync_stand_cli", "body_sync_stand_cli_stub", "body_sync_view", "body_sync_stand_view"],
     "ctest_targets": [
       "test_body_sync_logic", "test_body_sync_playback", "test_body_sync_soft", "test_body_sync_wire", "test_body_sync_stub", "test_body_sync_codec", "test_body_sync_sender", "test_body_sync_authority", "test_body_sync_authority_mf_revoked_as_arbitrated", "test_body_sync_real", "test_body_sync_seam_real", "test_body_sync_stand", "test_body_sync_checks", "test_body_sync_claims", "test_body_sync_claims_mf_*", "test_body_sync_two_processes", "test_body_sync_two_processes_*", "test_body_sync_mf_*", "test_body_sync_stub_two_processes", "test_body_sync_stub_two_processes_*", "test_body_sync_stub_contrast_char_push", "test_body_sync_stub_mf_*", "test_body_sync_stub_scn_*",
-      "test_body_sync_free_step", "test_body_sync_scn_*", "test_body_sync_layer_scn_*"
+      "test_body_sync_free_step", "test_body_sync_scn_*", "test_body_sync_layer_scn_*", "test_body_sync_interaction_scn_*", "test_body_sync_claims_loss_sweep"
     ]
   }
 }

@@ -55,8 +55,14 @@ add_test(NAME test_body_sync_claims_mf_approach_scale0
             -P "${CMAKE_CURRENT_LIST_DIR}/expect_unity_fail.cmake")
 add_test(NAME test_body_sync_claims_mf_reach_unbounded
     COMMAND "${CMAKE_COMMAND}" -DEXE=$<TARGET_FILE:test_body_sync_claims> -DARGS=--plant-claim-reach-unbounded
-            "-DCASES=test_forged_far_claim_is_rejected_host|test_forged_far_claim_is_rejected_interaction"
+            "-DCASES=test_forged_far_claim_is_rejected_host|test_forged_far_claim_is_rejected_interaction|test_flung_far_claim_is_rejected_host|test_flung_far_claim_is_rejected_interaction"
             -P "${CMAKE_CURRENT_LIST_DIR}/expect_unity_fail.cmake")
+add_test(NAME test_body_sync_claims_mf_approach_unbounded
+    COMMAND "${CMAKE_COMMAND}" -DEXE=$<TARGET_FILE:test_body_sync_claims> -DARGS=--plant-claim-approach-unbounded
+            "-DCASES=test_inflated_claim_speed_is_rejected"
+            -P "${CMAKE_CURRENT_LIST_DIR}/expect_unity_fail.cmake")
+# Honest throws under loss and jitter, over seeds: expensive, so its own slow case.
+add_test(NAME test_body_sync_claims_loss_sweep COMMAND test_body_sync_claims --sweep WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 box3d_enable(test_body_sync_stand)
 box3d_enable(test_body_sync_free_step)
 
@@ -78,8 +84,9 @@ set(BODY_SYNC_IMPLS "body_sync_stand_cli|" "body_sync_stand_cli_stub|stub_")
 
 set(core_tests test_body_sync_logic test_body_sync_playback test_body_sync_soft test_body_sync_policy test_body_sync_wire test_body_sync_stub test_body_sync_seam_real test_body_sync_codec test_body_sync_sender test_body_sync_authority test_body_sync_real
     test_body_sync_stand test_body_sync_checks test_body_sync_authority_mf_revoked_as_arbitrated
-    test_body_sync_claims test_body_sync_claims_mf_approach_scale0 test_body_sync_claims_mf_reach_unbounded)
-set(slow_tests test_body_sync_free_step)
+    test_body_sync_claims test_body_sync_claims_mf_approach_scale0 test_body_sync_claims_mf_reach_unbounded
+    test_body_sync_claims_mf_approach_unbounded)
+set(slow_tests test_body_sync_free_step test_body_sync_claims_loss_sweep)
 foreach(impl IN LISTS BODY_SYNC_IMPLS)
     string(REPLACE "|" ";" parts "${impl}")
     list(GET parts 0 cli)

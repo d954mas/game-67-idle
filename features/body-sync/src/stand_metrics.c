@@ -376,7 +376,8 @@ static const struct {
     {"takes.count", STAND_UNIT_COUNT},           {"take_refusals.count", STAND_UNIT_COUNT},   {"reclaims.count", STAND_UNIT_COUNT},
     {"returns.count", STAND_UNIT_COUNT},         {"lost_takes.count", STAND_UNIT_COUNT},      {"lost_takes.max", STAND_UNIT_LENGTH},
     {"claims.count", STAND_UNIT_COUNT},          {"claims_rejected.count", STAND_UNIT_COUNT}, {"claims_format.count", STAND_UNIT_COUNT},
-    {"claims_repeat.count", STAND_UNIT_COUNT},   {"claim_effects.count", STAND_UNIT_COUNT},
+    {"claims_repeat.count", STAND_UNIT_COUNT},   {"claim_effects.count", STAND_UNIT_COUNT},   {"claims_overflow.count", STAND_UNIT_COUNT},
+    {"claims_idle.count", STAND_UNIT_COUNT},
 };
 
 bool stand_metric_unit(const char *name, stand_metric_unit_t *unit) {
@@ -546,6 +547,10 @@ bool stand_metric_value(const body_sync_report_t *report, const stand_metrics_t 
             v = (double)m->claims_repeat;
         } else if (strcmp(name, "claim_effects.count") == 0) {
             v = (double)m->claim_effects;
+        } else if (strcmp(name, "claims_overflow.count") == 0) {
+            v = (double)m->claims_overflow;
+        } else if (strcmp(name, "claims_idle.count") == 0) {
+            v = (double)m->claims_idle;
         } else if (strcmp(name, "step.count") == 0) {
             v = (double)m->step_count;
         } else if (strcmp(name, "snap.count") == 0) {
@@ -860,6 +865,12 @@ bool stand_json_write(const body_sync_report_t *r, const stand_metrics_t *m, boo
         put(&j, ",");
         key(&j, "claim_effects");
         putf(&j, "%u", gm->claim_effects);
+        put(&j, ",");
+        key(&j, "claims_overflow");
+        putf(&j, "%u", gm->claims_overflow);
+        put(&j, ",");
+        key(&j, "claims_idle");
+        putf(&j, "%u", gm->claims_idle);
         put(&j, ",");
         key(&j, "steps");
         putf(&j, "%u", gm->step_count);

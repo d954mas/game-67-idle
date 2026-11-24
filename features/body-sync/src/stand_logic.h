@@ -140,6 +140,7 @@ typedef struct stand_claim_keys {
 } stand_claim_keys_t;
 /* False when `key` is in the table; otherwise adds it and returns true. */
 bool stand_claim_keys_add(stand_claim_keys_t *keys, stand_claim_key_t key);
+bool stand_claim_keys_has(const stand_claim_keys_t *keys, stand_claim_key_t key);
 /* Pose and velocity of debris piece `index` of a breaking body, drawn from the host's rng. */
 void stand_rules_debris(stand_rng_t *rng, const body_sync_body_desc_t *breakable, const float position[3], const float rotation[4],
                         float out_position[3], float out_velocity[3]);

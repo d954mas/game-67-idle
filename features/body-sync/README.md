@@ -627,11 +627,25 @@ ignores the mode.
     host's next move to that seat skips), a claim older than the seat's newest
     ended ownership, any ownership from before a seat joined again after a
     leave, a guest calling.
-  The host's world comes with it: the gap between the agent's and the
-  target's boxes (owned now: the agent's copy or its newest state, the nearer;
-  ended: where that seat's last state put it, INFINITY without one), the take
-  evidence's reach over the same capped span, the fastest approach, and the
-  end's age. A guest that acknowledges late raises its measured round trip:
+  The host's world comes with it, measured only on what the host itself took
+  of that ownership, never on the velocity its owner declares (a guest that
+  sent a faster velocity than its body showed would widen both limits). The
+  host keeps the owner's last 12 taken states of each body (position, the
+  sender's tick, its own), past the ownership's end until another ownership's
+  states replace them. A contact lies on the path they show: between two
+  consecutive states, on from a state along the step that led to it (only the
+  contact turns the body) until the next one, or on from the last for the
+  ticks since plus a playback delay and a tick. The gap is the agent's box from
+  the target's along the nearest such path of the claim's grace; the reach is
+  the take slop, the target's travel over that time and a bend of the path of
+  `SYNC_POLICY_CONTACT_BEND_MS2` (20 m/s^2), the time capped at 1 s; the
+  approach is the agent's fastest travel between those states (a sender's
+  span between two, never under the host's own less the playback delay, capped
+  at the box's speed) plus the target's speed. With no taken state of the
+  ownership in the grace the gap is INFINITY: a throw whose every flight state
+  the network lost, or that ended before the host heard of it, is a missed
+  effect, never a guessed one. The seam's records carry no pose, so a release
+  cannot stand in. A guest that acknowledges late raises its measured round trip:
   the cap keeps it from widening a take's or a contact's reach and the grace
   past 1 s. A seat that left gets nothing of a grace. The seam sets no
   threshold and judges no effect: the game dedupes per target effect across
@@ -661,8 +675,15 @@ seam's reach, and a claimed speed past the approach it saw times
 `STAND_IMPACT_SPEED_SCALE` (1.25) plus `STAND_IMPACT_SPEED_SLACK` (0.5 m/s).
 These limits are the stand's policy, not the seam's contract. The target's
 state dedupes across seats: a broken body is gone, a felled one carries the
-knock flag. The guests' counts are `claims`, `claims_rejected`,
-`claims_format`, `claims_repeat` and `claim_effects`.
+knock flag. The host holds each seat's claims of a tick in that seat's own
+queue (64), so one seat's flood costs only its own claims, and it keeps each
+seat's judged keys apart. A guest sends its stand records only once its seam
+records of the tick are all out, so a claim never overtakes its release. Every
+claim the host parses lands in one of `claims_overflow`, `claims_repeat`,
+`claims_rejected`, `claims_idle` (accepted, nothing left to do) and
+`claim_effects`, which add up to `claims`; `claims_format` counts what the
+parser refused. Under 150 ms, 60 ms of jitter and 10 % loss every honest throw
+of the sweep is applied in both modes (`test_body_sync_claims --sweep`).
 
 ## Running the stand
 

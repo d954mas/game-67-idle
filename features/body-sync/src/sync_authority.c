@@ -1,3 +1,4 @@
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -113,13 +114,20 @@ static void host_move_to(sync_authority_t *a, sync_authority_body_t *b, uint8_t 
         end = end == SYNC_END_REVOKED && a->plant_revoked_as_arbitrated ? SYNC_END_ARBITRATED : end;
         sync_authority_ended_t *e = &a->ended[b->seat][slot];
         *e = (sync_authority_ended_t){.number = b->number, .how = (uint8_t)end, .tick = a->now};
-        if (b->has_pose && b->pose_seat == b->seat) {
+        if (b->pose_count > 0 && b->pose_seat == b->seat && b->pose_number == b->number) {
+            const sync_authority_pose_t *last = &b->poses[(b->pose_next + SYNC_AUTHORITY_POSES - 1u) % SYNC_AUTHORITY_POSES];
             e->has_pose = true;
-            memcpy(e->position, b->pose_position, sizeof(e->position));
-            e->speed = b->pose_speed;
+            memcpy(e->position, last->position, sizeof(e->position));
+            memcpy(e->step, last->step, sizeof(e->step));
+            e->pose_tick = last->host_tick;
+            e->travel = 0.0f;
+            for (uint32_t i = 0; i < b->pose_count; i++) {
+                const float *d = b->poses[i].step;
+                float travel = sqrtf(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+                e->travel = travel > e->travel ? travel : e->travel;
+            }
         }
     }
-    b->has_pose = false;
     a->owned_by[b->seat] -= b->seat != BODY_SYNC_SEAT_HOST && b->hold == BODY_SYNC_HOLD_UNTIL_REST ? 1u : 0u;
     uint64_t bit = 1ull << (slot % 64);
     bool skip = seat != BODY_SYNC_SEAT_HOST && (a->refused[seat][slot / 64] & bit);
@@ -497,11 +505,30 @@ void sync_authority_received_data(sync_authority_body_t *b, uint8_t size, const 
     memcpy(b->in_data, data, sizeof(b->in_data));
 }
 
-void sync_authority_received_pose(sync_authority_body_t *b, uint8_t seat, const float position[3], float speed) {
-    b->has_pose = true;
-    b->pose_seat = seat;
-    memcpy(b->pose_position, position, sizeof(b->pose_position));
-    b->pose_speed = speed;
+void sync_authority_received_pose(sync_authority_body_t *b, uint8_t seat, uint32_t tick, uint32_t now, uint32_t jitter_ticks,
+                                  const float position[3]) {
+    if (b->pose_count == 0 || b->pose_seat != seat || b->pose_number != b->number) {
+        b->pose_seat = seat;
+        b->pose_number = b->number;
+        b->pose_count = 0;
+        b->pose_next = 0;
+    }
+    sync_authority_pose_t *p = &b->poses[b->pose_next];
+    memset(p->step, 0, sizeof(p->step));
+    if (b->pose_count > 0) {
+        const sync_authority_pose_t *q = &b->poses[(b->pose_next + SYNC_AUTHORITY_POSES - 1u) % SYNC_AUTHORITY_POSES];
+        uint32_t sent = tick - q->tick, seen = now - q->host_tick;
+        uint32_t floor = seen > jitter_ticks ? seen - jitter_ticks : 0u;
+        uint32_t ticks = sent > floor ? sent : floor;
+        for (int i = 0; i < 3; i++) {
+            p->step[i] = (position[i] - q->position[i]) / (float)(ticks > 0 ? ticks : 1u);
+        }
+    }
+    memcpy(p->position, position, sizeof(p->position));
+    p->tick = tick;
+    p->host_tick = now;
+    b->pose_next = (uint8_t)((b->pose_next + 1u) % SYNC_AUTHORITY_POSES);
+    b->pose_count += b->pose_count < SYNC_AUTHORITY_POSES ? 1u : 0u;
 }
 
 void sync_authority_received(sync_authority_body_t *b, uint8_t hold, body_sync_id_t holder, uint8_t flags) {
@@ -798,6 +825,125 @@ body_sync_contact_verdict_t sync_authority_check_contact(const sync_authority_t 
     }
     *ended = e;
     return e->how == SYNC_END_REVOKED ? BODY_SYNC_CONTACT_REVOKED : BODY_SYNC_CONTACT_OK;
+}
+
+static float length3(const float v[3]) { return sqrtf(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]); }
+
+/* The point's distance to the box `lo`..`hi`: the target's box grown by the agent's, so a point
+   of the agent's path stands for its whole box. */
+static float point_gap(const float lo[3], const float hi[3], const float p[3]) {
+    float d2 = 0.0f;
+    for (int i = 0; i < 3; i++) {
+        float d = p[i] < lo[i] ? lo[i] - p[i] : p[i] > hi[i] ? p[i] - hi[i] : 0.0f;
+        d2 += d * d;
+    }
+    return isfinite(d2) ? sqrtf(d2) : INFINITY;
+}
+
+/* The nearest the segment from `from` to `from + along` comes to the box. The distance to a convex
+   set is convex along a line, so a ternary search finds it. */
+static float segment_gap(const float lo[3], const float hi[3], const float from[3], const float along[3]) {
+    float t0 = 0.0f, t1 = 1.0f;
+    for (int k = 0; k < 40; k++) {
+        float m0 = t0 + (t1 - t0) / 3.0f, m1 = t1 - (t1 - t0) / 3.0f, p0[3], p1[3];
+        for (int i = 0; i < 3; i++) {
+            p0[i] = from[i] + along[i] * m0;
+            p1[i] = from[i] + along[i] * m1;
+        }
+        if (point_gap(lo, hi, p0) <= point_gap(lo, hi, p1)) {
+            t1 = m1;
+        } else {
+            t0 = m0;
+        }
+    }
+    float p[3];
+    for (int i = 0; i < 3; i++) {
+        p[i] = from[i] + along[i] * 0.5f * (t0 + t1);
+    }
+    return point_gap(lo, hi, p);
+}
+
+typedef struct contact_fit {
+    float lo[3], hi[3];
+    const sync_contact_scene_t *in;
+    float margin, gap, reach;
+} contact_fit_t;
+
+/* One path the contact may lie on, `ticks` long: the fit keeps the one whose gap comes nearest
+   within its reach. */
+static void fit_path(contact_fit_t *f, const float from[3], const float along[3], float ticks) {
+    float cap = SYNC_POLICY_EVIDENCE_AGE_MAX_S * (float)f->in->tick_hz;
+    float s = (ticks < cap ? ticks : cap) / (float)f->in->tick_hz;
+    float gap = segment_gap(f->lo, f->hi, from, along);
+    float reach = SYNC_POLICY_TAKE_SLOP_M + f->in->target_speed * s + 0.5f * SYNC_POLICY_CONTACT_BEND_MS2 * s * s;
+    if (gap - reach < f->margin) {
+        f->margin = gap - reach;
+        f->gap = gap;
+        f->reach = reach;
+    }
+}
+
+/* The step from `at` along `step` for `ticks`. */
+static void fit_ray(contact_fit_t *f, const float at[3], const float step[3], float ticks) {
+    const float along[3] = {step[0] * ticks, step[1] * ticks, step[2] * ticks};
+    fit_path(f, at, along, ticks);
+}
+
+bool sync_authority_contact_measure(const sync_authority_t *a, body_sync_id_t agent, uint8_t seat, const sync_authority_ended_t *ended,
+                                    const sync_contact_scene_t *in, float *gap, float *reach, float *approach_max) {
+    *gap = INFINITY;
+    *reach = SYNC_POLICY_TAKE_SLOP_M;
+    *approach_max = in->target_speed;
+    const sync_authority_body_t *b = sync_authority_body_const(a, agent);
+    if (!b || in->tick_hz == 0) {
+        return false;
+    }
+    contact_fit_t f = {.in = in, .margin = INFINITY, .gap = INFINITY, .reach = SYNC_POLICY_TAKE_SLOP_M};
+    for (int i = 0; i < 3; i++) {
+        f.lo[i] = in->target_lo[i] - in->agent_hi[i];
+        f.hi[i] = in->target_hi[i] - in->agent_lo[i];
+    }
+    float travel = 0.0f;
+    /* The ring still holds that ownership unless another one's states replaced it. */
+    uint16_t number = ended ? ended->number : b->number;
+    bool ring = b->pose_count > 0 && b->pose_seat == seat && b->pose_number == number && (ended || b->seat == seat);
+    if (!ring) {
+        if (!ended || !ended->has_pose || a->now - ended->pose_tick > in->window_ticks) {
+            return false;
+        }
+        fit_ray(&f, ended->position, ended->step, (float)(a->now - ended->pose_tick) + in->slack_ticks);
+        travel = ended->travel;
+    } else {
+        uint32_t first = (b->pose_next + SYNC_AUTHORITY_POSES - b->pose_count) % SYNC_AUTHORITY_POSES;
+        bool any = false;
+        for (uint32_t i = 0; i < b->pose_count; i++) {
+            const sync_authority_pose_t *p = &b->poses[(first + i) % SYNC_AUTHORITY_POSES];
+            const sync_authority_pose_t *next = i + 1u < b->pose_count ? &b->poses[(first + i + 1u) % SYNC_AUTHORITY_POSES] : NULL;
+            /* A state before the window still bounds the path to the first one in it. */
+            if (a->now - p->host_tick > in->window_ticks && (!next || a->now - next->host_tick > in->window_ticks)) {
+                continue;
+            }
+            any = true;
+            float step = length3(p->step);
+            travel = step > travel ? step : travel;
+            if (next) {
+                const float chord[3] = {next->position[0] - p->position[0], next->position[1] - p->position[1], next->position[2] - p->position[2]};
+                float ticks = (float)(next->tick - p->tick);
+                fit_path(&f, p->position, chord, ticks);
+                fit_ray(&f, p->position, p->step, ticks);
+            } else {
+                fit_ray(&f, p->position, p->step, (float)(a->now - p->host_tick) + in->slack_ticks);
+            }
+        }
+        if (!any) {
+            return false;
+        }
+    }
+    float speed = sync_policy_contact_speed(travel, in->tick_hz, in->max_speed);
+    *gap = f.gap;
+    *reach = f.reach;
+    *approach_max = speed + in->target_speed;
+    return true;
 }
 
 bool sync_authority_contact_number(const sync_authority_t *a, const sync_authority_body_t *b, uint16_t *number) {

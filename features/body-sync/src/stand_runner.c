@@ -18,7 +18,8 @@ _Static_assert(BODY_SYNC_SEAM_KINDS == BODY_SYNC_TRAFFIC_COUNT, "body_sync_metri
 
 enum {
     QUEUE_MAX = 256,
-    CLAIMS_MAX = 256,
+    /* A guest's claims the host holds for one tick: one seat's flood fills only its own. */
+    SEAT_CLAIMS_MAX = 64,
     EFFECTS_MAX = 256,
     EFFECT_SPAWNS_MAX = STAND_BREAK_SPAWNS_MAX,
     PACKET_MAX = 2048,
@@ -228,13 +229,16 @@ struct body_sync_stand {
     bool left[BODY_SYNC_ENDPOINTS_MAX];
     uint32_t left_tick[BODY_SYNC_ENDPOINTS_MAX];
     stand_limits_t limits;
-    pending_claim_t claims[CLAIMS_MAX];
-    uint32_t claim_count;
-    /* The host's impact claims, per seat: received whole, refused by the gate or the stand's
-       limits, refused by the parser, repeated keys, and effects they applied. */
-    stand_claim_keys_t judged;
-    uint32_t claims_in[BODY_SYNC_ENDPOINTS_MAX], claims_rejected[BODY_SYNC_ENDPOINTS_MAX], claims_format[BODY_SYNC_ENDPOINTS_MAX];
-    uint32_t claims_repeat[BODY_SYNC_ENDPOINTS_MAX], claim_effects[BODY_SYNC_ENDPOINTS_MAX];
+    pending_claim_t claims[BODY_SYNC_ENDPOINTS_MAX][SEAT_CLAIMS_MAX];
+    uint32_t claim_count[BODY_SYNC_ENDPOINTS_MAX];
+    /* The host's guest claims (hits and impacts), per seat: every one that parsed lands in exactly
+       one of overflow (its seat's tick queue full), repeat (an impact key judged before), rejected
+       (the seam's gate or the stand's limits or rules), idle (accepted, nothing to do) and
+       effects; format counts the seat's stand records the parser refused. */
+    stand_claim_keys_t judged[BODY_SYNC_ENDPOINTS_MAX];
+    uint32_t claims_in[BODY_SYNC_ENDPOINTS_MAX], claims_overflow[BODY_SYNC_ENDPOINTS_MAX], claims_repeat[BODY_SYNC_ENDPOINTS_MAX];
+    uint32_t claims_rejected[BODY_SYNC_ENDPOINTS_MAX], claims_idle[BODY_SYNC_ENDPOINTS_MAX], claim_effects[BODY_SYNC_ENDPOINTS_MAX];
+    uint32_t claims_format[BODY_SYNC_ENDPOINTS_MAX];
     float claim_reach_scale, claim_approach_scale; /* 1 and 1; stand_testing_plant_claim_limits */
     effect_t effects[EFFECTS_MAX];
     uint32_t effect_count;
@@ -296,17 +300,18 @@ static body_sync_id_t body_id_by_name(const body_sync_stand_t *st, const endpoin
     return index == UINT32_MAX ? BODY_SYNC_ID_NONE : stand_world_id(ep->world, index);
 }
 
-static void queue_record(body_sync_stand_t *st, endpoint_t *ep, uint8_t seat, const stand_record_t *record) {
+static bool queue_record(body_sync_stand_t *st, endpoint_t *ep, uint8_t seat, const stand_record_t *record) {
     out_queue_t *q = &ep->queues[seat];
     if (q->count >= QUEUE_MAX) {
         ep->claim_stale++;
-        return;
+        return false;
     }
     uint32_t at = (q->head + q->count) % QUEUE_MAX;
     q->size[at] = (uint8_t)stand_record_encode(record, q->data[at], STAND_RECORD_MAX);
     q->kind[at] = (uint8_t)stand_record_kind(record->type);
     q->count++;
     (void)st;
+    return true;
 }
 
 static void broadcast(body_sync_stand_t *st, const stand_record_t *record) {
@@ -790,11 +795,13 @@ static bool apply_impact(body_sync_stand_t *st, stand_effect_t effect, body_sync
 
 /* A guest's impact claim: once per key, through the seam's gate and the stand's limits, then the
    rule on the host's own target. The target's state dedupes across seats: a broken body is gone,
-   a knocked one carries the flag, so a second seat's OK for the same contact applies nothing. */
+   a knocked one carries the flag, so a second seat's OK for the same contact applies nothing.
+   A key enters its seat's ring before its verdict, so a refused claim is not judged again while
+   the ring holds it; once the ring forgets it, a retry meets the same gate on what the host itself
+   took of that body, which by then has aged past the claim's grace. */
 static void judge_impact(body_sync_stand_t *st, uint8_t seat, const stand_record_t *r, const stand_target_t *t) {
     endpoint_t *host = &st->ep[0];
-    st->claims_in[seat]++;
-    if (!stand_claim_keys_add(&st->judged, (stand_claim_key_t){.agent = r->body, .target = r->target, .number = r->number, .seat = seat})) {
+    if (!stand_claim_keys_add(&st->judged[seat], (stand_claim_key_t){.agent = r->body, .target = r->target, .number = r->number, .seat = seat})) {
         st->claims_repeat[seat]++;
         return;
     }
@@ -806,31 +813,44 @@ static void judge_impact(body_sync_stand_t *st, uint8_t seat, const stand_record
     }
     if (apply_impact(st, stand_rules_impact(t, r->speed), r->body, r->target, t)) {
         st->claim_effects[seat]++;
+    } else {
+        st->claims_idle[seat]++;
+    }
+}
+
+static void judge_hit(body_sync_stand_t *st, uint8_t seat, const stand_record_t *r, const stand_target_t *t) {
+    endpoint_t *host = &st->ep[0];
+    stand_effect_t effect;
+    bool accepted = stand_rules_hit(t, r->origin, st->scene.character.punch_range, &effect) && apply_effect(st, effect, r->target, r->origin);
+    stand_record_t verdict = {.type = STAND_REC_VERDICT, .target = r->target, .action = r->action, .accepted = accepted ? 1 : 0};
+    if (seat < st->endpoints && st->ep[seat].active) {
+        queue_record(st, host, seat, &verdict);
+    }
+    action_track_t *track = track_of(st, r->action);
+    if (track && accepted) {
+        track->answered_on_host = true;
+    }
+    if (accepted) {
+        st->claim_effects[seat]++;
+    } else {
+        st->claims_rejected[seat]++;
     }
 }
 
 static void answer_stand_claims(body_sync_stand_t *st) {
     endpoint_t *host = &st->ep[0];
-    for (uint32_t i = 0; i < st->claim_count; i++) {
-        const pending_claim_t *p = &st->claims[i];
-        stand_target_t t = target_of(st, host, p->record.target);
-        if (p->record.type == STAND_REC_HIT) {
-            stand_effect_t effect;
-            bool accepted = stand_rules_hit(&t, p->record.origin, st->scene.character.punch_range, &effect) &&
-                            apply_effect(st, effect, p->record.target, p->record.origin);
-            stand_record_t verdict = {.type = STAND_REC_VERDICT, .target = p->record.target, .action = p->record.action, .accepted = accepted ? 1 : 0};
-            if (p->seat < st->endpoints && st->ep[p->seat].active) {
-                queue_record(st, host, p->seat, &verdict);
+    for (uint8_t seat = 1; seat < st->endpoints; seat++) {
+        for (uint32_t i = 0; i < st->claim_count[seat]; i++) {
+            const stand_record_t *r = &st->claims[seat][i].record;
+            stand_target_t t = target_of(st, host, r->target);
+            if (r->type == STAND_REC_HIT) {
+                judge_hit(st, seat, r, &t);
+            } else {
+                judge_impact(st, seat, r, &t);
             }
-            action_track_t *track = track_of(st, p->record.action);
-            if (track && accepted) {
-                track->answered_on_host = true;
-            }
-        } else {
-            judge_impact(st, p->seat, &p->record, &t);
         }
+        st->claim_count[seat] = 0;
     }
-    st->claim_count = 0;
 }
 
 /* The owner of a flying body judges its contacts with the host's own rule: the host applies its
@@ -859,12 +879,15 @@ static void impacts(body_sync_stand_t *st, endpoint_t *ep) {
                 continue;
             }
             uint16_t number = 0;
-            if (!body_sync_contact_number(ep->sync, fid, &number) ||
-                !stand_claim_keys_add(&ep->claimed, (stand_claim_key_t){.agent = fid, .target = tid, .number = number, .seat = ep->index})) {
+            if (!body_sync_contact_number(ep->sync, fid, &number)) {
                 continue;
             }
+            /* Marked sent only once queued: a claim the full queue dropped goes again at the next hit. */
+            stand_claim_key_t key = {.agent = fid, .target = tid, .number = number, .seat = ep->index};
             stand_record_t r = {.type = STAND_REC_IMPACT, .target = tid, .body = fid, .number = number, .speed = h->speed};
-            queue_record(st, ep, BODY_SYNC_SEAT_HOST, &r);
+            if (!stand_claim_keys_has(&ep->claimed, key) && queue_record(st, ep, BODY_SYNC_SEAT_HOST, &r)) {
+                stand_claim_keys_add(&ep->claimed, key);
+            }
         }
     }
 }
@@ -906,10 +929,14 @@ static void close_peer(body_sync_stand_t *st, endpoint_t *ep, uint8_t seat) {
 
 static void stand_record_in(body_sync_stand_t *st, endpoint_t *ep, uint8_t seat, const stand_record_t *r) {
     if (is_host_ep(ep)) {
-        if (st->claim_count < CLAIMS_MAX) {
-            st->claims[st->claim_count++] = (pending_claim_t){.seat = seat, .record = *r};
+        if (seat == BODY_SYNC_SEAT_HOST || seat >= BODY_SYNC_ENDPOINTS_MAX) {
+            return;
+        }
+        st->claims_in[seat]++;
+        if (st->claim_count[seat] < SEAT_CLAIMS_MAX) {
+            st->claims[seat][st->claim_count[seat]++] = (pending_claim_t){.seat = seat, .record = *r};
         } else {
-            ep->claim_stale++;
+            st->claims_overflow[seat]++;
         }
         return;
     }
@@ -1049,9 +1076,11 @@ static void send_all(body_sync_stand_t *st, endpoint_t *ep) {
                 body_sync_resolve(ep->sync, seat, numbers[i], fate == COOP_PACKET_ARRIVED);
             }
         }
+        bool seam_left = false;
         while (cap_record > 1 && body_sync_peek_record(ep->sync, seat, st->packet + 1, cap_record - 1, &size)) {
             st->packet[0] = STAND_FAMILY_SEAM;
             if (coop_session_send_record(ep->session, seat, st->packet, size + 1) != COOP_SEND_OK) {
+                seam_left = true;
                 break;
             }
             body_sync_pop_record(ep->sync, seat);
@@ -1060,8 +1089,10 @@ static void send_all(body_sync_stand_t *st, endpoint_t *ep) {
                 stand_metrics_bytes(&st->metrics, (uint32_t)guest, direction, BODY_SYNC_TRAFFIC_AUTHORITY, 1, st->now);
             }
         }
+        /* The stand's records wait behind the seam's: a claim must not overtake the release or
+           take it follows, even when it alone would fit. */
         out_queue_t *q = &ep->queues[seat];
-        while (q->count > 0) {
+        while (!seam_left && q->count > 0) {
             if (coop_session_send_record(ep->session, seat, q->data[q->head], q->size[q->head]) != COOP_SEND_OK) {
                 break;
             }
@@ -2873,10 +2904,12 @@ static void evaluate(body_sync_stand_t *st) {
         gm->flush_over_limit = st->flush_over[g - 1];
         gm->packets_to_guest = a.packets_sent;
         gm->claims = st->claims_in[g];
-        gm->claims_rejected = st->claims_rejected[g];
-        gm->claims_format = st->claims_format[g];
+        gm->claims_overflow = st->claims_overflow[g];
         gm->claims_repeat = st->claims_repeat[g];
+        gm->claims_rejected = st->claims_rejected[g];
+        gm->claims_idle = st->claims_idle[g];
         gm->claim_effects = st->claim_effects[g];
+        gm->claims_format = st->claims_format[g];
     }
     r->action_count = st->scenario.action_count;
     for (uint32_t i = 0; i < st->scenario.action_count; i++) {

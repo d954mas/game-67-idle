@@ -78,11 +78,14 @@ extern "C" {
        (twice the layer's chain cap; the cap bounds it by (120 + 60) / 2, sync_soft.h)
      aligned_gap.max aligned_gap.p95 local_correction.max [m]   local_turn.max [deg]
      takes.count take_refusals.count reclaims.count returns.count [bodies]
-     claims.count claims_rejected.count claims_format.count claims_repeat.count claim_effects.count [claims]
-   - impact claims: a guest's claims of its flying bodies' contacts the host received whole;
-     of those, refused by the seam's gate (STALE, REVOKED) or the stand's limits (gap past the
-     reach, a claimed speed past the approach the host saw), repeats of a key already judged, and
-     effects applied; claims_format counts the guest's stand records the parser refused (dropped).
+     claims.count claims_overflow.count claims_repeat.count claims_rejected.count claims_idle.count
+     claim_effects.count claims_format.count [claims]
+   - claims: a guest's hit and impact claims the host parsed. Each lands in exactly one of
+     overflow (its seat's queue for the tick was full), repeat (an impact key judged before),
+     rejected (the seam's gate said STALE or REVOKED, or the stand's limits or rules refused it:
+     a gap past the reach, a claimed speed past the approach the host saw, a hit out of range),
+     idle (accepted, nothing left to do: a target already broken or felled) and effects.
+     claims_format counts the guest's stand records the parser refused (dropped).
    - lag-aligned gap: two pictures of one moment, while the body moves. A copy an endpoint plays
      (a guest the host's bodies, the host a guest's) against what its owner drew at the owner tick
      the copy shows, a body a guest predicts (the second layer) too once its pull runs: the snap
@@ -221,8 +224,9 @@ typedef struct body_sync_guest_metrics {
     uint32_t stale_max_ticks;          /* the worse end */
     uint32_t flush_over_limit;         /* ticks, both directions */
     uint32_t packets_to_guest;         /* state packets the host's seam wrote to this seat */
-    /* This seat's impact claims on the host (see "impact claims" above). */
-    uint32_t claims, claims_rejected, claims_format, claims_repeat, claim_effects;
+    /* This seat's claims on the host (see "claims" above): claims = overflow + repeat + rejected
+       + idle + effects. */
+    uint32_t claims, claims_overflow, claims_repeat, claims_rejected, claims_idle, claim_effects, claims_format;
 } body_sync_guest_metrics_t;
 
 typedef struct body_sync_action_metrics {
