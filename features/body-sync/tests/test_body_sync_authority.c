@@ -377,8 +377,8 @@ static void test_contact_of_a_retake_after_a_release_crossed_the_grant(void) {
     }
 }
 
-/* A take refused while the guest released it: no move, a refusal mark. The re-take names nothing
-   until it hears, then the number two on. */
+/* A take refused while the guest released it: no move, a refusal mark. The refusal record
+   settles the number, and the re-take names the grant's, two on. */
 static void test_contact_of_a_retake_after_a_refused_released_take(void) {
     contact_start();
     sync_authority_host_active(&host, A, true);
@@ -389,8 +389,66 @@ static void test_contact_of_a_retake_after_a_refused_released_take(void) {
     TEST_ASSERT_EQUAL_UINT16(0, sync_authority_body(&host, A)->number);
     deliver(&host, BODY_SYNC_SEAT_HOST, &guest, 1); /* the refusal */
     sync_authority_host_active(&host, A, false);
-    retake_names_the_grant(false, "a re-take after a refused take it released");
+    retake_names_the_grant(true, "a re-take after a refused take it released");
     TEST_ASSERT_EQUAL_UINT16(2, sync_authority_body(&host, A)->number);
+}
+
+/* The host grants a take and moves the body on by force before the answer leaves: the answer
+   names another seat, which the guest reads as a refusal, and the host marks the same. */
+static void test_contact_of_a_retake_after_a_grant_overtaken_by_a_forced_move(void) {
+    static const char *kinds[] = {"a take-back", "a host claim", "an assign to the host", "an assign to another seat",
+                                  "a grant to another seat"};
+    for (int kind = 0; kind < 5; kind++) {
+        contact_start();
+        see_host(&guest);
+        TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_take(&guest, A));
+        deliver(&guest, 1, &host, BODY_SYNC_SEAT_HOST); /* granted, the answer not sent */
+        TEST_ASSERT_EQUAL_UINT8(1, sync_authority_body(&host, A)->seat);
+        if (kind == 0) {
+            TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_reclaim(&host, A));
+            sync_authority_settled(&host, A);
+        } else if (kind == 1) {
+            TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_claim(&host, A, BODY_SYNC_HOLD_UNTIL_RELEASE));
+        } else if (kind == 2) {
+            TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_assign(&host, A, BODY_SYNC_SEAT_HOST, BODY_SYNC_HOLD_UNTIL_RELEASE));
+        } else if (kind == 3) {
+            TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_assign(&host, A, 2, BODY_SYNC_HOLD_UNTIL_RELEASE));
+        } else {
+            TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_claim(&other, A, BODY_SYNC_HOLD_UNTIL_RELEASE));
+            deliver(&other, 2, &host, BODY_SYNC_SEAT_HOST);
+            body_sync_claim_event_t c;
+            TEST_ASSERT_TRUE(sync_authority_poll(&host, &c));
+            TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_answer(&host, &c, true));
+        }
+        deliver(&host, BODY_SYNC_SEAT_HOST, &guest, 1); /* the answer, naming another seat */
+        TEST_ASSERT_FALSE_MESSAGE(sync_authority_local(&guest, sync_authority_body(&guest, A)), kinds[kind]);
+        if (kind >= 3) { /* seat 2 gives it back, so a take can be granted */
+            deliver(&host, BODY_SYNC_SEAT_HOST, &other, 2);
+            TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_release(&other, A));
+            deliver(&other, 2, &host, BODY_SYNC_SEAT_HOST);
+            deliver(&host, BODY_SYNC_SEAT_HOST, &guest, 1);
+        }
+        TEST_ASSERT_EQUAL_UINT8_MESSAGE(BODY_SYNC_SEAT_HOST, sync_authority_body(&host, A)->seat, kinds[kind]);
+        retake_names_the_grant(true, kinds[kind]);
+    }
+}
+
+/* A release crosses the grant and a relayed host state names the new number before the record
+   does: the state settles nothing (it carries no refusal mark); the record does. */
+static void test_contact_of_a_retake_primed_by_a_relayed_state(void) {
+    for (int heard = 0; heard < 2; heard++) {
+        contact_start();
+        see_host(&guest);
+        TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_take(&guest, A));
+        deliver(&guest, 1, &host, BODY_SYNC_SEAT_HOST);
+        TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_release(&guest, A));
+        deliver(&guest, 1, &host, BODY_SYNC_SEAT_HOST); /* crosses the grant */
+        see_host(&guest);                               /* the state, ahead of the record */
+        if (heard) {
+            deliver(&host, BODY_SYNC_SEAT_HOST, &guest, 1);
+        }
+        retake_names_the_grant(heard != 0, heard ? "the record heard after the state" : "only the state heard");
+    }
 }
 
 /* A seat that left gets nothing of an end's grace: its session is over. */
@@ -561,6 +619,8 @@ int main(int argc, char **argv) {
     RUN_TEST(test_contact_of_a_retake_after_a_withdrawn_claim);
     RUN_TEST(test_contact_of_a_retake_after_a_release_crossed_the_grant);
     RUN_TEST(test_contact_of_a_retake_after_a_refused_released_take);
+    RUN_TEST(test_contact_of_a_retake_after_a_grant_overtaken_by_a_forced_move);
+    RUN_TEST(test_contact_of_a_retake_primed_by_a_relayed_state);
     RUN_TEST(test_contact_of_an_arbitrated_end_lapses_when_the_seat_leaves);
     RUN_TEST(test_contact_after_a_take_back_counts_within_the_grace);
     RUN_TEST(test_contact_after_a_host_claim_counts_within_the_grace);

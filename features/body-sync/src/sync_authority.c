@@ -97,12 +97,18 @@ static void record_body(const sync_authority_t *a, const sync_authority_body_t *
 }
 
 /* Host: the one place authority changes on the host. `granted` is the claim answered, 0 for a
-   forced move. `voluntary`: a guest that owned the body gave it up itself, so its contact
-   claims of that ownership still count. */
+   forced move. `end`: how the current guest owner's ownership ends, for its contact claims. */
 static void host_move_to(sync_authority_t *a, sync_authority_body_t *b, uint8_t seat, uint8_t hold, uint16_t granted, bool keep_holder,
                          uint8_t announce, sync_authority_end_t end) {
     bool was_local = sync_authority_local(a, b);
     uint32_t slot = slot_of(a, b);
+    /* The body leaves a seat whose take grant has not left yet: that answer now names another
+       seat, which the seat reads as a refusal and declares two on for its next take (guest
+       take_refused), so the host skips the same. */
+    if (b->seat != BODY_SYNC_SEAT_HOST && seat != b->seat && b->hold == BODY_SYNC_HOLD_UNTIL_REST && b->granted_seq != 0 &&
+        a->answer[b->seat][slot] == b->granted_seq) {
+        a->refused[b->seat][slot / 64] |= 1ull << (slot % 64);
+    }
     if (b->seat != BODY_SYNC_SEAT_HOST) {
         end = end == SYNC_END_REVOKED && a->plant_revoked_as_arbitrated ? SYNC_END_ARBITRATED : end;
         sync_authority_ended_t *e = &a->ended[b->seat][slot];
@@ -156,17 +162,22 @@ static void guest_authority(sync_authority_t *a, sync_authority_body_t *b, const
         b->claim_pending = false;
     }
     /* The host marks every take it refuses of a body this seat does not own, one released while
-       it waited too, and a take whose grant a release crossed before the answer left. */
+       it waited too, and a granted take whose answer left after the body moved on (host_move_to). */
     bool answers_take = from_record && r->sequence != 0 && b->claim_take && r->sequence == b->claim_seq;
     b->take_refused = b->take_refused || (answers_take && r->seat != me);
+    bool stale_grant = r->seat == me && !answers_mine && r->sequence != 0 && !r->forced;
     if (newer16(r->number, b->number)) {
         b->number = r->number;
-        bool stale_grant = r->seat == me && !answers_mine && r->sequence != 0 && !r->forced;
-        /* A grant of a claim released since: the host still owes the release's move. */
-        b->number_lag = stale_grant ? SYNC_LAG_UNKNOWN : SYNC_LAG_NONE;
+        b->number_lag = b->number_lag == SYNC_LAG_ONE ? SYNC_LAG_NONE : b->number_lag;
         b->seat = stale_grant ? BODY_SYNC_SEAT_HOST : r->seat;
         /* Any move to this seat, stale grant or not, is the one the host skipped a number on. */
         b->take_refused = b->take_refused && r->seat != me;
+    }
+    /* Only a record at the host's number settles an unknown one: a state carries no refusal mark,
+       and the take answer that does may still be on its way. After a grant of a claim released
+       since, the host still owes the release's move. */
+    if (from_record && r->number == b->number) {
+        b->number_lag = stale_grant ? SYNC_LAG_UNKNOWN : SYNC_LAG_NONE;
     }
     bool now_local = sync_authority_local(a, b);
     if (!was_local && now_local) {
@@ -594,11 +605,7 @@ body_sync_result_t sync_authority_receive(sync_authority_t *a, uint8_t seat, uin
         /* A release counts at the number its sender saw, or for the grant it crossed; an older
            one (the host moved the body by force since) is stale and changes nothing. */
         if (b->seat == seat && (r.number == b->number || (r.sequence != 0 && r.sequence == b->granted_seq))) {
-            /* The take's answer, not sent yet, now leaves naming the host: the seat reads it as a
-               refusal and declares two on for its next take, so the host skips the same. */
-            bool crossed_take = r.number != b->number && b->hold == BODY_SYNC_HOLD_UNTIL_REST && a->answer[seat][slot] == r.sequence;
             host_move(a, b, BODY_SYNC_SEAT_HOST, BODY_SYNC_HOLD_UNTIL_RELEASE, 0, false, SYNC_END_VOLUNTARY);
-            a->refused[seat][slot / 64] |= crossed_take ? 1ull << (slot % 64) : 0ull;
             take_record(b, &r, false);
         } else if (!withdrew) {
             (*stale)++;
