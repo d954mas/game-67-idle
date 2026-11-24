@@ -1,8 +1,9 @@
 """Paint the freedom map `_CLOTH` of a garment piece from its geometry.
 
 `_CLOTH` is 0 on a pin (the vertex follows skinning) and in (0, 1] elsewhere; a free vertex is driven toward
-its target at drive_hz * (1 - _CLOTH). Pins are the top `seam_fraction` of the piece's height, and the drive weight
-falls along the surface distance from the pins. A drive weight w is a frequency ratio of sqrt(w), so
+its target at drive_hz * (1 - _CLOTH). Pins are the top `seam_fraction` of the piece's sheet, measured from the
+seam: the sheet holds every triangle with a corner on the piece, so its top is the skinned part the piece is sewn to.
+The drive weight falls along the surface distance from the pins. A drive weight w is a frequency ratio of sqrt(w), so
 _CLOTH = 1 - sqrt(w).
 A piece's seam is its not-cloth side: an unlabelled vertex is skinned and holds the border, so the labelled row next
 to it stays free. Two kinds of vertex are pins besides the band: one covered by an outer layer (an inner piece
@@ -106,7 +107,8 @@ def covered(points, normals, cover_points, cover_faces, max_distance):
 def baseline_freedom(points, faces, seam_fraction, curve=None, pinned=None):
     """Freedom per vertex used by `faces` (NaN elsewhere).
 
-    seam_fraction: share of the piece's height, measured from its top, that is pinned.
+    faces: the piece's sheet, every triangle with a corner on the piece, so the seam side is part of it.
+    seam_fraction: share of the sheet's height, measured from its top, that is pinned.
     pinned: further pins, such as covered or coincident vertices.
     curve: (start, end, reach) drive weights at surface distance 0 and at `reach` of the largest distance,
     linear between and clamped; None means an undriven piece (freedom 1).
