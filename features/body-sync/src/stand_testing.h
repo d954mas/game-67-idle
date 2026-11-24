@@ -31,6 +31,9 @@ void stand_testing_plant_claim_limits(body_sync_stand_t *stand, float reach_scal
 /* The host reads a catch's gap `metres` farther than the seam measures it: the catcher's evidence
    off by that much. */
 void stand_testing_plant_catch_offset(body_sync_stand_t *stand, float metres);
+/* Guest `player`'s grabs claim `hold` and name no holder, though her character carries the body: a
+   forged catcher that would keep a caught body a flight. */
+void stand_testing_plant_catch_hold(body_sync_stand_t *stand, uint32_t player, body_sync_hold_t hold);
 
 /* Planted defects for the lag-aligned gap: state packets every endpoint takes are stamped
    `ticks` later than they were sent (a copy then shows its owner a tick early for the tick it

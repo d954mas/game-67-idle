@@ -262,6 +262,11 @@ bool stand_rules_grab(const stand_target_t *target, const float claimant[3], flo
     return horizontal_gap(target->position, claimant) - stand_footprint_radius(target->desc) <= reach + STAND_CLAIM_SLACK_M;
 }
 
+bool stand_rules_in_throw_flight(const stand_hand_t *hand, const body_sync_authority_t *now) {
+    return hand->known && now->seat != BODY_SYNC_SEAT_HOST && now->hold == BODY_SYNC_HOLD_UNTIL_SETTLED && now->holder == BODY_SYNC_ID_NONE &&
+           hand->seat == now->seat && hand->number == now->number;
+}
+
 bool stand_rules_hit(const stand_target_t *target, const float origin[3], float range, stand_effect_t *effect) {
     *effect = STAND_EFFECT_NONE;
     if (!target->live || !target->desc || target->character || target->desc->motion == BODY_SYNC_MOTION_STATIC) {

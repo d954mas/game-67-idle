@@ -111,7 +111,9 @@ extern "C" {
      expect <metric> <=|>= <value> [stub <value>]
                                                 metric names of body_sync_metrics.h, the
                                                 worst guest counts; `stub` bounds the stub,
-                                                which has no render offset to blend a handover
+                                                which has no render offset to blend a handover:
+                                                jump.max, snap.count, step.count and
+                                                offset_step.count only
    With `guests 0` the checks that compare a guest (agree_at_rest, left, and every metric but
    host_ticks.max and echo_ticks.max) are refused.
 

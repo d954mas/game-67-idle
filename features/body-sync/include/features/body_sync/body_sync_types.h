@@ -120,6 +120,10 @@ typedef struct body_sync_contact {
     /* How far apart they may be after a real touch along that path: the take slop, the target's
        travel and the path's bend over its time. */
     float reach;
+    /* The part of `reach` a touch itself adds (Box3D's contact distance, a pose's rounding and turn,
+       with margin): the rest is the evidence's own slop, what a rule judging a reach other than a
+       touch (a grab) adds to that reach instead. */
+    float slop;
     /* The agent's fastest travel between its taken states, at most max_speed, plus the target's
        shown speed. */
     float approach_max;

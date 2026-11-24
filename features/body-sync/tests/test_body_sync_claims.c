@@ -31,6 +31,10 @@ static bool plant_recall_number; /* --plant-recall-keeps-number: a recall leaves
 /* --plant-catch-evidence-off: the host reads a catch's gap a character's reach (1.65 m) farther, past
    the grab's allowance whatever the seam measures */
 static bool plant_catch_off;
+/* --plant-move-keeps-received: the host's move of a body to another guest keeps what it received of
+   the old owner */
+static bool plant_keeps_received;
+static bool plant_ring_off; /* --plant-agent-ring-off: an agent's evidence is its ring of 12 states alone */
 static body_sync_scene_t scene;
 static body_sync_scenario_t scenario;
 static bool third_player; /* the next make() gives the breakables a third player and a rock for it */
@@ -103,6 +107,12 @@ static body_sync_stand_t *make(const char *text, int mode) {
     }
     if (plant_recall_number) {
         body_sync_plant_recall_keeps_number(stand_testing_sync(stand, 0));
+    }
+    if (plant_keeps_received) {
+        body_sync_plant_move_keeps_received(stand_testing_sync(stand, 0));
+    }
+    if (plant_ring_off) {
+        body_sync_plant_agent_ring_off(stand_testing_sync(stand, 0));
     }
 #endif
     return stand;
@@ -280,6 +290,110 @@ static void guest_catches_a_guest_throw(int mode) {
     body_sync_stand_destroy(stand);
 }
 static void test_a_guest_catches_a_guest_throw_host(void) { guest_catches_a_guest_throw(MODE_HOST); }
+
+static const char *scenario_text(const char *name) {
+    static char text[BODY_SYNC_SCENARIO_TEXT_MAX + 1];
+    char path[512];
+    snprintf(path, sizeof(path), "%s/%s.scn", BODY_SYNC_SCENARIOS_DIR, name);
+    FILE *f = fopen(path, "rb");
+    TEST_ASSERT_NOT_NULL(f);
+    size_t n = fread(text, 1, BODY_SYNC_SCENARIO_TEXT_MAX, f);
+    fclose(f);
+    text[n] = '\0';
+    return text;
+}
+
+/* catch_guest_throw_250 as shipped: at its seed the record lane resends the catch, which reaches the
+   host 27 ticks after the grab, past the 12 states the ring keeps of a character moving every tick:
+   only the agent's older ring holds the evidence. */
+static void test_a_resent_catch_is_granted(void) {
+    body_sync_stand_t *stand = make(scenario_text("catch_guest_throw_250"), MODE_HOST);
+    all_pass(body_sync_stand_run(stand));
+    body_sync_stand_destroy(stand);
+}
+
+/* catch_race as shipped: the first claim is caught, the second refused, and every endpoint agrees. */
+static void catch_race_shipped(int mode) {
+    body_sync_stand_t *stand = make(scenario_text("catch_race"), mode);
+    all_pass(body_sync_stand_run(stand));
+    body_sync_stand_destroy(stand);
+}
+static void test_a_catch_race_is_won_once_host(void) { catch_race_shipped(MODE_HOST); }
+static void test_a_catch_race_is_won_once_interaction(void) { catch_race_shipped(MODE_INTERACTION); }
+
+/* g2 forged: her grab of g1's throw claims a flight (a hold until settled) and names no holder. g3
+   grabs it from her 200 ms after g2's grab, once g2's states (a flight, no holder) are the host's
+   picture of it and before her forged flight settles back to the host. The host grants g2 and
+   refuses g3: a catch puts the box in g2's hand on the host whatever she claimed, and only a throw
+   from a hand the host granted as a grab is caught. */
+static void forged_catch_is_never_caught_back(int mode) {
+    body_sync_stand_t *stand = make("scenario claims\nscene four_chars_item\nseed 41\nguests 3\nsettle 6s\n"
+                                    "net g1 rtt 100ms jitter 10ms\nnet g2 rtt 100ms jitter 10ms\nnet g3 rtt 100ms jitter 10ms\n"
+                                    "p1 grab box as lift\np1 wait 300ms\np1 throw 4 0.2 0 speed 9 as throw\n"
+                                    "p2 walk box speed 1 on throw as reach2\np2 grab box as c2\np2 wait 1500ms\np2 drop as put2\n"
+                                    "p3 walk box speed 1 on c2 as reach3\np3 wait 200ms\np3 walk box speed 1\np3 grab box as c3\n",
+                                    mode);
+    stand_testing_plant_catch_hold(stand, 2, BODY_SYNC_HOLD_UNTIL_SETTLED);
+    body_sync_id_t box = id_of("box");
+    body_sync_authority_t a, granted = {0};
+    bool hers = false;
+    uint8_t before = BODY_SYNC_SEAT_HOST;
+    while (body_sync_stand_tick(stand)) {
+        TEST_ASSERT_TRUE(body_sync_authority(stand_testing_sync(stand, 0), box, &a));
+        if (a.seat == 2 && !hers) {
+            hers = true;
+            granted = a;
+        }
+        TEST_ASSERT_FALSE_MESSAGE(before == 2 && a.seat == 3, "the host let g3 catch the box from g2's forged catch");
+        before = a.seat;
+    }
+    TEST_ASSERT_TRUE_MESSAGE(hers, "g2's forged catch was never granted: the case proves nothing");
+    TEST_ASSERT_EQUAL_MESSAGE(BODY_SYNC_HOLD_UNTIL_RELEASE, granted.hold, "the host kept g2's claimed hold for the catch");
+    const body_sync_report_t *report = body_sync_stand_report(stand);
+    int c3 = -1;
+    for (uint32_t i = 0; i < report->action_count; i++) {
+        c3 = strcmp(report->actions[i].label, "c3") == 0 ? (int)report->actions[i].outcome : c3;
+    }
+    TEST_ASSERT_EQUAL_INT_MESSAGE(BODY_SYNC_OUTCOME_REFUSED, c3, "g3's grab was not refused by the host: the case proves nothing");
+    body_sync_stand_destroy(stand);
+}
+static void test_a_forged_catch_is_never_caught_back_host(void) { forged_catch_is_never_caught_back(MODE_HOST); }
+static void test_a_forged_catch_is_never_caught_back_interaction(void) { forged_catch_is_never_caught_back(MODE_INTERACTION); }
+
+/* catch_guest_throw_100 with the host's own claim of the box three ticks after it granted g2's
+   catch, before her first state: the host goes on from its copy as it shows it, held where the
+   thrower's states ended, not from the thrower's newest state, which flies it on at 9 m/s. Until
+   then it reads the grant's hold and the thrower's flags. */
+static void host_claim_after_a_catch(int mode) {
+    body_sync_stand_t *stand = make(scenario_text("catch_guest_throw_100"), mode);
+    body_sync_t *host = stand_testing_sync(stand, 0);
+    body_sync_id_t box = id_of("box");
+    body_sync_authority_t a;
+    uint32_t grant = 0;
+    uint8_t flags = 0;
+    while (body_sync_stand_tick(stand)) {
+        TEST_ASSERT_TRUE(body_sync_authority(host, box, &a));
+        if (grant == 0 && a.seat == 1) {
+            flags = body_sync_flags(host, box);
+        }
+        if (grant == 0 && a.seat == 2) {
+            grant = body_sync_stand_now(stand);
+            TEST_ASSERT_EQUAL_MESSAGE(BODY_SYNC_HOLD_UNTIL_RELEASE, a.hold, "the host reads the thrower's hold after the catch");
+            TEST_ASSERT_EQUAL_UINT8(flags, body_sync_flags(host, box));
+        }
+        if (grant != 0 && body_sync_stand_now(stand) == grant + 3u) {
+            TEST_ASSERT_EQUAL_MESSAGE(BODY_SYNC_HOLD_UNTIL_RELEASE, a.hold, "g2's first state came within three ticks: the case proves nothing");
+            TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_claim(host, box, BODY_SYNC_HOLD_UNTIL_RELEASE));
+            b3Vec3 v = b3Body_GetLinearVelocity(body_sync_body(host, box));
+            TEST_ASSERT_TRUE_MESSAGE(sqrtf(v.x * v.x + v.y * v.y + v.z * v.z) < 3.0f, "the host's claim goes on with the thrower's flight");
+            break;
+        }
+    }
+    TEST_ASSERT_TRUE_MESSAGE(grant != 0, "the catch was never granted");
+    body_sync_stand_destroy(stand);
+}
+static void test_a_host_claim_after_a_catch_holds_host(void) { host_claim_after_a_catch(MODE_HOST); }
+static void test_a_host_claim_after_a_catch_holds_interaction(void) { host_claim_after_a_catch(MODE_INTERACTION); }
 static void test_a_guest_catches_a_guest_throw_interaction(void) { guest_catches_a_guest_throw(MODE_INTERACTION); }
 
 /* A guest's claim of another guest's flight far out of her reach, made outside any grab: the host
@@ -786,6 +900,10 @@ int main(int argc, char **argv) {
             plant_recall_number = true;
         } else if (strcmp(argv[i], "--plant-catch-evidence-off") == 0) {
             plant_catch_off = true;
+        } else if (strcmp(argv[i], "--plant-move-keeps-received") == 0) {
+            plant_keeps_received = true;
+        } else if (strcmp(argv[i], "--plant-agent-ring-off") == 0) {
+            plant_ring_off = true;
         } else if (strcmp(argv[i], "--sweep") == 0) {
             sweep = true;
         }
@@ -815,6 +933,9 @@ int main(int argc, char **argv) {
     RUN_TEST(test_a_recall_drops_the_late_claim_host);
     RUN_TEST(test_a_guest_catches_a_guest_throw_host);
     RUN_TEST(test_a_far_catch_is_refused_host);
+    RUN_TEST(test_a_resent_catch_is_granted);
+    RUN_TEST(test_a_catch_race_is_won_once_host);
+    RUN_TEST(test_a_forged_catch_is_never_caught_back_host);
     return UNITY_END();
 #endif
     if (sweep) {
@@ -857,5 +978,12 @@ int main(int argc, char **argv) {
     RUN_TEST(test_a_recall_drops_the_late_claim_interaction);
     RUN_TEST(test_a_guest_catches_a_guest_throw_interaction);
     RUN_TEST(test_a_far_catch_is_refused_interaction);
+    RUN_TEST(test_a_resent_catch_is_granted);
+    RUN_TEST(test_a_catch_race_is_won_once_host);
+    RUN_TEST(test_a_catch_race_is_won_once_interaction);
+    RUN_TEST(test_a_forged_catch_is_never_caught_back_host);
+    RUN_TEST(test_a_forged_catch_is_never_caught_back_interaction);
+    RUN_TEST(test_a_host_claim_after_a_catch_holds_host);
+    RUN_TEST(test_a_host_claim_after_a_catch_holds_interaction);
     return UNITY_END();
 }

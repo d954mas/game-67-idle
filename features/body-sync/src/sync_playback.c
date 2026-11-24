@@ -362,6 +362,20 @@ static void evict(sync_buffered_t *b, const sync_timeline_t *t) {
     b->count--;
 }
 
+void sync_playback_end(sync_playback_t *p, uint16_t slot) {
+    if (slot >= BODY_SYNC_BODIES_MAX || !p->bodies[slot].has) {
+        return;
+    }
+    sync_buffered_t *b = &p->bodies[slot];
+    const sync_timeline_t *t = &p->timelines[b->timeline];
+    uint8_t keep = 0;
+    while (keep < b->count && (!t->started || at(t, b->snapshots[keep].tick) <= t->playback)) {
+        keep++;
+    }
+    b->count = keep < b->count ? (uint8_t)(keep + 1u) : b->count;
+    b->ended = true;
+}
+
 sync_file_t sync_playback_file(sync_playback_t *p, uint8_t timeline, uint32_t sample, const sync_record_t *r) {
     if (timeline >= BODY_SYNC_SEATS_MAX || r->slot >= BODY_SYNC_BODIES_MAX) {
         return SYNC_FILE_LATE;
@@ -401,6 +415,7 @@ sync_file_t sync_playback_file(sync_playback_t *p, uint8_t timeline, uint32_t sa
     memcpy(s->angular, r->angular, sizeof(s->angular));
     s->rare = r->rare;
     b->count++;
+    b->ended = false;
     return SYNC_FILE_TAKEN;
 }
 
@@ -455,7 +470,7 @@ void sync_playback_sample(const sync_playback_t *p, uint16_t slot, sync_play_t *
     }
     if (last + 1 >= b->count) {
         hold(s0, out);
-        out->frozen = now - at(t, s0->tick) > (double)SYNC_FREEZE_TICKS;
+        out->frozen = b->ended || now - at(t, s0->tick) > (double)SYNC_FREEZE_TICKS;
         if (!out->frozen) {
             /* Waiting for the next snapshot the pose holds; the owner's last motion is kept for
                a dynamic hold, which would otherwise brake every time playback catches up. */

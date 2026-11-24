@@ -251,6 +251,10 @@ struct body_sync_stand {
     uint32_t claims_ended[BODY_SYNC_ENDPOINTS_MAX];
     float claim_reach_scale, claim_approach_scale; /* 1 and 1; stand_testing_plant_claim_limits */
     float plant_catch_m; /* stand_testing_plant_catch_offset */
+    stand_hand_t hands[STAND_BODIES_MAX]; /* host: per body, its last grab granted (stand_rules_in_throw_flight) */
+    /* stand_testing_plant_catch_hold: the player whose grabs claim `plant_hold` and name no holder, -1 none */
+    int32_t plant_hold_player;
+    body_sync_hold_t plant_hold;
     uint32_t plant_declared_endpoint, plant_declared_ticks; /* stand_testing_plant_declared_velocity; 0 ticks none */
     body_sync_id_t plant_declared_body;
     float plant_declared_add[3];
@@ -772,12 +776,15 @@ static void start_action(body_sync_stand_t *st, endpoint_t *ep, int32_t index) {
                 return;
             }
         }
-        if (body_sync_claim(ep->sync, id, BODY_SYNC_HOLD_UNTIL_RELEASE) != BODY_SYNC_OK) {
+        bool forged = !is_host_ep(ep) && st->plant_hold_player == (int32_t)ep->index;
+        if (body_sync_claim(ep->sync, id, forged ? st->plant_hold : BODY_SYNC_HOLD_UNTIL_RELEASE) != BODY_SYNC_OK) {
             finish_action(st, ep, index, BODY_SYNC_OUTCOME_FAILED);
             return;
         }
         stand_character_attach(c, ep->world, id);
-        body_sync_set_holder(ep->sync, id, me);
+        if (!forged) {
+            body_sync_set_holder(ep->sync, id, me);
+        }
         begin_measure(st, index, id);
         track->shows = true;
         track->answered = !is_host_ep(ep);
@@ -938,11 +945,14 @@ static void character_tick(body_sync_stand_t *st, endpoint_t *ep) {
    trip and more ahead of what the catcher saw, so where the host shows the two now is no evidence;
    the seam's contact measure is: the catcher's character on the path the host's own taken states of
    it show, the body put back along its velocity to the claim's tick. The grab took it within
-   `reach` of the character's centre, so at most reach less the capsule's radius from its box. */
+   `reach` of the character's centre, so at most reach less the capsule's radius from its box; the
+   measure's slop for its own evidence (how far its path and the body's may have bent since) comes
+   on top, not a touch's, which a grab needs none of. */
 static bool catch_in_reach(const body_sync_stand_t *st, endpoint_t *host, const body_sync_claim_event_t *claim, const stand_target_t *t,
                            const body_sync_authority_t *now) {
     if (!t->live || !t->desc || t->character || t->held || !(t->desc->flags & BODY_SYNC_BODY_GRABBABLE) ||
-        (now->hold != BODY_SYNC_HOLD_UNTIL_SETTLED && now->hold != BODY_SYNC_HOLD_UNTIL_REST) || claim->seat >= st->scene.player_count) {
+        body_sync_id_slot(claim->id) >= STAND_BODIES_MAX || !stand_rules_in_throw_flight(&st->hands[body_sync_id_slot(claim->id)], now) ||
+        claim->seat >= st->scene.player_count) {
         return false;
     }
     body_sync_id_t agent = stand_world_id(host->world, character_slot(st, claim->seat));
@@ -955,7 +965,7 @@ static bool catch_in_reach(const body_sync_stand_t *st, endpoint_t *host, const 
         return false;
     }
     float grab = st->scene.character.reach - st->scene.character.radius;
-    return c.gap + st->plant_catch_m <= c.reach * st->claim_reach_scale + grab;
+    return c.gap + st->plant_catch_m <= c.reach * st->claim_reach_scale - c.slop + grab;
 }
 
 static void answer_claims(body_sync_stand_t *st) {
@@ -970,8 +980,9 @@ static void answer_claims(body_sync_stand_t *st) {
         }
         body_sync_authority_t now;
         body_sync_authority(host->sync, claim.id, &now);
-        /* Only a flight of another guest's is caught: one she carries or claimed into her own hold
-           stays hers, so two catchers of one throw get it once and a caught body is not caught back. */
+        /* Only a throw of another guest's is caught (stand_rules_in_throw_flight): one she carries,
+           pushes or was granted stays hers, so two catchers of one throw get it once and a caught
+           body is not caught back until it is thrown again. */
         bool caught = now.seat != BODY_SYNC_SEAT_HOST && now.seat != claim.seat;
         bool granted = caught ? catch_in_reach(st, host, &claim, &t, &now) : stand_rules_grab(&t, claimant, st->scene.character.reach);
         int32_t grab = -1;
@@ -986,8 +997,18 @@ static void answer_claims(body_sync_stand_t *st) {
         if (granted && caught && grab >= 0) {
             open_late(st, grab, claim.id);
         }
+        /* A catch puts the body in her hand on the host, whatever hold she claimed: a claim of a
+           settled hold with no holder would leave it a flight another guest could catch from her. */
+        bool as_grab = claim.hold == BODY_SYNC_HOLD_UNTIL_RELEASE;
+        if (granted && caught) {
+            claim.hold = BODY_SYNC_HOLD_UNTIL_RELEASE;
+        }
         body_sync_answer(host->sync, &claim, granted);
         body_sync_authority(host->sync, claim.id, &now);
+        uint32_t body = body_sync_id_slot(claim.id);
+        if (granted && body < STAND_BODIES_MAX) {
+            st->hands[body] = (stand_hand_t){.known = as_grab, .seat = now.seat, .number = now.number};
+        }
         if (grab >= 0) {
             action_track_t *a = &st->actions[grab];
             a->answered_on_host = true;
@@ -2490,6 +2511,11 @@ static void sample_playback(body_sync_stand_t *st) {
             bool offset_now = offset[0] * offset[0] + offset[1] * offset[1] + offset[2] * offset[2] > REST_OFFSET_M * REST_OFFSET_M;
             uint32_t gi = e == 0 ? (uint32_t)a.seat - 1u : e - 1u;
             bool moved = t->valid && t->id == id && t->owner == a.seat && played >= t->played;
+            /* The tick its owner changes (a catch) the new owner's path has no move to set against
+               the drawn one, which is all jump: a placement the offset takes moves nothing drawn. */
+            if (t->valid && t->id == id && t->owner != a.seat) {
+                stand_metrics_correction(&st->metrics, gi, (double)stand_distance3(drawn, t->drawn));
+            }
             const endpoint_t *owner = &st->ep[a.seat];
             double behind = owner->ring_any ? (double)owner->ring_newest - played : 0.0;
             stand_metrics_playback(&st->metrics, gi, (double)stand_distance3(drawn, truth), path_error(ring, played, drawn), behind, moved,
@@ -3549,6 +3575,7 @@ static body_sync_stand_t *create_stand(const body_sync_stand_config_t *config, b
     st->rest_tick = UINT32_MAX;
     st->limits = stand_limits_of(&st->scene);
     st->claim_reach_scale = st->claim_approach_scale = 1.0f;
+    st->plant_hold_player = -1;
     if (!check_scenario(st, error)) {
         free(st);
         return NULL;
@@ -3817,6 +3844,11 @@ void stand_testing_plant_declared_velocity(body_sync_stand_t *st, uint32_t endpo
 }
 
 void stand_testing_plant_catch_offset(body_sync_stand_t *st, float metres) { st->plant_catch_m = metres; }
+
+void stand_testing_plant_catch_hold(body_sync_stand_t *st, uint32_t player, body_sync_hold_t hold) {
+    st->plant_hold_player = (int32_t)player;
+    st->plant_hold = hold;
+}
 
 void stand_testing_plant_claim_limits(body_sync_stand_t *st, float reach_scale, float approach_scale) {
     st->claim_reach_scale = reach_scale;

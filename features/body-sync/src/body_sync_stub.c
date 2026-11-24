@@ -44,6 +44,9 @@ typedef struct entry {
     uint8_t in_from;
     uint32_t in_tick;
     bool in_ordered; /* in_tick orders that sender's next states: one session of the seat */
+    /* Host: the state received is an old owner's, from before the body moved to another guest: a
+       take-over goes on from the copy as shown, not from that owner's motion. */
+    bool in_old;
     stub_body_state_t in;
     sync_masks_t masks;
 } entry_t;
@@ -121,6 +124,7 @@ body_sync_t *body_sync_create(const body_sync_config_t *config) {
     s->dt = 1.0f / (float)config->tick_hz;
     sync_authority_init(&s->authority, config->seat, (uint8_t)config->seats, s->error, sizeof(s->error));
     s->authority.rebind_ticks = sync_policy_rebind_ticks(config->tick_hz);
+    s->authority.agent_stride = sync_policy_agent_stride(config->tick_hz, SYNC_AUTHORITY_AGENT_POSES);
     return s;
 }
 
@@ -198,6 +202,9 @@ body_sync_result_t body_sync_bind(body_sync_t *s, body_sync_id_t id, const body_
     e->body_class = bind->body_class;
     e->bound_type = b3Body_GetType(bind->body);
     e->bound_locks = b3Body_GetMotionLocks(bind->body);
+    if (is_host(s) && bind->body_class == BODY_SYNC_CLASS_CHARACTER) {
+        sync_authority_set_agent(&s->authority, id, true);
+    }
     return BODY_SYNC_OK;
 }
 
@@ -269,6 +276,7 @@ body_sync_contact_verdict_t body_sync_check_contact(const body_sync_t *s, uint8_
                                   .contact_tick = contact_tick,
                                   .window_ticks = grace > 2u ? grace : 2u}; /* at least the tick a state crosses in and the one the claim is judged in */
     sync_authority_contact_measure(&s->authority, agent, seat, ended, &scene, &out->gap, &out->reach, &out->approach_max);
+    out->slop = SYNC_POLICY_TAKE_SLOP_M;
     return verdict;
 }
 
@@ -291,16 +299,36 @@ static void note_live(body_sync_t *s, body_sync_id_t id) {
     }
 }
 
-body_sync_result_t body_sync_answer(body_sync_t *s, const body_sync_claim_event_t *claim, bool granted) {
-    if (claim) {
-        note_live(s, claim->id);
+/* Host: a copy moved from guest `from` to another guest: what it received is the old owner's. */
+static void host_handover(body_sync_t *s, uint32_t slot, uint8_t from) {
+    const sync_authority_body_t *a = auth_of(s, slot);
+    if (is_host(s) && from != BODY_SYNC_SEAT_HOST && a->seat != BODY_SYNC_SEAT_HOST && a->seat != from) {
+        s->entries[slot].in_old = true;
     }
-    return sync_authority_answer(&s->authority, claim, granted);
+}
+
+body_sync_result_t body_sync_answer(body_sync_t *s, const body_sync_claim_event_t *claim, bool granted) {
+    if (!claim) {
+        return sync_authority_answer(&s->authority, claim, granted);
+    }
+    note_live(s, claim->id);
+    const sync_authority_body_t *a = sync_authority_body_const(&s->authority, claim->id);
+    uint8_t from = a ? a->seat : BODY_SYNC_SEAT_HOST;
+    body_sync_result_t r = sync_authority_answer(&s->authority, claim, granted);
+    if (r == BODY_SYNC_OK && a) {
+        host_handover(s, body_sync_id_slot(claim->id), from);
+    }
+    return r;
 }
 static void take_over(body_sync_t *s, uint32_t slot);
 body_sync_result_t body_sync_assign(body_sync_t *s, body_sync_id_t id, uint8_t seat, body_sync_hold_t hold) {
     note_live(s, id);
+    const sync_authority_body_t *was = sync_authority_body_const(&s->authority, id);
+    uint8_t from = was ? was->seat : BODY_SYNC_SEAT_HOST;
     body_sync_result_t r = sync_authority_assign(&s->authority, id, seat, hold);
+    if (r == BODY_SYNC_OK && was) {
+        host_handover(s, body_sync_id_slot(id), from);
+    }
     /* A move to this side takes over now, so what the caller does next (a recall puts the body
        home) is not undone by the next apply's take-over. */
     uint32_t slot = body_sync_id_slot(id);
@@ -364,6 +392,7 @@ static void store_in(body_sync_t *s, uint32_t slot, uint8_t from, uint32_t tick,
     }
     e->in = *b;
     e->has_in = true;
+    e->in_old = false;
     e->in_fresh = true;
     e->in_from = from;
     e->in_tick = tick;
@@ -448,17 +477,19 @@ static void take_over(body_sync_t *s, uint32_t slot) {
     bool was_copy = e->copy_mode;
     e->copy_mode = false;
     a->resume = false;
-    if (e->has_in || was_copy || a->take_motion) {
+    bool has_in = e->has_in && !e->in_old;
+    e->in_old = false;
+    if (has_in || was_copy || a->take_motion) {
         bool kinematic;
         uint8_t locks;
-        sync_authority_resume_motion(a, e->has_in, e->in.kinematic, e->in.locks, e->bound_type == b3_kinematicBody, locks_bits(e->bound_locks),
+        sync_authority_resume_motion(a, has_in, e->in.kinematic, e->in.locks, e->bound_type == b3_kinematicBody, locks_bits(e->bound_locks),
                                      &kinematic, &locks);
         b3Body_SetType(e->body, kinematic ? b3_kinematicBody : b3_dynamicBody);
         b3Body_SetMotionLocks(e->body, locks_of(locks));
         sync_authority_applied(a, kinematic, locks);
     }
     sync_masks_restore(&e->masks, e->body);
-    if (e->has_in) {
+    if (has_in) {
         b3Body_SetLinearVelocity(e->body, (b3Vec3){e->in.velocity[0], e->in.velocity[1], e->in.velocity[2]});
         b3Body_SetAngularVelocity(e->body, (b3Vec3){e->in.angular[0], e->in.angular[1], e->in.angular[2]});
     }

@@ -141,8 +141,12 @@ static void host_move_to(sync_authority_t *a, sync_authority_body_t *b, uint8_t 
     }
     /* What the host received of the body was its last owner's: a new guest owner is read from the
        host's own move (this hold, no holder) until her states come, or another guest's claim of a
-       body just granted would read the old flight's hold. */
-    if (seat != BODY_SYNC_SEAT_HOST && seat != from) {
+       body just granted would read the old flight's hold. Its flags and data stay the body's, as
+       the new owner goes on from them. */
+    if (seat != BODY_SYNC_SEAT_HOST && seat != from && b->has_in && !a->plant_move_keeps_received) {
+        b->flags = b->in_flags;
+        b->data_size = b->in_data_size;
+        memcpy(b->data, b->in_data, sizeof(b->data));
         b->has_in = false;
     }
     b->hold = hold;
@@ -258,6 +262,9 @@ body_sync_result_t sync_authority_bind(sync_authority_t *a, body_sync_id_t id, u
     if (sync_authority_is_host(a) && (a->unbound_ever[slot] & (1u << low)) && a->now - a->unbound_tick[slot][low] < a->rebind_ticks) {
         return BODY_SYNC_TAKEN;
     }
+    if (b->agent_ring) {
+        a->agent_rings[b->agent_ring - 1u].used = false;
+    }
     memset(b, 0, sizeof(*b));
     for (uint8_t s = 0; s < BODY_SYNC_SEATS_MAX; s++) {
         a->ended[s][slot] = (sync_authority_ended_t){0};
@@ -271,6 +278,34 @@ body_sync_result_t sync_authority_bind(sync_authority_t *a, body_sync_id_t id, u
     return BODY_SYNC_OK;
 }
 
+bool sync_authority_set_agent(sync_authority_t *a, body_sync_id_t id, bool agent) {
+    sync_authority_body_t *b = sync_authority_body(a, id);
+    if (!b || !sync_authority_is_host(a)) {
+        return false;
+    }
+    if (!agent) {
+        if (b->agent_ring) {
+            a->agent_rings[b->agent_ring - 1u].used = false;
+            b->agent_ring = 0;
+        }
+        return true;
+    }
+    if (b->agent_ring) {
+        return true;
+    }
+    for (uint32_t i = 0; i < SYNC_AUTHORITY_AGENTS; i++) {
+        if (!a->agent_rings[i].used) {
+            /* Empty until the body's next state starts its ring over: both hold one stretch. */
+            a->agent_rings[i] = (sync_authority_agent_ring_t){.used = true};
+            b->agent_ring = (uint8_t)(i + 1u);
+            b->pose_count = 0;
+            b->pose_next = 0;
+            return true;
+        }
+    }
+    return false;
+}
+
 body_sync_result_t sync_authority_unbind(sync_authority_t *a, body_sync_id_t id) {
     sync_authority_body_t *b = sync_authority_body(a, id);
     if (!b) {
@@ -281,6 +316,10 @@ body_sync_result_t sync_authority_unbind(sync_authority_t *a, body_sync_id_t id)
         a->owned_by[b->seat]--;
     }
     b->bound = false;
+    if (b->agent_ring) {
+        a->agent_rings[b->agent_ring - 1u].used = false;
+        b->agent_ring = 0;
+    }
     a->unbound_ever[slot] |= (uint16_t)(1u << (b->generation & 15u));
     a->unbound_tick[slot][b->generation & 15u] = a->now;
     for (uint8_t seat = 0; seat < BODY_SYNC_SEATS_MAX; seat++) {
@@ -417,8 +456,11 @@ body_sync_result_t sync_authority_answer(sync_authority_t *a, const body_sync_cl
     a->pending_count--;
     a->answer[claim->seat][slot] = claim->sequence;
     if (granted) {
-        /* Granting the owner's own newer claim ends nothing it did not ask for. */
-        host_move(a, b, claim->seat, p->hold, claim->sequence, false, b->seat == claim->seat ? SYNC_END_VOLUNTARY : SYNC_END_ARBITRATED);
+        /* The caller may grant under another hold than the one claimed (a catch puts the body in
+           a hand); the claimant keeps simulating under her own. Granting the owner's own newer
+           claim ends nothing it did not ask for. */
+        uint8_t hold = claim->hold <= BODY_SYNC_HOLD_UNTIL_SETTLED ? (uint8_t)claim->hold : p->hold;
+        host_move(a, b, claim->seat, hold, claim->sequence, false, b->seat == claim->seat ? SYNC_END_VOLUNTARY : SYNC_END_ARBITRATED);
         b->holder = BODY_SYNC_ID_NONE;
     } else {
         a->owed[claim->seat][slot / 64] |= 1ull << (slot % 64);
@@ -524,16 +566,18 @@ void sync_authority_received_pose(sync_authority_t *a, sync_authority_body_t *b,
     if (seat < BODY_SYNC_SEATS_MAX) {
         a->heard[seat] = now;
     }
+    sync_authority_agent_ring_t *older = b->agent_ring ? &a->agent_rings[b->agent_ring - 1u] : NULL;
     if (b->pose_count == 0 || b->pose_seat != seat || b->pose_number != b->number) {
         b->pose_seat = seat;
         b->pose_number = b->number;
         b->pose_count = 0;
         b->pose_next = 0;
     }
-    uint32_t span = 0;
+    uint32_t span = 0, prev_tick = tick;
     float step[3] = {0.0f, 0.0f, 0.0f};
     if (b->pose_count > 0) {
         const sync_authority_pose_t *q = &b->poses[(b->pose_next + SYNC_AUTHORITY_POSES - 1u) % SYNC_AUTHORITY_POSES];
+        prev_tick = q->tick;
         uint32_t sent = tick - q->tick, seen = now - q->host_tick;
         uint32_t floor = seen > jitter_ticks ? seen - jitter_ticks : 0u;
         uint32_t ceiling = seen + jitter_ticks >= seen ? seen + jitter_ticks : UINT32_MAX;
@@ -558,11 +602,28 @@ void sync_authority_received_pose(sync_authority_t *a, sync_authority_body_t *b,
     sync_authority_pose_t *p = &b->poses[b->pose_next];
     memcpy(p->step, step, sizeof(step));
     p->span = span;
+    p->prev_tick = prev_tick;
     memcpy(p->position, position, sizeof(p->position));
     p->tick = tick;
     p->host_tick = now;
     b->pose_next = (uint8_t)((b->pose_next + 1u) % SYNC_AUTHORITY_POSES);
     b->pose_count += b->pose_count < SYNC_AUTHORITY_POSES ? 1u : 0u;
+    if (older) {
+        /* The older ring starts over with the ring: what came before is another ownership's, or
+           no path to where a teleport put the body. */
+        if (b->pose_count == 1u) {
+            older->count = 0;
+            older->next = 0;
+        }
+        const sync_authority_pose_t *last =
+            older->count ? &older->poses[(older->next + SYNC_AUTHORITY_AGENT_POSES - 1u) % SYNC_AUTHORITY_AGENT_POSES] : NULL;
+        uint32_t stride = a->agent_stride ? a->agent_stride : 1u;
+        if (!last || tick - last->tick >= stride) {
+            older->poses[older->next] = *p;
+            older->next = (uint8_t)((older->next + 1u) % SYNC_AUTHORITY_AGENT_POSES);
+            older->count += older->count < SYNC_AUTHORITY_AGENT_POSES ? 1u : 0u;
+        }
+    }
 }
 
 void sync_authority_received(sync_authority_body_t *b, uint8_t hold, body_sync_id_t holder, uint8_t flags) {
@@ -972,12 +1033,23 @@ bool sync_authority_path_measure(const sync_authority_t *a, const sync_authority
     const uint32_t window = in->window_ticks;
     /* The ring still holds that ownership unless another one's states replaced it; then only the
        end's last state is left. */
-    const sync_authority_pose_t *poses[SYNC_AUTHORITY_POSES];
+    const sync_authority_pose_t *poses[SYNC_AUTHORITY_AGENT_POSES + SYNC_AUTHORITY_POSES];
     uint32_t count = 0;
     bool from_end = false;
     uint16_t number = ended ? ended->number : b->number;
     if (b->pose_count > 0 && b->pose_seat == seat && b->pose_number == number && (ended || b->seat == seat)) {
         uint32_t first = (b->pose_next + SYNC_AUTHORITY_POSES - b->pose_count) % SYNC_AUTHORITY_POSES;
+        /* An agent's older states the ring no longer holds come first, oldest first; they started
+           over with the ring, so they are of this ownership. */
+        const sync_authority_agent_ring_t *older = b->agent_ring && !a->plant_agent_ring_off ? &a->agent_rings[b->agent_ring - 1u] : NULL;
+        uint32_t oldest = b->poses[first].tick;
+        for (uint32_t i = 0; older && i < older->count; i++) {
+            const sync_authority_pose_t *o =
+                &older->poses[(older->next + SYNC_AUTHORITY_AGENT_POSES - older->count + i) % SYNC_AUTHORITY_AGENT_POSES];
+            if (oldest - o->tick - 1u < 0x7FFFFFFFu) {
+                poses[count++] = o;
+            }
+        }
         for (uint32_t i = 0; i < b->pose_count; i++) {
             poses[count++] = &b->poses[(first + i) % SYNC_AUTHORITY_POSES];
         }
@@ -1037,7 +1109,8 @@ bool sync_authority_path_measure(const sync_authority_t *a, const sync_authority
         f.since = (float)(since < window ? since : window);
         fit_ray(&f, p->position, grows || short_step(p) ? p->step : none, ticks);
         /* The contact before the next state, the two a chord's spacing apart: on their chord too. */
-        if (next && next->span > 0 && (grows || next->span <= SYNC_POLICY_CHORD_TICKS_MAX) && next->tick - in->contact_tick <= 0x7FFFFFFFu) {
+        if (next && next->span > 0 && (grows || (next->span <= SYNC_POLICY_CHORD_TICKS_MAX && next->prev_tick == p->tick)) &&
+            next->tick - in->contact_tick <= 0x7FFFFFFFu) {
             const float chord[3] = {next->position[0] - p->position[0], next->position[1] - p->position[1], next->position[2] - p->position[2]};
             fit_path(&f, p->position, chord, grows ? (float)(next->tick - p->tick) : (float)next->span);
             float step = length3(next->step);

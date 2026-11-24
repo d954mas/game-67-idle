@@ -731,6 +731,12 @@ static bool expect(parser_t *p, const line_words_t *w) {
         if ((w->count != 4 && !stub) || (strcmp(w->word[2], "<=") != 0 && strcmp(w->word[2], ">=") != 0)) {
             return refuse(p, "a metric check reads: expect %s <=|>= <value> [stub <value>]", what);
         }
+        /* The stub differs only in what it draws (no render offset, a copy at its newest state);
+           a bound on anything else holds on both implementations alike. */
+        if (stub && strcmp(what, "jump.max") != 0 && strcmp(what, "snap.count") != 0 && strcmp(what, "step.count") != 0 &&
+            strcmp(what, "offset_step.count") != 0) {
+            return refuse(p, "a stub bound is for what a copy draws (jump.max, snap.count, step.count, offset_step.count), not '%s'", what);
+        }
         e.at_least = strcmp(w->word[2], ">=") == 0;
         e.kind = BODY_SYNC_EXPECT_METRIC_AT_MOST;
         copy_text(e.metric, sizeof(e.metric), what);

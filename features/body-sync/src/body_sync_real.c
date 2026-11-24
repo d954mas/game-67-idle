@@ -73,6 +73,9 @@ typedef struct entry {
     uint32_t lost_count;
     float lost_hand_back;
     bool lost_glide;
+    /* Host: it moved from one guest to another while a copy here; its new owner's first pose is a
+       placement the render offset takes up to a lost take's reach (host_handover). */
+    bool handover;
     /* The body that last carried it, as this side knows it, and the filter that keeps a throw off
        its thrower until it has cleared her (release_filters). */
     body_sync_id_t carrier;
@@ -215,6 +218,8 @@ void body_sync_plant_evidence_age_unbounded(body_sync_t *s) { s->authority.plant
 void body_sync_plant_transform_sleep(body_sync_t *s) { s->plant_transform_sleep = true; }
 void body_sync_plant_end_grace_zero(body_sync_t *s) { s->plant_end_grace_zero = true; }
 void body_sync_plant_recall_keeps_number(body_sync_t *s) { s->authority.plant_recall_keeps_number = true; }
+void body_sync_plant_move_keeps_received(body_sync_t *s) { s->authority.plant_move_keeps_received = true; }
+void body_sync_plant_agent_ring_off(body_sync_t *s) { s->authority.plant_agent_ring_off = true; }
 
 body_sync_t *body_sync_create(const body_sync_config_t *config) {
     if (!config || !b3World_IsValid(config->world) || config->seats < 1 || config->seats > BODY_SYNC_SEATS_MAX ||
@@ -241,6 +246,7 @@ body_sync_t *body_sync_create(const body_sync_config_t *config) {
     s->dt = 1.0f / (float)config->tick_hz;
     sync_authority_init(&s->authority, config->seat, (uint8_t)config->seats, s->error, sizeof(s->error));
     s->authority.rebind_ticks = sync_policy_rebind_ticks(config->tick_hz);
+    s->authority.agent_stride = sync_policy_agent_stride(config->tick_hz, SYNC_AUTHORITY_AGENT_POSES);
     s->authority.take_gap = take_gap;
     s->authority.take_context = s;
     s->authority.mode = config->authority == BODY_SYNC_AUTHORITY_INTERACTION ? SYNC_POLICY_INTERACTION : SYNC_POLICY_HOST;
@@ -348,6 +354,9 @@ body_sync_result_t body_sync_bind(body_sync_t *s, body_sync_id_t id, const body_
     e->bound_locks = b3Body_GetMotionLocks(bind->body);
     e->light = s->config.light_mass_max > 0.0f && bind->body_class == BODY_SYNC_CLASS_LIGHT && b3Body_GetMass(bind->body) <= s->config.light_mass_max;
     s->authority.bodies[slot].takable = e->light;
+    if (is_host(s) && bind->body_class == BODY_SYNC_CLASS_CHARACTER) {
+        sync_authority_set_agent(&s->authority, id, true);
+    }
     sync_offset_clear(&e->offset);
     forget_slot(s, slot);
     hash_put(s, bind->body, slot);
@@ -432,6 +441,7 @@ body_sync_contact_verdict_t body_sync_check_contact(const body_sync_t *s, uint8_
     }
     contact_boxes(target_box, b3Body_ComputeAABB(g->body), b3Body_GetPosition(g->body), &scene);
     sync_authority_contact_measure(&s->authority, agent, seat, ended, &scene, &out->gap, &out->reach, &out->approach_max);
+    out->slop = SYNC_POLICY_TAKE_SLOP_M;
     return verdict;
 }
 
@@ -468,15 +478,45 @@ body_sync_result_t body_sync_claim(body_sync_t *s, body_sync_id_t id, body_sync_
 }
 body_sync_result_t body_sync_release(body_sync_t *s, body_sync_id_t id) { return sync_authority_release(&s->authority, id); }
 bool body_sync_poll_claim(body_sync_t *s, body_sync_claim_event_t *out) { return sync_authority_poll(&s->authority, out); }
-body_sync_result_t body_sync_answer(body_sync_t *s, const body_sync_claim_event_t *claim, bool granted) {
-    if (claim) {
-        note_live(s, claim->id);
+
+/* Host: a copy moved from guest `from` to another guest. What the host received of it is the old
+   owner's flight past the move: a host claim before the new owner's first state goes on from the
+   copy as shown, not from that flight; the copy plays the old owner's snapshots no further than
+   now and holds still, since extrapolated they fly it on from where the new owner has it; and her
+   first pose is a placement the render offset glides, as a lost take's, since at the move the
+   host shows the flight a round trip of hers past where she took it. */
+static void host_handover(body_sync_t *s, uint32_t slot, uint8_t from) {
+    const sync_authority_body_t *a = &s->authority.bodies[slot];
+    if (!is_host(s) || from == BODY_SYNC_SEAT_HOST || a->seat == BODY_SYNC_SEAT_HOST || a->seat == from || s->authority.plant_move_keeps_received) {
+        return;
     }
-    return sync_authority_answer(&s->authority, claim, granted);
+    s->receiver.bodies[slot].has = false;
+    s->receiver.bodies[slot].fresh = false;
+    sync_playback_end(&s->playback, (uint16_t)slot);
+    s->entries[slot].handover = true;
+}
+
+body_sync_result_t body_sync_answer(body_sync_t *s, const body_sync_claim_event_t *claim, bool granted) {
+    if (!claim) {
+        return sync_authority_answer(&s->authority, claim, granted);
+    }
+    note_live(s, claim->id);
+    const sync_authority_body_t *a = sync_authority_body_const(&s->authority, claim->id);
+    uint8_t from = a ? a->seat : BODY_SYNC_SEAT_HOST;
+    body_sync_result_t r = sync_authority_answer(&s->authority, claim, granted);
+    if (r == BODY_SYNC_OK && a) {
+        host_handover(s, body_sync_id_slot(claim->id), from);
+    }
+    return r;
 }
 body_sync_result_t body_sync_assign(body_sync_t *s, body_sync_id_t id, uint8_t seat, body_sync_hold_t hold) {
     note_live(s, id);
+    const sync_authority_body_t *was = sync_authority_body_const(&s->authority, id);
+    uint8_t from = was ? was->seat : BODY_SYNC_SEAT_HOST;
     body_sync_result_t r = sync_authority_assign(&s->authority, id, seat, hold);
+    if (r == BODY_SYNC_OK && was) {
+        host_handover(s, body_sync_id_slot(id), from);
+    }
     /* A move to this side takes over now, from the owner's newest state as the host's claim does,
        so what the caller does next (a recall puts the body home) is not undone at the next apply. */
     uint32_t slot = body_sync_id_slot(id);
@@ -890,7 +930,7 @@ static void place(entry_t *e, const float position[3], const float rotation[4]) 
     pose_now(e->body, p0, q0);
     b3Body_SetTransform(e->body, (b3Vec3){position[0], position[1], position[2]}, quat_of(rotation));
     if (e->shown) {
-        sync_offset_absorb(&e->offset, p0, q0, position, rotation, e->lost ? SYNC_OFFSET_LOST_M : SYNC_OFFSET_SNAP_M);
+        sync_offset_absorb(&e->offset, p0, q0, position, rotation, e->lost || e->handover ? SYNC_OFFSET_LOST_M : SYNC_OFFSET_SNAP_M);
     }
     e->placed = true;
     e->shown = true;
@@ -904,6 +944,7 @@ static void resume(body_sync_t *s, uint32_t slot, bool was_copy) {
     entry_t *e = &s->entries[slot];
     const sync_received_t *in = &s->receiver.bodies[slot];
     e->copy_mode = false;
+    e->handover = false;
     a->resume = false;
     sync_masks_restore(&e->masks, e->body);
     if (was_copy) {
@@ -1187,8 +1228,14 @@ static void drive_copy(body_sync_t *s, uint32_t slot) {
     bool held_within_step = rest_hold && !dynamic && sqrtf(home_e[0] * home_e[0] + home_e[1] * home_e[1] + home_e[2] * home_e[2]) <= SYNC_SOFT_HOLD_M &&
                             sqrtf(home_r[0] * home_r[0] + home_r[1] * home_r[1] + home_r[2] * home_r[2]) <= SYNC_SOFT_HOLD_RAD;
     e->placed = e->placed || held_within_step;
+    /* The handover ends at the new owner's first pose: her snapshots replaced the old owner's. */
+    bool handed = e->handover && s->playback.bodies[slot].timeline == a->seat && !s->playback.bodies[slot].ended;
+    if (handed) {
+        e->placed = false;
+    }
     if (play.jumped || !e->placed || !reachable) {
         place(e, play.position, play.rotation);
+        e->handover = e->handover && !handed;
         if (dynamic) {
             b3Body_SetLinearVelocity(e->body, (b3Vec3){play.velocity[0], play.velocity[1], play.velocity[2]});
             b3Body_SetAngularVelocity(e->body, (b3Vec3){play.angular[0], play.angular[1], play.angular[2]});

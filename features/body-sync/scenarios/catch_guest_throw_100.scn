@@ -36,11 +36,13 @@ expect late_drops.count <= 30
 # Derived: the claim takes over from the pose the catcher shows (as in throw_catch): 0, and 1 cm
 # for a placement's rounding.
 expect local_correction.max <= 1cm
-# Derived: the host's and the thrower's copies hand the flight over to her hand through the render
-# offset, at most 0.15 of 2 m a tick: 0.3 m (measured 0.18-0.30). The stub draws a copy at its
-# newest state with no offset, so the handover shows whole: a jump below 2 m, a snap past it.
-expect jump.max <= 0.3m stub 2m
-expect snap.count <= 0 stub 1
+# The host's copy stops where the thrower's states end at the grant and hands over to her hand at
+# her first state through the render offset (the jump counted from the tick the owner changes):
+# measured 0.16-0.17 m over 20 seeds in both modes, against 0.23 m for a catch of the host's own
+# throw at this speed (throw_catch at 9 m/s). The stub draws a copy at its newest state with no
+# offset, so the handover shows whole: measured up to 0.86 m, no snap.
+expect jump.max <= 0.2m stub 1m
+expect snap.count <= 0
 # A catch is a grab: nothing moves by interaction, and nothing of the host's touches the flight.
 expect takes.count <= 0
 expect take_refusals.count <= 0

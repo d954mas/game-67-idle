@@ -82,6 +82,12 @@ uint32_t sync_policy_rebind_ticks(uint32_t tick_hz) {
     return (uint32_t)ceilf(SYNC_POLICY_EVIDENCE_AGE_MAX_S * (float)tick_hz) + SYNC_DELAY_MAX;
 }
 
+uint32_t sync_policy_agent_stride(uint32_t tick_hz, uint32_t poses) {
+    float span = ceilf(SYNC_POLICY_EVIDENCE_AGE_MAX_S * (float)tick_hz) + (float)SYNC_POLICY_CHORD_TICKS_MAX;
+    uint32_t stride = poses > 0 ? (uint32_t)ceilf(span / (float)poses) : 1u;
+    return stride > 0 ? stride : 1u;
+}
+
 float sync_policy_box_gap(const float lo[3], const float hi[3], const float other_lo[3], const float other_hi[3]) {
     float d2 = 0.0f;
     for (int i = 0; i < 3; i++) {

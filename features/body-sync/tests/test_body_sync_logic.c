@@ -223,6 +223,8 @@ static void test_refusals_name_their_line(void) {
         {"scenario a\nscene b\nexpect jump.max <= 0.3m stub\n", 3},
         {"scenario a\nscene b\nexpect jump.max <= 0.3m stub 2deg\n", 3},
         {"scenario a\nscene b\nexpect jump.max <= 0.3m layer 2m\n", 3},
+        {"scenario a\nscene b\nguests 1\nexpect late_drops.count <= 3 stub 9\n", 4},
+        {"scenario a\nscene b\nguests 1\nexpect local_correction.max <= 1cm stub 2m\n", 4},
         {"scenario a\nscene b\nat 600s p0 walk 1 1\n", 3},
         {"scenario a\nscene b\nat 600s net g1 loss 2%\n", 3},
         {"scenario a\nscene b\np0 wait 590s\nsettle 20s\n", 4},
@@ -332,6 +334,35 @@ static void test_schedule_orders_actions(void) {
     TEST_ASSERT_EQUAL_INT32(0, stand_schedule_next(s, 0, 0));
     TEST_ASSERT_EQUAL_INT32(2, stand_schedule_next(s, 0, 200));
     free(s);
+}
+
+/* A catch takes only a throw in flight from a hand the host granted: not a body pushed under the
+   interaction hold, not one a catcher claimed as a flight, not one carried, not another ownership's. */
+static void test_catch_takes_only_a_throw(void) {
+    const stand_hand_t hand = {.known = true, .seat = 1, .number = 4};
+    body_sync_authority_t thrown = {.seat = 1, .number = 4, .hold = BODY_SYNC_HOLD_UNTIL_SETTLED, .holder = BODY_SYNC_ID_NONE};
+    TEST_ASSERT_TRUE(stand_rules_in_throw_flight(&hand, &thrown));
+    body_sync_authority_t pushed = thrown;
+    pushed.hold = BODY_SYNC_HOLD_UNTIL_REST;
+    TEST_ASSERT_FALSE_MESSAGE(stand_rules_in_throw_flight(&hand, &pushed), "a pushed body is no throw");
+    body_sync_authority_t carried = thrown;
+    carried.hold = BODY_SYNC_HOLD_UNTIL_RELEASE;
+    TEST_ASSERT_FALSE(stand_rules_in_throw_flight(&hand, &carried));
+    carried = thrown;
+    carried.holder = body_sync_id_make(7, 1);
+    TEST_ASSERT_FALSE(stand_rules_in_throw_flight(&hand, &carried));
+    body_sync_authority_t renumbered = thrown;
+    renumbered.number = 5; /* caught since, or taken: another ownership than the grab's */
+    TEST_ASSERT_FALSE(stand_rules_in_throw_flight(&hand, &renumbered));
+    renumbered = thrown;
+    renumbered.seat = 2;
+    TEST_ASSERT_FALSE(stand_rules_in_throw_flight(&hand, &renumbered));
+    const stand_hand_t claimed_as_flight = {.known = false, .seat = 1, .number = 4};
+    TEST_ASSERT_FALSE_MESSAGE(stand_rules_in_throw_flight(&claimed_as_flight, &thrown), "a catch claimed as a flight is caught back");
+    const stand_hand_t host_hand = {.known = true, .seat = BODY_SYNC_SEAT_HOST, .number = 4};
+    body_sync_authority_t hosts = thrown;
+    hosts.seat = BODY_SYNC_SEAT_HOST;
+    TEST_ASSERT_FALSE(stand_rules_in_throw_flight(&host_hand, &hosts));
 }
 
 static void test_rules_verdicts(void) {
@@ -913,6 +944,7 @@ int main(void) {
     RUN_TEST(test_schedule_orders_actions);
     RUN_TEST(test_schedule_starts_on_events);
     RUN_TEST(test_rules_verdicts);
+    RUN_TEST(test_catch_takes_only_a_throw);
     RUN_TEST(test_records_round_trip_and_refuse);
     RUN_TEST(test_impact_rules_by_role);
     RUN_TEST(test_impact_limits);

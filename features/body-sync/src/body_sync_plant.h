@@ -27,5 +27,12 @@ void body_sync_plant_end_grace_zero(body_sync_t *sync);
 /* This host keeps a recalled seat's old number standing for its contact claims: a recall (an
    assign while the seat owned the body) drops none of the claims the seat sent before it heard. */
 void body_sync_plant_recall_keeps_number(body_sync_t *sync);
+/* This host keeps what it received of a body's old owner when it moves the body to another guest
+   (a catch): its hold, holder, flags, data and pose read as the new owner's until her states
+   come, and a host claim before them goes on from the old owner's flight. */
+void body_sync_plant_move_keeps_received(body_sync_t *sync);
+/* This host judges an agent's contacts on its ring of 12 states alone: a claim the record lane
+   resent, which lands past them, has no evidence. */
+void body_sync_plant_agent_ring_off(body_sync_t *sync);
 
 #endif

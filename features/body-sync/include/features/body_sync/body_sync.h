@@ -216,7 +216,9 @@ body_sync_result_t body_sync_release(body_sync_t *sync, body_sync_id_t id);
 bool body_sync_poll_claim(body_sync_t *sync, body_sync_claim_event_t *out);
 
 /* Host only: the answer to a polled claim. Granted: the claimant simulates the body from now
-   on with the claim's hold, no holder and a new number. Refused: nothing changes and the
+   on with no holder and a new number; the host reads the event's hold for it until her states
+   come (a caller may set another than the one polled: a catch puts the body in her hand), while
+   she keeps the hold she claimed. Refused: nothing changes and the
    claimant is told, so its optimistic copy turns back into a copy. UNKNOWN when that claim is
    no longer pending (released, claimed again, its seat left, the body unbound, or already
    answered): the caller drops the event, nothing is owed for it, and a newer claim, if any,

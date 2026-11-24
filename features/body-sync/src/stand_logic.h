@@ -118,6 +118,19 @@ typedef struct stand_target {
 /* A grab claim: granted when the body is live, grabbable, not carried and the claimant's
    capsule centre is within reach plus slack of the body's footprint. */
 bool stand_rules_grab(const stand_target_t *target, const float claimant[3], float reach);
+/* The ownership (seat, number) under which the host last granted a body as a grab: the host's own
+   answer, so no state naming the holder need reach it first (at 250 ms a body carried for 300 ms
+   may show none there). */
+typedef struct stand_hand {
+    bool known;
+    uint8_t seat;
+    uint16_t number;
+} stand_hand_t;
+/* A catch's target: a throw in flight, from its thrower's release until its first contact or rest
+   (a hold until settled, which the seam ends there), no holder, under an ownership the host granted
+   as a grab. A body owned by interaction is pushed, not thrown; a catch claimed as anything but a
+   grab is granted into a hand the host does not know, so that owner's flight of it is never caught. */
+bool stand_rules_in_throw_flight(const stand_hand_t *hand, const body_sync_authority_t *now);
 /* A hit claim from a punch at `origin`: accepted when the target is live and within range plus
    slack; the effect says what the host does. A knocked mannequin or a static body is rejected. */
 bool stand_rules_hit(const stand_target_t *target, const float origin[3], float range, stand_effect_t *effect);
@@ -327,7 +340,8 @@ void stand_metrics_jerk(stand_metrics_t *metrics, uint32_t guest, double jerk_m)
    move since the last tick, and whether a render offset was giving a move back meanwhile. */
 void stand_metrics_playback(stand_metrics_t *metrics, uint32_t guest, double lag_m, double path_m, double behind_ticks, bool moved,
                             double drawn_move_m, double owner_move_m, bool offset_active);
-/* A predicted copy's drawn move that its own step does not explain: into jump.max. */
+/* A drawn move no owner's move explains (a predicted copy's correction, a copy's move the tick its
+   owner changes): into jump.max, or a snap past 2 m. */
 void stand_metrics_correction(stand_metrics_t *metrics, uint32_t guest, double correction_m);
 /* One sample of the lag-aligned gap (body_sync_metrics.h), `predicted` of a copy the layer predicts. */
 void stand_metrics_aligned(stand_metrics_t *metrics, uint32_t guest, double gap_m, bool predicted);

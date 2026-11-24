@@ -226,11 +226,11 @@ record of it went out since. A body's priority and age reset when its packet
 is handed to the session, not when it is written. Without fates (no
 `body_sync_resolve`) nothing is acknowledged: 200 sleeping bodies then cost
 about 1 KB a tick for ever, against nothing once acknowledged.
-A record whose authority group changed (a new number: a claim granted, a take,
-a move) carries every rare group again: the host takes a guest's state only
-under the number it holds for her, so a group acknowledged under the claim's
-old number (a holder set at the grab, before the grant) may never have been
-read there.
+A record whose authority number changed (a claim granted, a take, a move)
+carries every rare group again: the host takes a guest's state only under the
+number it holds for her, so a group acknowledged under the claim's old number
+(a holder set at the grab, before the grant) may never have been read there. A
+change of hold alone (a throw) keeps the number and resends nothing more.
 
 The budget is 1000 bytes (`state_budget`, 0 takes it), clamped by each
 write's capacity. `body_sync_create` refuses a budget without room for one
@@ -348,6 +348,14 @@ starved body shows as a catch-up the render offset or a dynamic hold smooths
   home is drawn there at once). It gives the move back
   at 0.95 a tick up to 25 cm and 0.85 from 1 m, by distance between; past 2 m
   it is cleared and the body is seen to jump.
+- **A handover between guests.** On the host, a copy that moves from one guest to
+  another (a catch, `body_sync_answer`; an `assign`) plays the old owner's
+  snapshots no further than the one after its playback time and holds there, frozen:
+  the host shows that flight a round trip of the new owner's past where she took it,
+  and the old owner's later snapshots, or a dynamic hold extrapolating them, fly it on
+  further from her hand. Her first pose is a placement the render offset takes up to a
+  lost take's 5 m, so the host's picture glides to her hand instead of jumping
+  (`catch_guest_throw_250`: 2.5-3 m at 250 ms).
 - **Data and characters.** `body_sync_set_data` gives a local body up to 8
   opaque bytes (the stand's character activity), sent as the fifth rare group
   until acknowledged; `body_sync_data` reads them, on a copy as of its playback
@@ -590,17 +598,28 @@ ignores the mode.
 - **A catch.** The policy moves no body between guests by interaction, but a
   caller's claim is the caller's to answer: `body_sync_answer` may grant a body
   another guest flies, an arbitrated end of hers (her late states are dropped
-  by their number, her contact claims count within the grace). The host's move
-  forgets what it received of the old owner, so `body_sync_authority` there
-  reads the grant's hold and no holder until the new owner's states come. The
-  stand grants a grab of another guest's flight (a hold until settled or until
-  rest, no holder) on `body_sync_check_contact` of the catcher's character and
-  the body, within the seam's reach and her grab's (her reach less the
-  capsule's radius); a body in another guest's hold until release is hers, so
-  two catchers of one throw get it once and a caught body is never caught back
-  (`catch_guest_throw_100`, `catch_guest_throw_250`, `catch_race`). A claim the
-  record lane resends a round trip late lands past the host's 12 taken states
-  of the catcher and is refused: a missed catch, never a false one.
+  by their number, her contact claims count within the grace), and under
+  another hold than the one claimed (the event's, which the caller may set; the
+  claimant keeps simulating under her own). The host's move to another guest
+  forgets what it received of the old owner (its hold, holder and pose; the
+  flags and data stay the body's), so `body_sync_authority` there reads the
+  grant's hold and no holder until the new owner's states come, and a host
+  claim before them goes on from the copy as the host shows it, not from the
+  old owner's flight. The stand catches only a throw in flight: a hold until
+  settled with no holder, under an ownership the host itself granted as a grab
+  (a claim until release), from the thrower's release until the seam ends the
+  hold at its first contact or rest. A body pushed under the interaction hold is
+  no throw, and a catch is granted into her hand (until release) whatever hold
+  she claimed: a catch claimed as a flight is in no hand the host granted, so a
+  caught body is never caught back until thrown from a granted grab, and two
+  catchers of one throw get it once (`catch_guest_throw_100`,
+  `catch_guest_throw_250`, `catch_race`; `test_body_sync_claims`: a forged
+  catcher). The catch is judged on `body_sync_check_contact` of the catcher's
+  character and the body: the gap within her grab (her reach less the capsule's
+  radius) and the measure's own slop for its evidence (`reach` less `slop`, the
+  touch's part, which a grab needs none of). A claim the record lane resends
+  lands past the host's 12 taken states of her character (one a tick: 200 ms);
+  a character keeps older ones too (below), so it is judged as one sent at once.
 - **The host's hold.** A guest's body owned by interaction is held on the host
   as any dynamic copy (owner's velocity and the closed error), and keeps
   `character_category`'s bits there, so the host's character meets it; that
@@ -681,7 +700,14 @@ ignores the mode.
   sent a faster velocity than its body showed would widen both limits). The
   host keeps the owner's last 12 taken states of each body (position, the
   sender's tick, its own), past the ownership's end until another ownership's
-  states replace them. A gap in them is no evidence, never a wider bound: it
+  states replace them. A character (`BODY_SYNC_CLASS_CHARACTER`, the claims'
+  agent, sent every tick) also keeps 64 older ones of its ownership, every
+  `sync_policy_agent_stride` ticks (1 at 60 Hz), so the evidence spans the
+  claim's whole lag, up to `SYNC_POLICY_EVIDENCE_AGE_MAX_S`, not 200 ms of it;
+  they start over with the ring (a new ownership, a teleport) and are judged by
+  every rule below, a chord only between a state and the one that followed it.
+  Past 16 characters on a host, or above 252 Hz, an older contact has gaps: a
+  missed effect, never a false one. A gap in them is no evidence, never a wider bound: it
   may cost an effect, never forge one. All of it stands only while the seat is
   heard within the claim's grace (a seat gone silent leaves no evidence). The
   claim names the contact's tick on the claimant's clock, the one its states
@@ -838,7 +864,7 @@ expect moved <body> <=|>= <length>  # the body's travel on the host, first tick 
 expect effect <body>                # a knockdown or break took the body on the host, shown once on every guest
 expect held <body> <player> ...     # at one tick every endpoint shows the body in one named player's hand, and no endpoint but her own ever shows another named one holding it
 expect pace <label>                 # a walk to a point keeps up with a local reference run
-expect <metric> <=|>= <value> [stub <value>]   # stub: the bound on the stub, which blends no handover
+expect <metric> <=|>= <value> [stub <value>]   # stub: the bound on the stub, which blends no handover; only jump.max, snap.count, step.count and offset_step.count
 ```
 
 Units are required: `250ms`, `1.5s`, `90t` (ticks), `5cm`, `0.05m`, `3deg`,
@@ -1011,7 +1037,8 @@ a cut corner free of any time shift), `step.count` (ticks where the drawn move
 exceeds 1.25 times the owner's move over the same playback interval plus
 1 cm, counted in body-ticks; those while the copy's render offset gives a
 move back are `offset_step.count`, a slide by design), `jump.max` (the drawn
-move less the owner's, largest), `snap.count` (drawn moves past 2 m, the
+move less the owner's, largest; the tick a copy's owner changes, all of its drawn
+move), `snap.count` (drawn moves past 2 m, the
 offset's reach, not counted as jumps) and `behind_ticks` (max, p95: how many
 owner ticks a copy plays behind its owner's newest; a frozen or late clock shows
 here). A check of a playback metric on a guest with no copy measured fails: no

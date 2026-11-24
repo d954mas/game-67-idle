@@ -25,12 +25,18 @@
 
 /* A state the host took of a guest's body: where, the sender's tick, the host's tick. The ring
    keeps enough of them to span a contact claim's grace at the full state rate of a flying body
-   under the slowest honest path (README "Contact claims"). */
-enum { SYNC_AUTHORITY_POSES = 12 };
+   under the slowest honest path (README "Contact claims"). An agent (a character) also keeps an
+   older ring that spans the claim's whole lag (SYNC_POLICY_CLAIM_LAG_GRACES, at most
+   SYNC_POLICY_EVIDENCE_AGE_MAX_S): its contacts are claimed by records the lane may resend, and a
+   character goes out every tick, so 12 states are 200 ms of it. */
+enum { SYNC_AUTHORITY_POSES = 12, SYNC_AUTHORITY_AGENT_POSES = 64, SYNC_AUTHORITY_AGENTS = 16 };
 typedef struct sync_authority_pose {
     float position[3];
     float step[3]; /* metres a tick from the state before it in the ring; 0 without a span */
     uint32_t tick, host_tick;
+    /* The sender's tick of the state the step came from: a chord joins two states only where one
+       followed the other, never across states an agent's older ring skipped. */
+    uint32_t prev_tick;
     /* Ticks from the state before it: the sender's span, within the jitter granted of the host's
        own, at least one. 0 for the first state of the ring: a step faster than the box's speed
        starts the ring over at its state, no evidence of a path into it. */
@@ -90,7 +96,17 @@ typedef struct sync_authority_body {
     uint16_t pose_number;
     uint8_t pose_count, pose_next;
     sync_authority_pose_t poses[SYNC_AUTHORITY_POSES];
+    uint8_t agent_ring; /* host: its agent ring's index plus one (sync_authority_set_agent), 0 none */
 } sync_authority_body_t;
+
+/* Host: an agent's older taken states, every `agent_stride`-th of one ownership's, starting over
+   with the body's ring (an ownership's first state, a teleport). Its states are those the ring
+   holds as they were taken, so each keeps the step from the state before it in the stream. */
+typedef struct sync_authority_agent_ring {
+    bool used;
+    uint8_t count, next;
+    sync_authority_pose_t poses[SYNC_AUTHORITY_AGENT_POSES];
+} sync_authority_agent_ring_t;
 
 /* Guest: what its release did to the host's number, until it hears a newer one. */
 typedef enum sync_number_lag {
@@ -182,6 +198,11 @@ typedef struct sync_authority {
     uint32_t unbound_tick[BODY_SYNC_BODIES_MAX][16];
     uint16_t unbound_ever[BODY_SYNC_BODIES_MAX];
     uint32_t rebind_ticks;
+    /* Host: the agents' older rings, and the sender ticks between two states kept there
+       (sync_policy_agent_stride), set by the shell. A body past SYNC_AUTHORITY_AGENTS agents keeps
+       only its ring: an older contact of it is a missed one. */
+    sync_authority_agent_ring_t agent_rings[SYNC_AUTHORITY_AGENTS];
+    uint32_t agent_stride;
     /* A planted defect for tests that require a check to catch it: a revocation is recorded as
        an arbitrated end. Never set outside tests. */
     bool plant_revoked_as_arbitrated;
@@ -204,6 +225,12 @@ typedef struct sync_authority {
     /* A planted defect: a recall leaves the recalled seat's number standing for its contact
        claims, judged OK as if it still owned the body. Never set outside tests. */
     bool plant_recall_keeps_number;
+    /* A planted defect: a move to another guest keeps what the host received of the old owner,
+       its hold, holder, flags and data read as the new owner's. Never set outside tests. */
+    bool plant_move_keeps_received;
+    /* A planted defect: an agent's evidence is its ring alone, none of its older states. Never set
+       outside tests. */
+    bool plant_agent_ring_off;
     /* Host: the shell's measure of a take's evidence (sync_policy_grant_in_t agent_gap, *reach).
        None: every take counts as touching, for the parts tested without a world. */
     float (*take_gap)(void *context, uint8_t seat, uint32_t slot, uint32_t tick, float *reach);
@@ -226,6 +253,10 @@ void sync_authority_seat_left(sync_authority_t *a, uint8_t seat);
    while it quarantines a generation equal modulo 16 that it unbound there. */
 body_sync_result_t sync_authority_bind(sync_authority_t *a, body_sync_id_t id, uint8_t seat, uint16_t number);
 body_sync_result_t sync_authority_unbind(sync_authority_t *a, body_sync_id_t id);
+
+/* Host: `agent` gives the body an older ring of its taken states (a character, whose contacts
+   are claimed), or takes it away. False when every agent ring is in use. */
+bool sync_authority_set_agent(sync_authority_t *a, body_sync_id_t id, bool agent);
 
 /* NULL when nothing is bound under `id` (slot, generation). */
 sync_authority_body_t *sync_authority_body(sync_authority_t *a, body_sync_id_t id);

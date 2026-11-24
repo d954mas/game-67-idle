@@ -109,6 +109,17 @@ add_test(NAME test_body_sync_claims_stub_mf_catch_evidence_off
     COMMAND "${CMAKE_COMMAND}" -DEXE=$<TARGET_FILE:test_body_sync_claims_stub> -DARGS=--plant-catch-evidence-off
             "-DCASES=test_a_guest_catches_a_guest_throw_host"
             -P "${CMAKE_CURRENT_LIST_DIR}/expect_unity_fail.cmake")
+# A host that keeps what it received of a catch's thrower reads the caught box as her flight: the
+# second catcher is granted too, and a host claim goes on with the thrower's flight.
+add_test(NAME test_body_sync_claims_mf_move_keeps_received
+    COMMAND "${CMAKE_COMMAND}" -DEXE=$<TARGET_FILE:test_body_sync_claims> -DARGS=--plant-move-keeps-received
+            "-DCASES=test_a_catch_race_is_won_once_host|test_a_catch_race_is_won_once_interaction|test_a_host_claim_after_a_catch_holds_host|test_a_host_claim_after_a_catch_holds_interaction"
+            -P "${CMAKE_CURRENT_LIST_DIR}/expect_unity_fail.cmake")
+# A host that judges a character on its last 12 states refuses the catch the record lane resent.
+add_test(NAME test_body_sync_claims_mf_agent_ring_off
+    COMMAND "${CMAKE_COMMAND}" -DEXE=$<TARGET_FILE:test_body_sync_claims> -DARGS=--plant-agent-ring-off
+            "-DCASES=test_a_resent_catch_is_granted"
+            -P "${CMAKE_CURRENT_LIST_DIR}/expect_unity_fail.cmake")
 add_test(NAME test_body_sync_claims_mf_take_reach_unbounded
     COMMAND "${CMAKE_COMMAND}" -DEXE=$<TARGET_FILE:test_body_sync_claims> -DARGS=--plant-take-reach-unbounded
             "-DCASES=test_inflated_far_take_is_refused"
@@ -174,6 +185,7 @@ set(core_tests test_body_sync_logic test_body_sync_playback test_body_sync_soft 
     test_body_sync_claims_mf_approach_scale0 test_body_sync_claims_mf_reach_unbounded
     test_body_sync_claims_mf_approach_unbounded test_body_sync_claims_mf_take_reach_unbounded
     test_body_sync_claims_mf_catch_evidence_off test_body_sync_claims_stub_mf_catch_evidence_off
+    test_body_sync_claims_mf_move_keeps_received test_body_sync_claims_mf_agent_ring_off
     test_body_sync_claims_mf_evidence_grows_over_gaps test_body_sync_claims_mf_transform_sleep
     test_body_sync_authority_mf_approach_from_ring test_body_sync_authority_mf_evidence_age_unbounded
     test_body_sync_authority_mf_teleport_keeps_ring test_body_sync_authority_mf_target_any_ownership

@@ -143,6 +143,7 @@ typedef struct sync_buffered {
     uint8_t known;    /* rare groups played so far */
     sync_rare_t rare; /* their values at playback time */
     uint32_t rare_tick[SYNC_RARE_GROUPS];
+    bool ended; /* its owner changed (sync_playback_end): past its newest snapshot it holds still */
 } sync_buffered_t;
 
 typedef struct sync_playback {
@@ -158,6 +159,10 @@ void sync_playback_init(sync_playback_t *p, uint32_t tick_hz, uint32_t delay_min
 void sync_playback_forget_body(sync_playback_t *p, uint16_t slot);
 /* The newest snapshot tick a body holds; false when none. */
 bool sync_playback_newest(const sync_playback_t *p, uint16_t slot, uint32_t *tick);
+/* The body's owner changed and the snapshots are the old owner's: it plays on to the first one
+   after its playback time, drops the rest (a path its new owner never saw) and holds there with no
+   motion, frozen, until a snapshot is filed again. */
+void sync_playback_end(sync_playback_t *p, uint16_t slot);
 /* Drops a body's snapshots at or before `tick` (its rare groups stay as played). */
 void sync_playback_forget_until(sync_playback_t *p, uint16_t slot, uint32_t tick);
 /* A join forgets that seat's timeline and every snapshot on it; a leave forgets the timeline
