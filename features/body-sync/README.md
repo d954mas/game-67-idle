@@ -79,7 +79,10 @@ library `body_sync_stand_logic` and are tested alone.
 
 Scene catalog: `floor_wall`, `stack10`, `pile60`, `cabinet_mug`, `mannequin`
 (one standing, one walking a route), `two_chars_item`, `breakables` (glass,
-a crate with contents), `load300` (300 bodies, four players).
+a crate with contents), `load300` (300 bodies, four players), `dummy_wall`
+(a wall and a standing dummy to throw at), `walker_lane` (a mannequin walking
+across a thrower's line), `glass_door` (glass and a heavy door, both broken by
+an impact claim).
 
 The test character mirrors a game's mechanics: a dynamic capsule moved by
 setting its velocity, rotation locked, its facing written into its rotation
@@ -788,6 +791,7 @@ expect agree_at_rest <length> [<angle>] | no_stuck | effects_once | left <guest>
 expect result <label> <done|granted|refused|hit|missed|rejected|failed>
 expect one_of <outcome> <label> <label> ...
 expect moved <body> <=|>= <length>  # the body's travel on the host, first tick to last
+expect effect <body>                # a knockdown or break took the body on the host, shown once on every guest
 expect pace <label>                 # a walk to a point keeps up with a local reference run
 expect <metric> <=|>= <value>
 ```

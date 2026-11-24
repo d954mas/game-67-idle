@@ -548,6 +548,12 @@ static bool expect(parser_t *p, const line_words_t *w) {
         copy_text(e.body, sizeof(e.body), w->word[2]);
         e.at_least = w->word[3][0] == '>';
         e.limit = (double)m;
+    } else if (strcmp(what, "effect") == 0) {
+        e.kind = BODY_SYNC_EXPECT_EFFECT;
+        if (w->count != 3 || !name_word(w->word[2], BODY_SYNC_NAME_MAX - 1)) {
+            return refuse(p, "effect needs one body%s", "");
+        }
+        copy_text(e.body, sizeof(e.body), w->word[2]);
     } else if (strcmp(what, "left") == 0) {
         e.kind = BODY_SYNC_EXPECT_LEFT;
         if (w->count != 3 || !guest_word(w->word[2], &e.endpoint)) {

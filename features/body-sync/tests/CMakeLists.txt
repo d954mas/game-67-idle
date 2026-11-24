@@ -118,7 +118,8 @@ box3d_enable(test_body_sync_free_step)
 set(BODY_SYNC_CORE_SCENARIOS two_walk)
 set(BODY_SYNC_SLOW_SCENARIOS stack_punch pile_throw cabinet_carry mannequin_hits grab_dispute breakables_break load_four
     edge_throw_cut edge_stall edge_deaf load_overflow pile_settle_loss10 throw_catch
-    bounce_wall cut_short cut_long hitch_guest hitch_host rate_mismatch rate_rough two_ping latency_drop)
+    bounce_wall cut_short cut_long hitch_guest hitch_host rate_mismatch rate_rough two_ping latency_drop
+    throw_dummy throw_glass_door throw_walker)
 # The same scenarios with the second layer on (the real seam; the stub has no layer): their
 # checks hold in both modes. The layer scenes name it themselves.
 set(BODY_SYNC_LAYER_KG 20)
@@ -197,7 +198,8 @@ endforeach()
 set(BODY_SYNC_AUTHORITY_SCENARIOS authority_host_push authority_two_guests authority_two_guests_far authority_leave
     authority_three_host authority_three_guest authority_three_cross)
 set(BODY_SYNC_INTERACTION_SCENARIOS layer_bounce layer_pile layer_push layer_rest layer_stand layer_nudge layer_leave pile_throw throw_catch
-    load_four char_push edge_throw_cut pile_settle_loss10 breakables_break mannequin_hits cabinet_carry grab_dispute)
+    load_four char_push edge_throw_cut pile_settle_loss10 breakables_break mannequin_hits cabinet_carry grab_dispute
+    throw_dummy throw_glass_door throw_walker)
 foreach(scn IN LISTS BODY_SYNC_AUTHORITY_SCENARIOS)
     add_test(NAME test_body_sync_scn_${scn}
         COMMAND body_sync_stand_cli "${BODY_SYNC_SCENARIOS}/${scn}.scn" --out "${CMAKE_CURRENT_BINARY_DIR}/${scn}.json" --quiet)
@@ -219,7 +221,12 @@ set_tests_properties(${slow_tests} PROPERTIES LABELS "slow")
 # Scenarios that must not pass, each on a named check and on each implementation: a check that
 # cannot fail proves nothing.
 set(BODY_SYNC_MUST_FAIL "${CMAKE_CURRENT_LIST_DIR}/must_fail")
+# An optional fourth argument is REJECT of expect_fail.cmake: output that must not appear.
 function(body_sync_must_fail name rc expect)
+    set(reject "")
+    if(ARGC GREATER 3)
+        set(reject "-DREJECT=${ARGV3}")
+    endif()
     foreach(impl IN LISTS BODY_SYNC_IMPLS)
         string(REPLACE "|" ";" parts "${impl}")
         list(GET parts 0 cli)
@@ -230,7 +237,7 @@ function(body_sync_must_fail name rc expect)
         endif()
         add_test(NAME test_body_sync_${tag}mf_${name}
             COMMAND "${CMAKE_COMMAND}" -DCLI=$<TARGET_FILE:${cli}> -DSCENARIO=${BODY_SYNC_MUST_FAIL}/${name}.scn
-                    -DOUT=${CMAKE_CURRENT_BINARY_DIR} -DTAG=${tag} -DRC=${rc} "-DEXPECT=${expect}" -P "${CMAKE_CURRENT_LIST_DIR}/expect_fail.cmake")
+                    -DOUT=${CMAKE_CURRENT_BINARY_DIR} -DTAG=${tag} -DRC=${rc} "-DEXPECT=${expect}" ${reject} -P "${CMAKE_CURRENT_LIST_DIR}/expect_fail.cmake")
         set_tests_properties(test_body_sync_${tag}mf_${name} PROPERTIES LABELS "core")
     endforeach()
 endfunction()
@@ -251,6 +258,8 @@ body_sync_must_fail(mf_angle_zero 1 "FAIL line 9 agree_at_rest~turned")
 body_sync_must_fail(mf_no_copy 1 "FAIL line 8 metric~no copy was measured")
 body_sync_must_fail(mf_behind 1 "FAIL line 9 metric~behind_ticks.max")
 body_sync_must_fail(mf_layer_off 1 "FAIL line 14 metric~response_ticks.max")
+# The rock must reach the dummy (line 15 passes) for the knockdown check to be what fails.
+body_sync_must_fail(mf_dummy_stands 1 "FAIL line 16 effect~dummy: no effect took it on the host" "FAIL line 1[45] ")
 # The stub takes nothing by interaction, so only the real seam has a take that can lose.
 add_test(NAME test_body_sync_mf_lost_take
     COMMAND "${CMAKE_COMMAND}" -DCLI=$<TARGET_FILE:body_sync_stand_cli> -DSCENARIO=${BODY_SYNC_MUST_FAIL}/mf_lost_take.scn

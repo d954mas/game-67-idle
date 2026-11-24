@@ -256,6 +256,9 @@ struct body_sync_stand {
     uint32_t rest_tick;
     bool started;
     float start_position[STAND_BODIES_MAX][3]; /* the host's, at the first tick: `expect moved` */
+    /* The host's ids at the first tick: `expect effect` names a scene body whose slot a break frees
+       for its spawns. */
+    uint32_t start_id[STAND_BODIES_MAX];
     /* `expect pace`: a reference run is the host's world alone with every player local and no
        network, the players other than `ref_walker` acting `ref_shift` ticks late; per check, the
        walk's progress (its start distance less the nearest it came) by tick since it started. */
@@ -2285,6 +2288,7 @@ static void sample(body_sync_stand_t *st) {
             if (host->world->slots[slot].live) {
                 pose_of(host, slot, st->start_position[slot], rot);
             }
+            st->start_id[slot] = stand_world_id(host->world, slot);
         }
     }
     /* The host's own motion this tick, so a frozen copy can be told from a body at rest. */
@@ -2804,6 +2808,50 @@ static void check_effects(body_sync_stand_t *st, body_sync_check_metrics_t *c) {
     c->passed = offenders == 0;
 }
 
+/* The scene body's knockdown or break, applied on the host, shown once by every guest that stayed:
+   effects_once holds what was applied to every endpoint, this holds that the effect happened. */
+static void check_effect(body_sync_stand_t *st, const body_sync_expect_t *x, body_sync_check_metrics_t *c) {
+    uint32_t index = body_sync_scene_find_body(&st->scene, x->body);
+    body_sync_id_t id = index < STAND_BODIES_MAX ? st->start_id[index] : BODY_SYNC_ID_NONE;
+    const effect_t *f = NULL;
+    for (uint32_t i = 0; id != BODY_SYNC_ID_NONE && i < st->effect_count && !f; i++) {
+        if ((st->effects[i].kind == STAND_EFFECT_KNOCK || st->effects[i].kind == STAND_EFFECT_BREAK) && st->effects[i].target == id) {
+            f = &st->effects[i];
+        }
+    }
+    uint32_t offenders = 0, shown = 0, guests = 0;
+    char text[BODY_SYNC_ERROR_TEXT_MAX];
+    if (!f) {
+        offenders++;
+        snprintf(text, sizeof(text), "%s: no effect took it on the host", x->body);
+        check_detail(c, text);
+    }
+    uint32_t slot = body_sync_id_slot(id);
+    for (uint32_t e = 1; f && e < st->endpoints; e++) {
+        endpoint_t *ep = &st->ep[e];
+        if (!ep->built || guest_out(st, e, c, &offenders)) {
+            continue;
+        }
+        guests++;
+        bool ok = f->kind == STAND_EFFECT_KNOCK ? ep->knock_id[slot] == id && ep->knock_count[slot] == 1 : !stand_world_slot(ep->world, id);
+        if (ok) {
+            shown++;
+        } else {
+            offenders++;
+            snprintf(text, sizeof(text), "g%u: %s not %s", e, x->body, f->kind == STAND_EFFECT_KNOCK ? "knocked down once" : "gone");
+            check_detail(c, text);
+        }
+    }
+    if (offenders == 0) {
+        snprintf(text, sizeof(text), "%s %s on the host and %u of %u guests", x->body, f->kind == STAND_EFFECT_KNOCK ? "knocked down" : "broken",
+                 shown, guests);
+        check_detail(c, text);
+    }
+    c->value = (double)offenders;
+    c->limit = 0.0;
+    c->passed = offenders == 0;
+}
+
 static int32_t label_index(const body_sync_stand_t *st, const char *label) {
     for (uint32_t i = 0; i < st->scenario.action_count; i++) {
         if (strcmp(st->scenario.actions[i].label, label) == 0) {
@@ -3059,6 +3107,9 @@ static void evaluate(body_sync_stand_t *st) {
         case BODY_SYNC_EXPECT_PACE:
             check_pace(st, i, c);
             break;
+        case BODY_SYNC_EXPECT_EFFECT:
+            check_effect(st, x, c);
+            break;
         case BODY_SYNC_EXPECT_LEFT: {
             bool gone = st->left[x->endpoint];
             c->passed = gone;
@@ -3111,7 +3162,7 @@ static bool check_scenario(const body_sync_stand_t *st, body_sync_error_t *error
     }
     for (uint32_t i = 0; i < s->expect_count; i++) {
         const body_sync_expect_t *x = &s->expects[i];
-        if (x->kind == BODY_SYNC_EXPECT_MOVED && body_sync_scene_find_body(&st->scene, x->body) == UINT32_MAX) {
+        if ((x->kind == BODY_SYNC_EXPECT_MOVED || x->kind == BODY_SYNC_EXPECT_EFFECT) && body_sync_scene_find_body(&st->scene, x->body) == UINT32_MAX) {
             char text[BODY_SYNC_ERROR_TEXT_MAX];
             snprintf(text, sizeof(text), "the scene has no body '%s'", x->body);
             error_text(error, x->line, text);

@@ -83,6 +83,9 @@ extern "C" {
      expect moved <body> <=|>= <length> [layer <length>]
                                                 the scene body's travel on the host from the
                                                 first tick to the last
+     expect effect <body>                       an effect (a knockdown, a break) took the scene
+                                                body on the host, and every guest that stayed
+                                                shows it once: knocked down, or gone
      expect pace <label>                        a walk to a point keeps up with the same walk in
                                                 a reference run of the scenario on one world,
                                                 every player local, no network (README
@@ -197,6 +200,7 @@ typedef enum body_sync_expect_kind {
     BODY_SYNC_EXPECT_LEFT,
     BODY_SYNC_EXPECT_MOVED, /* a body's travel on the host from the first tick to the last */
     BODY_SYNC_EXPECT_PACE,  /* a walk's progress against the same walk in a local reference run */
+    BODY_SYNC_EXPECT_EFFECT, /* a scene body an effect took, shown on every endpoint */
 } body_sync_expect_kind_t;
 
 typedef struct body_sync_expect {
@@ -211,7 +215,7 @@ typedef struct body_sync_expect {
     char metric[BODY_SYNC_METRIC_NAME_MAX]; /* METRIC_AT_MOST */
     double limit; /* METRIC_AT_MOST, in the metric's unit: m, deg, ticks or bytes/s; MOVED in m */
     double layer_limit; /* MOVED: the bound while the second layer is on; negative: `limit` */
-    char body[BODY_SYNC_NAME_MAX]; /* MOVED: the scene body */
+    char body[BODY_SYNC_NAME_MAX]; /* MOVED, EFFECT: the scene body */
     bool at_least;                 /* MOVED: >= rather than <= */
 } body_sync_expect_t;
 

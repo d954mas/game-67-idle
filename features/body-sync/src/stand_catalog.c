@@ -247,6 +247,94 @@ static void build_wall_plank(body_sync_scene_t *s) {
     add_player(s, 4.95f, 2.9f, 2.0f * HALF_PI);
 }
 
+static uint32_t add_mannequin(body_sync_scene_t *s, const char *name, float x, float z, uint8_t route) {
+    body_sync_body_desc_t person = body_sync_body_default(BODY_SYNC_SHAPE_CAPSULE, (const float[3]){0.3f, 0.55f, 0.0f}, 60.0f,
+                                                          (const float[3]){x, PLAYER_Y, z});
+    person.role = BODY_SYNC_ROLE_MANNEQUIN;
+    person.model_tag = 9;
+    /* Written out, not left to the default: the throw scenarios' checks are derived from it (a
+       thrown rock at 9 m/s fells it, a lob at 3 m/s does not). */
+    person.fall_speed = 5.0f;
+    if (route != BODY_SYNC_ROUTE_NONE) {
+        person.motion = BODY_SYNC_MOTION_KINEMATIC;
+        person.route = route;
+    }
+    snprintf(person.name, sizeof(person.name), "%s", name);
+    return body_sync_scene_add(s, &person);
+}
+
+static void add_rock(body_sync_scene_t *s, const char *name, float x, float z) {
+    add_sphere(s, name, 0.12f, 2.0f, x, 0.12f, z, BODY_SYNC_BODY_GRABBABLE, 12);
+}
+
+/* Throws into the wall and into a standing dummy: the thrower's own body flies with no delay, and
+   the dummy falls for everyone by the thrower's impact claim. The dummy stands off the wall's
+   line so a rock coming back off the wall does not reach it. */
+static void build_dummy_wall(body_sync_scene_t *s) {
+    body_sync_scene_reset(s, "dummy_wall");
+    add_floor(s);
+    uint32_t wall = add_box(s, "wall", 0.25f, 1.5f, 4.0f, 0.0f, 6.0f, 1.5f, 0.0f, 0, 2);
+    s->bodies[wall].motion = BODY_SYNC_MOTION_STATIC;
+    add_mannequin(s, "dummy", 3.0f, -1.8f, BODY_SYNC_ROUTE_NONE);
+    add_rock(s, "rock_a", 0.5f, -0.4f);
+    add_rock(s, "rock_b", 0.5f, 0.4f);
+    add_player(s, -3.0f, -2.5f, HALF_PI);
+    add_player(s, 0.0f, 0.0f, HALF_PI);
+}
+
+/* A mannequin walking across a thrower's line at the mannequin scene's pace: a hit claim on a
+   target the host moves, which the guest sees a one-way trip and a playback delay late. */
+static void build_walker_lane(body_sync_scene_t *s) {
+    body_sync_scene_reset(s, "walker_lane");
+    add_floor(s);
+    body_sync_route_t *route = &s->routes[s->route_count++];
+    route->point_count = 2;
+    route->points[0][0] = 2.5f;
+    route->points[0][1] = -4.0f;
+    route->points[1][0] = 2.5f;
+    route->points[1][1] = 4.0f;
+    route->speed = 1.2f;
+    route->loop = false;
+    add_mannequin(s, "walker", 2.5f, -4.0f, 0);
+    add_rock(s, "rock", 0.5f, -0.4f);
+    add_player(s, -3.0f, -2.5f, HALF_PI);
+    add_player(s, 0.0f, 0.0f, HALF_PI);
+}
+
+/* Glass and a door a guest throws at. The door is the heavy case: dynamic like every breakable,
+   too heavy for a guest to take, so a guest's rock that meets it returns to the host on contact
+   and its release goes out before the claim. A slab 16 cm deep stands up to a rock's push that
+   does not break it; it breaks at a thrown rock's speed, past a punched item's or a walk's. */
+static void build_glass_door(body_sync_scene_t *s) {
+    body_sync_scene_reset(s, "glass_door");
+    add_floor(s);
+    body_sync_body_desc_t t = body_sync_body_default(BODY_SYNC_SHAPE_BOX, (const float[3]){0.06f, 0.06f, 0.015f}, 0.1f, NULL);
+    snprintf(t.name, sizeof(t.name), "shard");
+    t.model_tag = 20;
+    s->templates[s->template_count++] = t;
+    t = body_sync_body_default(BODY_SYNC_SHAPE_BOX, (const float[3]){0.25f, 0.03f, 0.05f}, 0.3f, NULL);
+    snprintf(t.name, sizeof(t.name), "plank");
+    t.model_tag = 23;
+    s->templates[s->template_count++] = t;
+
+    uint32_t glass = add_box(s, "glass", 0.03f, 0.6f, 0.4f, 2.0f, 3.0f, 0.6f, -1.0f, 0, 10);
+    s->bodies[glass].role = BODY_SYNC_ROLE_BREAKABLE;
+    s->bodies[glass].debris_template = 0;
+    s->bodies[glass].debris_count = 6;
+    s->bodies[glass].debris_speed = 2.0f;
+    s->bodies[glass].break_speed = 3.0f;
+    uint32_t door = add_box(s, "door", 0.08f, 1.0f, 0.45f, 120.0f, 3.0f, 1.0f, 1.2f, BODY_SYNC_BODY_HEAVY, 13);
+    s->bodies[door].role = BODY_SYNC_ROLE_BREAKABLE;
+    s->bodies[door].debris_template = 1;
+    s->bodies[door].debris_count = 6;
+    s->bodies[door].debris_speed = 1.5f;
+    s->bodies[door].break_speed = 6.0f;
+    add_rock(s, "rock_a", 0.5f, -0.4f);
+    add_rock(s, "rock_b", 0.5f, 0.4f);
+    add_player(s, -2.5f, -2.5f, HALF_PI);
+    add_player(s, 0.0f, 0.0f, HALF_PI);
+}
+
 static const body_sync_scene_entry_t catalog[] = {
     {"floor_wall", "floor and wall with one body: bounce, fast throw, tunnelling", build_floor_wall},
     {"stack10", "a stack of 10 boxes: rest, divergence, jitter", build_stack10},
@@ -259,6 +347,9 @@ static const body_sync_scene_entry_t catalog[] = {
     {"wall_boxes", "floor and wall, a crate and six light boxes at the wall's foot: a bounce into light bodies", build_wall_boxes},
     {"pile60_four", "pile60 with four players and two balls: two throws at once and a runner", build_pile60_four},
     {"wall_plank", "a crate across a runner's lane to a wall and a ball to clear it: a late throw leaves her debris", build_wall_plank},
+    {"dummy_wall", "a wall, a standing dummy and two rocks: a guest's throw flies at once, the dummy falls by its claim", build_dummy_wall},
+    {"walker_lane", "a mannequin walking across a thrower's line and a rock: an impact claim on a moving host target", build_walker_lane},
+    {"glass_door", "glass, a heavy door and two rocks: breaks by a guest's impact claim, the door ending the flight", build_glass_door},
 };
 
 const body_sync_scene_entry_t *body_sync_scene_catalog(uint32_t *count) {

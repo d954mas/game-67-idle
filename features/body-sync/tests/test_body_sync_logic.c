@@ -120,6 +120,8 @@ static void test_refusals_name_their_line(void) {
         {"scenario a\nscene b\nexpect divergence.max <= 1m\nguests 0\n", 3},
         {"scenario a\nscene b\nguests 0\nexpect left g1\n", 4},
         {"scenario a\nscene b\nexpect left host\n", 3},
+        {"scenario a\nscene b\nexpect effect\n", 3},
+        {"scenario a\nscene b\nexpect effect dummy glass\n", 3},
         {"scenario a\nscene b\nat 600s p0 walk 1 1\n", 3},
         {"scenario a\nscene b\nat 600s net g1 loss 2%\n", 3},
         {"scenario a\nscene b\np0 wait 590s\nsettle 20s\n", 4},
@@ -464,6 +466,9 @@ static void test_new_forms_are_read(void) {
     TEST_ASSERT_TRUE(scenario.expects[1].tolerance_deg == 0.0f); /* 0deg written: a bound */
     TEST_ASSERT_EQUAL(BODY_SYNC_EXPECT_LEFT, scenario.expects[2].kind);
     TEST_ASSERT_EQUAL_UINT8(1, scenario.expects[2].endpoint);
+    TEST_ASSERT_TRUE_MESSAGE(parse("scenario a\nscene b\nexpect effect dummy\n", &error), error.text);
+    TEST_ASSERT_EQUAL(BODY_SYNC_EXPECT_EFFECT, scenario.expects[0].kind);
+    TEST_ASSERT_EQUAL_STRING("dummy", scenario.expects[0].body);
     TEST_ASSERT_TRUE_MESSAGE(parse("scenario a\nscene b\nguests 0\np0 walk 1 1\nexpect host_ticks.max <= 3t\nexpect no_stuck\n", &error), error.text);
     /* a timed action cuts off the long wait before it, so this schedule fits */
     TEST_ASSERT_TRUE_MESSAGE(parse("scenario a\nscene b\np0 wait 600s\nat 1s p0 wait 1s\n", &error), error.text);
@@ -601,7 +606,7 @@ static void test_json_is_complete_and_repeatable(void) {
 static void test_catalog_validates_and_broken_scenes_are_refused(void) {
     uint32_t count = 0;
     const body_sync_scene_entry_t *catalog = body_sync_scene_catalog(&count);
-    TEST_ASSERT_EQUAL_UINT32(11, count);
+    TEST_ASSERT_EQUAL_UINT32(14, count);
     body_sync_error_t error;
     for (uint32_t i = 0; i < count; i++) {
         catalog[i].build(&scene);

@@ -1,0 +1,37 @@
+# A guest throws a rock into glass and one into a heavy door: each breaks for everyone, once, by
+# the guest's impact claim. The door is the host's and too heavy to take, so the rock's flight ends
+# on the contact and its release reaches the host before the claim.
+scenario throw_glass_door
+scene glass_door
+# The stub's claim grace is one tick: about one seed in five it refuses an honest claim, as in
+# breakables_break. The real seam applied every claim over 40 seeds in each mode.
+seed 23
+guests 1
+settle 8s
+
+net g1 rtt 100ms jitter 20ms loss 2%
+
+p1 grab rock_a as lift_a
+p1 wait 300ms
+p1 throw glass speed 7 as glass
+p1 wait 1s
+p1 walk rock_b
+p1 grab rock_b as lift_b
+p1 wait 300ms
+p1 throw door speed 9 as door
+
+expect result lift_a granted
+expect result lift_b granted
+expect result glass done
+expect result door done
+expect effect glass
+expect effect door
+expect effects_once
+# Both breaks came by the guest's claims, and an honest guest sends nothing the parser refuses.
+expect claims.count >= 2
+expect claim_effects.count >= 2
+expect claims_format.count <= 0
+# Derived as in layer_bounce: float noise, 1 cm.
+expect local_correction.max <= 1cm
+expect agree_at_rest 5cm 5deg
+expect no_stuck
