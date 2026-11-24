@@ -51,6 +51,54 @@ static void fails(body_sync_stand_t *stand, uint32_t line, const char *why) {
     TEST_FAIL_MESSAGE("no check on that line");
 }
 
+/* return_rest.scn derives its return_jump bound; a return that draws the host's picture or the
+   thrower's 10 cm off, ten times it, fails there, by the plant and at most the bound more. */
+static body_sync_stand_t *run_return(uint32_t endpoint, float metres) {
+    char path[512];
+    snprintf(path, sizeof(path), "%s/return_rest.scn", BODY_SYNC_SCENARIOS_DIR);
+    body_sync_error_t error;
+    TEST_ASSERT_TRUE_MESSAGE(body_sync_scenario_load(path, &scenario, &error), error.text);
+    scene_named(scenario.scene)->build(&scene);
+    body_sync_stand_config_t config = {.scene = &scene, .scenario = &scenario};
+    body_sync_stand_t *stand = body_sync_stand_create(&config, &error);
+    TEST_ASSERT_NOT_NULL_MESSAGE(stand, error.text);
+    if (metres > 0.0f) {
+        stand_testing_plant_return_place(stand, endpoint, metres);
+    }
+    body_sync_stand_run(stand);
+    return stand;
+}
+
+static uint32_t metric_line(body_sync_stand_t *stand, const char *name) {
+    const body_sync_report_t *r = body_sync_stand_report(stand);
+    for (uint32_t i = 0; i < r->check_count; i++) {
+        if (strcmp(r->checks[i].detail, name) == 0) {
+            return r->checks[i].line;
+        }
+    }
+    TEST_FAIL_MESSAGE("no such metric check");
+    return 0;
+}
+
+static void test_return_jump_fails_on_a_return_placed_off(void) {
+    const double bound = 0.01, planted = 0.10;
+    body_sync_stand_t *clean = run_return(0, 0.0f);
+    const body_sync_report_t *c = body_sync_stand_report(clean);
+    TEST_ASSERT_TRUE(c->passed);
+    TEST_ASSERT_TRUE_MESSAGE(c->guests[0].return_jumps >= 2, "the host's and the thrower's pictures were not both handed back");
+    TEST_ASSERT_TRUE(c->guests[0].return_jump_max_m <= bound);
+    uint32_t line = metric_line(clean, "return_jump.max");
+    for (uint32_t endpoint = 0; endpoint < 2; endpoint++) {
+        body_sync_stand_t *off = run_return(endpoint, (float)planted);
+        fails(off, line, "return_jump.max");
+        const body_sync_guest_metrics_t *g = &body_sync_stand_report(off)->guests[0];
+        double seen = endpoint == 0 ? g->return_jump_host_m : g->return_jump_own_m;
+        TEST_ASSERT_TRUE_MESSAGE(seen >= planted - bound && seen <= planted + bound, "the planted picture's jump is not the plant");
+        body_sync_stand_destroy(off);
+    }
+    body_sync_stand_destroy(clean);
+}
+
 static const char *walk_text = "scenario planted\nscene two_chars_item\nguests 1\nnet g1 rtt 60ms\np1 walk -2 -1\n"
                                "expect agree_at_rest 5cm 5deg\nexpect no_stuck\nexpect effects_once\n";
 
@@ -879,5 +927,6 @@ int main(int argc, char **argv) {
     RUN_TEST(test_effects_fail_on_a_break_that_lost_its_spawns);
     RUN_TEST(test_effect_fails_on_a_break_a_guest_never_shows);
     RUN_TEST(test_the_world_hash_sees_what_it_names);
+    RUN_TEST(test_return_jump_fails_on_a_return_placed_off);
     return UNITY_END();
 }

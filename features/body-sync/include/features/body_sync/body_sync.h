@@ -95,6 +95,11 @@ typedef struct body_sync_config {
        hands them back. The host grants or refuses those takes itself; its own agents come first.
        The stub ignores it. */
     body_sync_authority_mode_t authority;
+    /* When a guest's or the host's own flight goes back to the host (README "Authority follows
+       interaction", "A flight"); every endpoint uses the same, as with authority. CONTACT, the
+       default, ends it at its first contact with a body that is not static; REST keeps it its
+       thrower's until it sleeps. The stub follows it too. */
+    body_sync_flight_end_t flight_end;
 } body_sync_config_t;
 
 /* NULL when the config is out of range, its limits are too wide for the implementation's wire

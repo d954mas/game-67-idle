@@ -183,7 +183,7 @@ set(BODY_SYNC_LAYER_KG 20)
 # mug_table: a guest's flight the host holds dynamic, where the stub's kinematic copy shoves what it
 # strikes (its contrast below).
 set(BODY_SYNC_REAL_SCENARIOS char_push layer_bounce layer_pile layer_push layer_rest layer_stand layer_nudge layer_leave
-    mug_table_100 mug_table_250 mug_table_jitter)
+    mug_table_100 mug_table_250 mug_table_jitter return_rest)
 # One seed, two processes, byte-equal metrics: the core case and the playback's edges.
 set(BODY_SYNC_TWICE_SCENARIOS two_walk bounce_wall cut_short cut_long hitch_guest hitch_host rate_mismatch rate_rough two_ping)
 set(BODY_SYNC_IMPLS "body_sync_stand_cli|" "body_sync_stand_cli_stub|stub_")
@@ -263,7 +263,7 @@ set(BODY_SYNC_INTERACTION_SCENARIOS layer_bounce layer_pile layer_push layer_res
     load_four char_push edge_throw_cut pile_settle_loss10 breakables_break mannequin_hits cabinet_carry grab_dispute
     throw_dummy throw_glass_door throw_walker recall_flight recall_carry remove_owned
     catch_guest_throw_100 catch_guest_throw_250 catch_race catch_miss mug_table_100 mug_table_250
-    mug_table_jitter)
+    mug_table_jitter return_rest)
 foreach(scn IN LISTS BODY_SYNC_AUTHORITY_SCENARIOS)
     add_test(NAME test_body_sync_scn_${scn}
         COMMAND body_sync_stand_cli "${BODY_SYNC_SCENARIOS}/${scn}.scn" --out "${CMAKE_CURRENT_BINARY_DIR}/${scn}.json" --quiet)

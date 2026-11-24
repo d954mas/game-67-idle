@@ -71,6 +71,10 @@ typedef struct body_sync_stand_config {
        `authority`: the command line's --authority, so one scenario runs under both policies. */
     bool override_authority;
     uint8_t authority;
+    /* Every seam's flight_end (body_sync_flight_end_t) instead of the scenario's own `flight_end`:
+       the command line's --flight-end. */
+    bool override_flight_end;
+    uint8_t flight_end;
 } body_sync_stand_config_t;
 
 /* Builds every endpoint's world, seam, session and the network, and connects the guests. NULL

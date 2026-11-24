@@ -1,0 +1,31 @@
+# A guest throws the box onto the open floor. It meets nothing that is not static, so its flight
+# goes back to the host when it sleeps under either flight_end and either authority: a return at
+# rest, and the grab before it a switch from rest.
+scenario return_rest
+scene two_chars_item
+seed 17
+guests 1
+settle 6s
+light_mass 20kg
+
+net g1 rtt 100ms jitter 10ms loss 1%
+
+p1 walk box
+p1 grab box as lift
+p1 wait 300ms
+p1 throw 5 0.2 3 speed 4 as throw
+
+expect result lift granted
+expect result throw done
+expect agree_at_rest 5cm
+expect no_stuck
+# Derived: both sides hold one rest pose when the body goes back. The guest's rest state carries its
+# pose to the bit, the host's copy rests on it or, within the second layer's dead zone (1 cm), goes
+# on from its own pose, and a copy in the rest hold takes a state within a copy-grid step (3.4 mm)
+# of its pose without moving: no picture moves more than the dead zone, 1 cm, in the window.
+expect return_jump.max <= 1cm
+# The host's picture and the thrower's were both handed back: 2 windows.
+expect return_jump.count >= 2
+# Derived: a grab takes over from the pose the claimant shows, its copy of the box at rest, so the
+# host's copy starts within the dead zone of its own body: 1 cm.
+expect switch_jump.max <= 1cm

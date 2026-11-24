@@ -125,6 +125,21 @@ void stand_metrics_correction(stand_metrics_t *metrics, uint32_t guest, double c
     metrics->jump_max[guest] = correction_m > metrics->jump_max[guest] ? correction_m : metrics->jump_max[guest];
 }
 
+void stand_metrics_return_jump(stand_metrics_t *metrics, uint32_t guest, stand_picture_t picture, double jump_m) {
+    if (guest < metrics->guests && (unsigned)picture < 3u && isfinite(jump_m)) {
+        double *worst = &metrics->return_jump[guest][picture];
+        *worst = jump_m > *worst ? jump_m : *worst;
+        metrics->return_jumps[guest]++;
+    }
+}
+
+void stand_metrics_switch_jump(stand_metrics_t *metrics, uint32_t guest, double jump_m) {
+    if (guest < metrics->guests && isfinite(jump_m)) {
+        metrics->switch_jump[guest] = jump_m > metrics->switch_jump[guest] ? jump_m : metrics->switch_jump[guest];
+        metrics->switch_jumps[guest]++;
+    }
+}
+
 void stand_metrics_aligned(stand_metrics_t *metrics, uint32_t guest, double gap_m, bool predicted) {
     if (guest < metrics->guests && isfinite(gap_m)) {
         stand_hist_add(&metrics->aligned[guest], gap_m);
@@ -350,6 +365,14 @@ void stand_metrics_summarize(const stand_metrics_t *metrics, body_sync_report_t 
         out->pause_divergence_max_m = metrics->pause_divergence[g];
         out->snap_count = metrics->snaps[g];
         out->jump_max_m = metrics->jump_max[g];
+        out->return_jump_host_m = metrics->return_jump[g][STAND_PICTURE_HOST];
+        out->return_jump_own_m = metrics->return_jump[g][STAND_PICTURE_OWN];
+        out->return_jump_other_m = metrics->return_jump[g][STAND_PICTURE_OTHER];
+        out->return_jump_max_m = out->return_jump_host_m > out->return_jump_own_m ? out->return_jump_host_m : out->return_jump_own_m;
+        out->return_jump_max_m = out->return_jump_other_m > out->return_jump_max_m ? out->return_jump_other_m : out->return_jump_max_m;
+        out->return_jumps = metrics->return_jumps[g];
+        out->switch_jump_max_m = metrics->switch_jump[g];
+        out->switch_jumps = metrics->switch_jumps[g];
         out->aligned_samples = (uint32_t)metrics->aligned[g].count;
         out->aligned_gap_max_m = metrics->aligned[g].max;
         out->aligned_gap_p95_m = stand_hist_quantile(&metrics->aligned[g], 0.95);
@@ -381,6 +404,7 @@ static const struct {
     {"stale_ticks.max", STAND_UNIT_TICKS},       {"deferred.count", STAND_UNIT_COUNT},
     {"lag_divergence.max", STAND_UNIT_LENGTH},   {"lag_divergence.p95", STAND_UNIT_LENGTH},    {"path_error.max", STAND_UNIT_LENGTH},
     {"path_error.p95", STAND_UNIT_LENGTH},       {"jump.max", STAND_UNIT_LENGTH},              {"step.count", STAND_UNIT_COUNT},
+    {"return_jump.max", STAND_UNIT_LENGTH},      {"return_jump.count", STAND_UNIT_COUNT},      {"switch_jump.max", STAND_UNIT_LENGTH},
     {"snap.count", STAND_UNIT_COUNT},         {"offset_step.count", STAND_UNIT_COUNT},     {"behind_ticks.max", STAND_UNIT_TICKS},
     {"behind_ticks.p95", STAND_UNIT_TICKS},      {"response_ticks.max", STAND_UNIT_TICKS},    {"response_ticks.p95", STAND_UNIT_TICKS},
     {"rest_jitter.max", STAND_UNIT_LENGTH},      {"rest_wakes.count", STAND_UNIT_COUNT},      {"rest_breaks.count", STAND_UNIT_COUNT},      {"host_wakes.count", STAND_UNIT_COUNT},      {"rest_lag_ticks.max", STAND_UNIT_TICKS},
@@ -569,6 +593,19 @@ bool stand_metric_value(const body_sync_report_t *report, const stand_metrics_t 
             v = m->path_error_p95_m;
         } else if (strcmp(name, "jump.max") == 0) {
             v = m->jump_max_m;
+        } else if (strcmp(name, "return_jump.count") == 0) {
+            v = (double)m->return_jumps;
+        } else if ((strcmp(name, "return_jump.max") == 0 && m->return_jumps == 0) || (strcmp(name, "switch_jump.max") == 0 && m->switch_jumps == 0)) {
+            /* No handover measured is no evidence of a smooth one. */
+            if (detail && detail_size) {
+                snprintf(detail, detail_size, "g%u: no %s was measured", (unsigned)m->seat, name[0] == 'r' ? "return" : "switch");
+            }
+            *value = (double)INFINITY;
+            return true;
+        } else if (strcmp(name, "return_jump.max") == 0) {
+            v = m->return_jump_max_m;
+        } else if (strcmp(name, "switch_jump.max") == 0) {
+            v = m->switch_jump_max_m;
         } else if (strncmp(name, "aligned_gap", 11) == 0 && m->aligned_samples == 0) {
             if (detail && detail_size) {
                 snprintf(detail, detail_size, "no aligned sample was measured");
@@ -809,6 +846,9 @@ bool stand_json_write(const body_sync_report_t *r, const stand_metrics_t *m, boo
     key(&j, "authority");
     put(&j, r->authority == BODY_SYNC_AUTHORITY_INTERACTION ? "\"interaction\"" : "\"host\"");
     put(&j, ",");
+    key(&j, "flight_end");
+    put(&j, r->flight_end == BODY_SYNC_FLIGHT_END_REST ? "\"rest\"" : "\"contact\"");
+    put(&j, ",");
     key(&j, "ticks");
     putf(&j, "%u", r->ticks);
     put(&j, ",");
@@ -874,6 +914,27 @@ bool stand_json_write(const body_sync_report_t *r, const stand_metrics_t *m, boo
         put(&j, ",");
         key(&j, "jump_max");
         number(&j, gm->jump_max_m);
+        put(&j, ",");
+        key(&j, "return_jump_max");
+        number(&j, gm->return_jump_max_m);
+        put(&j, ",");
+        key(&j, "return_jump_host");
+        number(&j, gm->return_jump_host_m);
+        put(&j, ",");
+        key(&j, "return_jump_own");
+        number(&j, gm->return_jump_own_m);
+        put(&j, ",");
+        key(&j, "return_jump_other");
+        number(&j, gm->return_jump_other_m);
+        put(&j, ",");
+        key(&j, "return_jumps");
+        putf(&j, "%u", gm->return_jumps);
+        put(&j, ",");
+        key(&j, "switch_jump_max");
+        number(&j, gm->switch_jump_max_m);
+        put(&j, ",");
+        key(&j, "switch_jumps");
+        putf(&j, "%u", gm->switch_jumps);
         put(&j, ",");
         key(&j, "aligned_gap_max");
         number(&j, gm->aligned_gap_max_m);

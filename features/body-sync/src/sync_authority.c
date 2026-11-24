@@ -847,7 +847,8 @@ bool sync_authority_settle(sync_authority_t *a, body_sync_id_t id, bool asleep, 
     if (!b || !sync_authority_local(a, b) || b->hold != BODY_SYNC_HOLD_UNTIL_SETTLED) {
         return false;
     }
-    sync_policy_flight_in_t in = {.mode = a->mode, .asleep = asleep, .touched_body = touched_moving, .touched_untakable = touched_untakable};
+    sync_policy_flight_in_t in = {.mode = a->mode, .asleep = asleep, .touched_body = touched_moving, .touched_untakable = touched_untakable,
+                                 .until_rest = a->flight_until_rest};
     switch (sync_policy_flight(&in)) {
     case SYNC_FLIGHT_ON:
         return false;

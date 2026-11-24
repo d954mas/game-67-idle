@@ -44,6 +44,8 @@ typedef struct view {
     float light_mass;
     bool override_authority; /* --authority host|interaction */
     uint8_t authority;
+    bool override_flight_end; /* --flight-end contact|rest */
+    uint8_t flight_end;
     uint32_t endpoint;
     bool ghost;
     bool paused;
@@ -84,8 +86,8 @@ typedef struct view {
 static view_t s_view;
 
 static int usage(void) {
-    fprintf(stderr, "usage: body_sync_stand_view <scenario.scn> [--view host|g1|g2|g3] [--ghost] [--seed N] [--light-mass KG] [--authority host|interaction] [--frames N]\n"
-                    "                            [--size WxH] [--camera ex,ey,ez,tx,ty,tz[,fov]] [--record file.mp4] [--shot file.png]\n"
+    fprintf(stderr, "usage: body_sync_stand_view <scenario.scn> [--view host|g1|g2|g3] [--ghost] [--seed N] [--light-mass KG] [--authority host|interaction]\n"
+                    "                            [--flight-end contact|rest] [--frames N] [--size WxH] [--camera ex,ey,ez,tx,ty,tz[,fov]] [--record file.mp4] [--shot file.png]\n"
                     "                            [--shot-tick N] [--hash-every N]\n");
     return 2;
 }
@@ -117,7 +119,8 @@ static bool parse_u64(const char *text, uint64_t *out) {
 static bool create_stand(view_t *v, body_sync_error_t *error) {
     body_sync_stand_config_t config = {.scene = v->scene, .scenario = v->scenario, .override_seed = v->override_seed, .seed = v->seed,
                                        .override_light_mass = v->override_light_mass, .light_mass_max = v->light_mass,
-                                       .override_authority = v->override_authority, .authority = v->authority};
+                                       .override_authority = v->override_authority, .authority = v->authority,
+                                       .override_flight_end = v->override_flight_end, .flight_end = v->flight_end};
     v->stand = body_sync_stand_create(&config, error);
     v->ticks = 0;
     v->framed = false;
@@ -642,6 +645,13 @@ int body_sync_view_main(int argc, char **argv, const body_sync_scene_entry_t *ex
             i++;
             v->authority = strcmp(value, "interaction") == 0 ? BODY_SYNC_AUTHORITY_INTERACTION : BODY_SYNC_AUTHORITY_HOST;
             v->override_authority = true;
+        } else if (strcmp(arg, "--flight-end") == 0) {
+            if (!value || (strcmp(value, "contact") != 0 && strcmp(value, "rest") != 0)) {
+                return refuse(arg, value, value ? "must be contact or rest" : "needs a value");
+            }
+            i++;
+            v->flight_end = strcmp(value, "rest") == 0 ? BODY_SYNC_FLIGHT_END_REST : BODY_SYNC_FLIGHT_END_CONTACT;
+            v->override_flight_end = true;
         } else if (strcmp(arg, "--frames") == 0) {
             bad = parse_count(arg, value, &v->frames_max);
             i++;

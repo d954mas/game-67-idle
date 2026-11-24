@@ -34,6 +34,8 @@ extern "C" {
                                 (0.1..1000); off without it
      authority <host|interaction>  who owns free bodies on every seam (body_sync_config_t
                                 authority), host by default; interaction needs light_mass
+     flight_end <contact|rest>  when a flight goes back to the host on every seam
+                                (body_sync_config_t flight_end), contact by default
      rate <host|gN> <x>hz       that endpoint steps x times a second of virtual time, 20..240
                                 (59.5hz); its seam keeps BODY_SYNC_TICK_HZ; once per endpoint
 
@@ -283,6 +285,9 @@ typedef struct body_sync_scenario {
     /* body_sync_authority_mode_t for every seam; `authority_set` once the word was read. */
     uint8_t authority;
     bool authority_set;
+    /* body_sync_flight_end_t for every seam; `flight_end_set` once the word was read. */
+    uint8_t flight_end;
+    bool flight_end_set;
     bool has_end;
     uint32_t end_tick;
     uint32_t action_count;

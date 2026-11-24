@@ -7,7 +7,7 @@
 
      host         (BODY_SYNC_AUTHORITY_HOST) the host owns every free body. A body a guest threw
                   or dropped (a hold until settled) goes back to the host at its first touch of a
-                  body that is not static, or when it sleeps.
+                  body that is not static, or when it sleeps (flight_end REST: only then).
      interaction  (BODY_SYNC_AUTHORITY_INTERACTION) the seat whose action sets a light body moving
                   owns it, and through it whatever that body sets moving, until they rest; the
                   others show it through playback. A take is optimistic: the guest simulates the
@@ -86,6 +86,7 @@ typedef struct sync_policy_flight_in {
     bool asleep;
     bool touched_body;       /* began touching a body that is neither static nor its last holder */
     bool touched_untakable;  /* ...one of which this seat may not take (heavy, a character, owned elsewhere) */
+    bool until_rest;         /* body_sync_config_t.flight_end REST: a touch ends no flight */
 } sync_policy_flight_in_t;
 sync_flight_t sync_policy_flight(const sync_policy_flight_in_t *in);
 

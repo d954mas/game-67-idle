@@ -29,7 +29,7 @@ sync_flight_t sync_policy_flight(const sync_policy_flight_in_t *in) {
     if (in->mode == SYNC_POLICY_INTERACTION && !in->touched_untakable) {
         return SYNC_FLIGHT_INTERACTS;
     }
-    return SYNC_FLIGHT_RETURNS;
+    return in->until_rest ? SYNC_FLIGHT_ON : SYNC_FLIGHT_RETURNS;
 }
 
 bool sync_policy_takes(const sync_policy_take_in_t *in) {

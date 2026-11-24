@@ -856,6 +856,18 @@ static bool statement(parser_t *p, const line_words_t *w) {
         s->authority_set = true;
         return true;
     }
+    if (strcmp(head, "flight_end") == 0) {
+        bool contact = w->count == 2 && strcmp(w->word[1], "contact") == 0, rest = w->count == 2 && strcmp(w->word[1], "rest") == 0;
+        if (!contact && !rest) {
+            return refuse(p, "flight_end reads: flight_end contact|rest%s", "");
+        }
+        if (s->flight_end_set) {
+            return refuse(p, "flight_end is set twice%s", "");
+        }
+        s->flight_end = rest ? BODY_SYNC_FLIGHT_END_REST : BODY_SYNC_FLIGHT_END_CONTACT;
+        s->flight_end_set = true;
+        return true;
+    }
     if (strcmp(head, "rate") == 0) {
         uint8_t who;
         double hz;

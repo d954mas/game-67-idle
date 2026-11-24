@@ -307,6 +307,12 @@ typedef struct stand_metrics {
     stand_hist_t lag[BODY_SYNC_GUESTS_MAX], path[BODY_SYNC_GUESTS_MAX], behind[BODY_SYNC_GUESTS_MAX];
     uint32_t steps[BODY_SYNC_GUESTS_MAX], offset_steps[BODY_SYNC_GUESTS_MAX], snaps[BODY_SYNC_GUESTS_MAX];
     double jump_max[BODY_SYNC_GUESTS_MAX];
+    /* Returns to the host: each window's largest jump, by picture (STAND_PICTURE_*), and how many
+       windows; the host's switch of a body it simulated to a guest's copy, likewise. */
+    double return_jump[BODY_SYNC_GUESTS_MAX][3];
+    uint32_t return_jumps[BODY_SYNC_GUESTS_MAX];
+    double switch_jump[BODY_SYNC_GUESTS_MAX];
+    uint32_t switch_jumps[BODY_SYNC_GUESTS_MAX];
     stand_hist_t aligned[BODY_SYNC_GUESTS_MAX], prediction[BODY_SYNC_GUESTS_MAX], flight_pause[BODY_SYNC_GUESTS_MAX];
     double local_correction[BODY_SYNC_GUESTS_MAX];
     double local_turn_deg[BODY_SYNC_GUESTS_MAX];
@@ -343,6 +349,16 @@ void stand_metrics_playback(stand_metrics_t *metrics, uint32_t guest, double lag
 /* A drawn move no owner's move explains (a predicted copy's correction, a copy's move the tick its
    owner changes): into jump.max, or a snap past 2 m. */
 void stand_metrics_correction(stand_metrics_t *metrics, uint32_t guest, double correction_m);
+/* Who draws a returned body: the host, the guest that owned it, or another guest. */
+typedef enum stand_picture {
+    STAND_PICTURE_HOST = 0,
+    STAND_PICTURE_OWN,
+    STAND_PICTURE_OTHER,
+} stand_picture_t;
+/* One return window's largest per-tick jump of one picture (body_sync_metrics.h return_jump). */
+void stand_metrics_return_jump(stand_metrics_t *metrics, uint32_t guest, stand_picture_t picture, double jump_m);
+/* The host's picture at the tick a body it simulated turns into this guest's copy. */
+void stand_metrics_switch_jump(stand_metrics_t *metrics, uint32_t guest, double jump_m);
 /* One sample of the lag-aligned gap (body_sync_metrics.h), `predicted` of a copy the layer predicts. */
 void stand_metrics_aligned(stand_metrics_t *metrics, uint32_t guest, double gap_m, bool predicted);
 /* The most paused ticks one copy of this guest's had in a pause window so far. */

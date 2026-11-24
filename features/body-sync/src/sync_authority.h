@@ -171,6 +171,7 @@ typedef struct sync_authority {
     uint16_t answer[BODY_SYNC_SEATS_MAX][BODY_SYNC_BODIES_MAX];
     bool forced[BODY_SYNC_SEATS_MAX][BODY_SYNC_BODIES_MAX]; /* the owed move answers no claim */
     sync_policy_mode_t mode;
+    bool flight_until_rest; /* body_sync_config_t.flight_end REST */
     /* Counts for body_sync_traffic: a guest's takes sent and returns, the host's answers by seat. */
     uint32_t takes_sent, returns_sent;
     uint32_t granted[BODY_SYNC_SEATS_MAX], refused_takes[BODY_SYNC_SEATS_MAX], reclaimed[BODY_SYNC_SEATS_MAX];

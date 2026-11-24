@@ -99,6 +99,24 @@ typedef struct copy_track {
     float owner_at[3];
 } copy_track_t;
 
+/* One picture of a body across its handovers: the owner it showed at the last sample and what
+   it drew then, and the return window open on it. */
+typedef struct handover_track {
+    body_sync_id_t id;
+    bool valid;
+    uint8_t seat;
+    bool local;
+    bool played_valid;
+    double played; /* the owner tick a copy showed */
+    uint32_t ticks_at;
+    float drawn[3];
+    uint32_t until;  /* ticks_run the return window lasts to; 0 none open */
+    uint8_t guest;   /* 0-based, the window's attribution */
+    uint8_t picture; /* stand_picture_t */
+    bool measured;
+    double worst;
+} handover_track_t;
+
 typedef struct endpoint {
     bool built;
     bool active; /* seated and its session alive */
@@ -121,6 +139,7 @@ typedef struct endpoint {
     bool ring_any;
     uint32_t ring_newest; /* the session tick of its last recorded step */
     copy_track_t tracks[STAND_BODIES_MAX];
+    handover_track_t handover[STAND_BODIES_MAX];
     uint32_t stall_until, deaf_until;
     out_queue_t queues[BODY_SYNC_ENDPOINTS_MAX];
     uint16_t view[STAND_BODIES_MAX];
@@ -227,6 +246,10 @@ struct body_sync_stand {
     float plant_creep_m, plant_creep_turn; /* turn: radians a tick, stand_testing_plant_turn */
     bool plant_creep_copy; /* the creep moves guest 1's copy, held as stand_testing_plant_wall holds one, not the host body */
     uint8_t authority; /* body_sync_authority_mode_t of every seam */
+    uint8_t flight_end; /* body_sync_flight_end_t of every seam */
+    uint8_t plant_return_endpoint; /* stand_testing_plant_return_place: endpoint + 1, 0 none */
+    float plant_return_m;
+    bool plant_return_done;
     uint64_t seed;
     uint32_t endpoints;
     net_link_sim_t *sim;
@@ -2494,6 +2517,127 @@ static void sample_local(body_sync_stand_t *st) {
     }
 }
 
+/* A return's consequences on a picture end once the new owner's states have reached it and the
+   render offset has glided: a round trip, a playback delay and a tick (34 ticks at the stand's
+   300 ms), within the 1 s the seam's evidence span is capped at (SYNC_POLICY_EVIDENCE_AGE_MAX_S). */
+#define RETURN_WINDOW_TICKS 60u
+
+static void close_return(body_sync_stand_t *st, handover_track_t *h) {
+    if (h->until && h->measured) {
+        stand_metrics_return_jump(&st->metrics, h->guest, (stand_picture_t)h->picture, h->worst);
+    }
+    h->until = 0;
+}
+
+/* The move of what a picture plays over this tick (body_sync_metrics.h, handover jump): a copy's
+   owner path when its owner sends to it directly, else the body's own step. */
+static void played_move(const body_sync_stand_t *st, const endpoint_t *ep, uint32_t slot, body_sync_id_t id, const body_sync_authority_t *a,
+                        bool local, const handover_track_t *h, bool *played_valid, double *played, float move[3]) {
+    float here[3], rot[4];
+    pose_of(ep, slot, here, rot);
+    for (int i = 0; i < 3; i++) {
+        move[i] = here[i] - ep->tracks[slot].acted[i];
+    }
+    *played_valid = false;
+    bool direct = !local && a->seat < st->endpoints && (ep->index == 0) != (a->seat == 0) && st->ep[a->seat].built;
+    if (!direct || !body_sync_playback(ep->sync, id, played)) {
+        return;
+    }
+    const owner_ring_t *ring = &st->ep[a->seat].rings[slot];
+    float now[3], other[3];
+    if (ring->id != id || !owner_at(ring, *played, now)) {
+        return;
+    }
+    *played_valid = true;
+    bool same = h->valid && h->id == id && h->seat == a->seat && h->played_valid && h->played <= *played;
+    if (same && owner_at(ring, h->played, other)) {
+        for (int i = 0; i < 3; i++) {
+            move[i] = now[i] - other[i];
+        }
+    } else if (owner_at(ring, *played - 1.0, other)) {
+        for (int i = 0; i < 3; i++) {
+            move[i] = now[i] - other[i];
+        }
+    } else if (owner_at(ring, *played + 1.0, other)) {
+        for (int i = 0; i < 3; i++) {
+            move[i] = other[i] - now[i];
+        }
+    }
+}
+
+/* Every picture of every body across its handovers: a return to the host opens a window on each
+   picture at the tick it shows the host as the owner, and the host's switch of a body it
+   simulated to a guest's copy is taken at its tick (body_sync_metrics.h). */
+static void sample_handover(body_sync_stand_t *st) {
+    for (uint32_t e = 0; e < st->endpoints; e++) {
+        endpoint_t *ep = &st->ep[e];
+        for (uint32_t slot = 0; slot < STAND_BODIES_MAX; slot++) {
+            handover_track_t *h = &ep->handover[slot];
+            stand_slot_t *s = ep->built ? &ep->world->slots[slot] : NULL;
+            body_sync_id_t id = s ? stand_world_id(ep->world, slot) : BODY_SYNC_ID_NONE;
+            body_sync_authority_t a;
+            if (!s || !ep->active || !s->live || s->character || s->desc.motion == BODY_SYNC_MOTION_STATIC || !body_sync_authority(ep->sync, id, &a)) {
+                close_return(st, h);
+                h->valid = false;
+                continue;
+            }
+            if (h->valid && h->id == id && h->ticks_at == ep->ticks_run) {
+                continue; /* not stepped since */
+            }
+            bool local = body_sync_is_local(ep->sync, id);
+            float drawn[3], rot[4], move[3];
+            bool played_valid;
+            double played = 0.0;
+            played_move(st, ep, slot, id, &a, local, h, &played_valid, &played, move);
+            bool continues = h->valid && h->id == id && ep->ticks_run == h->ticks_at + 1u;
+            bool returned = continues && h->seat != BODY_SYNC_SEAT_HOST && a.seat == BODY_SYNC_SEAT_HOST;
+            if (returned && st->plant_return_endpoint == e + 1u && !st->plant_return_done) {
+                /* After the move it plays is read and before the pose is drawn: the return's own tick draws it off. */
+                st->plant_return_done = true;
+                b3Vec3 p = b3Body_GetPosition(s->body);
+                b3Body_SetTransform(s->body, (b3Vec3){p.x + st->plant_return_m, p.y, p.z}, b3Body_GetRotation(s->body));
+                b3Body_SetAwake(s->body, true);
+            }
+            drawn_pose(ep, slot, drawn, rot);
+            double jump = (double)INFINITY;
+            if (continues) {
+                float d[3];
+                for (int i = 0; i < 3; i++) {
+                    d[i] = drawn[i] - h->drawn[i] - move[i];
+                }
+                jump = (double)sqrtf(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+            } else {
+                close_return(st, h);
+            }
+            if (returned) {
+                close_return(st, h);
+                h->until = ep->ticks_run + RETURN_WINDOW_TICKS;
+                h->guest = (uint8_t)(e == 0 ? h->seat - 1u : e - 1u);
+                h->picture = (uint8_t)(e == 0 ? STAND_PICTURE_HOST : e == h->seat ? STAND_PICTURE_OWN : STAND_PICTURE_OTHER);
+                h->measured = false;
+                h->worst = 0.0;
+            } else if (h->until && a.seat != BODY_SYNC_SEAT_HOST) {
+                close_return(st, h); /* taken again: what follows is that handover's */
+            }
+            if (h->until && isfinite(jump)) {
+                h->measured = true;
+                h->worst = jump > h->worst ? jump : h->worst;
+            }
+            if (h->until && ep->ticks_run >= h->until) {
+                close_return(st, h);
+            }
+            if (continues && e == 0 && h->local && !local && a.seat != BODY_SYNC_SEAT_HOST && a.seat < st->endpoints) {
+                stand_metrics_switch_jump(&st->metrics, (uint32_t)a.seat - 1u, jump);
+            }
+            handover_track_t next = {.id = id, .valid = true, .seat = a.seat, .local = local, .played_valid = played_valid, .played = played,
+                                     .ticks_at = ep->ticks_run, .until = h->until, .guest = h->guest, .picture = h->picture,
+                                     .measured = h->measured, .worst = h->worst};
+            memcpy(next.drawn, drawn, sizeof(drawn));
+            *h = next;
+        }
+    }
+}
+
 /* Every copy that its owner sends to directly, against that owner's own path. */
 static void sample_playback(body_sync_stand_t *st) {
     for (uint32_t e = 0; e < st->endpoints; e++) {
@@ -2626,6 +2770,7 @@ static void sample(body_sync_stand_t *st) {
     }
     sample_layer(st);
     sample_playback(st);
+    sample_handover(st);
     note_lost_takes(st);
     sample_aligned(st);
     sample_carry(st);
@@ -2893,6 +3038,11 @@ bool body_sync_stand_tick(body_sync_stand_t *st) {
     }
     if (st->now >= BODY_SYNC_STAND_TICKS_MAX) {
         st->ended = true;
+    }
+    for (uint32_t i = 0; st->ended && i < st->endpoints; i++) {
+        for (uint32_t b = 0; b < STAND_BODIES_MAX; b++) {
+            close_return(st, &st->ep[i].handover[b]); /* a window the run's end cut short */
+        }
     }
     return !st->ended;
 }
@@ -3219,7 +3369,8 @@ static body_sync_stand_t *create_stand(const body_sync_stand_config_t *config, b
 static float *pace_reference(body_sync_stand_t *st, uint32_t i, uint8_t walker, uint32_t shift, uint32_t *len) {
     body_sync_stand_config_t config = {.scene = &st->scene, .scenario = &st->scenario, .override_seed = true, .seed = st->seed,
                                        .override_light_mass = true, .light_mass_max = st->light_mass,
-                                       .override_authority = true, .authority = st->authority};
+                                       .override_authority = true, .authority = st->authority,
+                                       .override_flight_end = true, .flight_end = st->flight_end};
     body_sync_error_t error;
     body_sync_stand_t *ref = create_stand(&config, true, &error);
     *len = 0;
@@ -3257,7 +3408,8 @@ static void solo_reference(body_sync_stand_t *st) {
     }
     body_sync_stand_config_t config = {.scene = &st->scene, .scenario = &st->scenario, .override_seed = true, .seed = st->seed,
                                        .override_light_mass = true, .light_mass_max = st->light_mass,
-                                       .override_authority = true, .authority = st->authority};
+                                       .override_authority = true, .authority = st->authority,
+                                       .override_flight_end = true, .flight_end = st->flight_end};
     body_sync_error_t error;
     body_sync_stand_t *ref = create_stand(&config, true, &error);
     if (!ref) {
@@ -3355,6 +3507,7 @@ static void evaluate(body_sync_stand_t *st) {
     r->tick_hz = BODY_SYNC_TICK_HZ;
     r->light_mass_max = st->light_mass;
     r->authority = st->authority;
+    r->flight_end = st->flight_end;
     r->ticks = st->now;
     r->rest_tick = st->rest_tick;
     stand_metrics_summarize(&st->metrics, r);
@@ -3632,6 +3785,7 @@ static body_sync_stand_t *create_stand(const body_sync_stand_config_t *config, b
     st->seed = config->override_seed ? config->seed : st->scenario.seed;
     st->light_mass = config->override_light_mass ? config->light_mass_max : st->scenario.light_mass_max;
     st->authority = config->override_authority ? config->authority : st->scenario.authority;
+    st->flight_end = config->override_flight_end ? config->flight_end : st->scenario.flight_end;
     if (st->authority == BODY_SYNC_AUTHORITY_INTERACTION && !(st->light_mass > 0.0f)) {
         error_text(error, 0, "authority interaction needs light_mass: it takes only light bodies");
         free(st);
@@ -3692,7 +3846,8 @@ static body_sync_stand_t *create_stand(const body_sync_stand_config_t *config, b
                                  .max_spin = st->limits.max_spin,
                                  .character_category = STAND_CAT_CHARACTER,
                                  .light_mass_max = st->light_mass,
-                                 .authority = (body_sync_authority_mode_t)st->authority};
+                                 .authority = (body_sync_authority_mode_t)st->authority,
+                                 .flight_end = (body_sync_flight_end_t)st->flight_end};
         memcpy(sc.bounds_min, st->limits.bounds_min, sizeof(sc.bounds_min));
         memcpy(sc.bounds_max, st->limits.bounds_max, sizeof(sc.bounds_max));
         ep->sync = body_sync_create(&sc);
@@ -3935,6 +4090,11 @@ void stand_testing_plant_wall(body_sync_stand_t *st, uint32_t endpoint, const ch
         st->plant_wall_slots[st->plant_wall_count++] = slot;
     }
 }
+void stand_testing_plant_return_place(body_sync_stand_t *st, uint32_t endpoint, float metres) {
+    st->plant_return_endpoint = (uint8_t)(endpoint + 1u);
+    st->plant_return_m = metres;
+}
+
 void stand_testing_plant_jolt(body_sync_stand_t *st, uint32_t tick, float metres, bool local) {
     st->plant_jolt_tick = tick;
     st->plant_jolt_m = metres;

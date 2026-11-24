@@ -102,7 +102,7 @@ static bool local_slot(const body_sync_t *s, uint32_t slot) { return sync_author
 body_sync_t *body_sync_create(const body_sync_config_t *config) {
     if (!config || !b3World_IsValid(config->world) || config->seats < 1 || config->seats > BODY_SYNC_SEATS_MAX ||
         config->seat >= config->seats || config->tick_hz < 1 || config->tick_hz > 1000 || !(isfinite(config->max_speed) && config->max_speed > 0.0f) ||
-        !(isfinite(config->max_spin) && config->max_spin > 0.0f)) {
+        !(isfinite(config->max_spin) && config->max_spin > 0.0f) || config->flight_end > BODY_SYNC_FLIGHT_END_REST) {
         return NULL;
     }
     for (int i = 0; i < 3; i++) {
@@ -635,7 +635,7 @@ void body_sync_collect(body_sync_t *s, uint32_t tick) {
             if (h) {
                 ignore = h->body;
             }
-            if (o->asleep || touched_moving(&events, e->body, ignore)) {
+            if (o->asleep || (s->config.flight_end == BODY_SYNC_FLIGHT_END_CONTACT && touched_moving(&events, e->body, ignore))) {
                 uint8_t hold = sync_authority_settled(&s->authority, o->id);
                 if (is_host(s)) {
                     o->hold = hold;
