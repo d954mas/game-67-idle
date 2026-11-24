@@ -1022,6 +1022,16 @@ static void resume(body_sync_t *s, uint32_t slot, bool was_copy) {
        heap. The difference is the layer's, and nobody sees it; the velocities are the owner's. */
     bool keep_pose = false;
     keep_own = keep_own || (unheard_end && was_copy && was_simulated);
+    /* Taken back from its copy, a flight goes on no faster than its owner as played (cap_flight's
+       rule, wherever it is): the copy's speed past the owner's is its correction catching up, and
+       the host's own simulation would carry it into what the flight strikes next. */
+    if (unheard_end && was_copy && was_simulated && !s->plant_flight_catch_up && !s->plant_copy_catch_up) {
+        b3Vec3 v = b3Body_GetLinearVelocity(e->body);
+        float speed = b3Length(v);
+        if (speed > e->played_speed) {
+            b3Body_SetLinearVelocity(e->body, b3MulSV(e->played_speed / speed, v));
+        }
+    }
     if (in->has && was_copy && was_simulated && !keep_own) {
         float p[3], q[4], turn[3];
         pose_now(e->body, p, q);

@@ -362,7 +362,10 @@ starved body shows as a catch-up the render offset or a dynamic hold smooths
   settles keeps to its owner's motion as played:
   - *Near the host's bodies, never faster than its owner.* Within its step's reach
     of a body the host simulates, the copy's speed, driven or coasting, is at most
-    its owner's speed as played (as last played while frozen). The correction
+    its owner's speed as played (as last played while frozen), and so is the
+    speed the host goes on with when it takes the flight back from the copy,
+    wherever that is: the copy's speed past its owner's is its correction
+    catching up, which the host's own simulation would carry into what it strikes. The correction
     steers it onto the owner's path, and speed past the owner's (playback catching
     up its clock at a pace up to 1.25, a path rejoined after lost states) would
     strike harder than the thrower's did. It bounds the speed, not the velocity
@@ -397,7 +400,10 @@ starved body shows as a catch-up the render offset or a dynamic hold smooths
   and, as an alternative design that fails the same way, a host that plays every
   flight at its newest state (`copy_catch_up`); with the link cut over the first
   mug's contact each fails (over seeds 1-12 at both round trips, all but
-  `flight_catch_up` at one pair). `test_body_sync_real` drives a
+  `flight_catch_up` at one pair). A flight that coasts through a long cut
+  meets whatever is in its way: in `edge_throw_cut` (3 s) it flies on into the
+  wall rather than hovering where its states stopped, and `aligned_gap.p95`
+  rose from 1.99 to 4.51 m over seeds 1-6, under the derived 7.7 m. `test_body_sync_real` drives a
   frozen flight back (`frozen_drive`) and requires the copy to fly on.
 - **Data and characters.** `body_sync_set_data` gives a local body up to 8
   opaque bytes (the stand's character activity), sent as the fifth rare group
@@ -969,8 +975,10 @@ fall short of it by the margin at most); `interaction <length>` is the margin
 under that authority mode, whose host shows the thrower's simulation instead of
 its own. A margin is derived from what the sync may change of the body's
 motion, never measured (`mug_table_100`: a guest's mug may push a table no
-farther than the same throw solo, 0.2 mm under HOST for the copy's velocity
-grid and where it strikes, 3.4 mm under INTERACTION for the host's rest hold). The whole of `scenarios/edge_throw_cut.scn`:
+farther than the same throw solo; under HOST by the copy's velocity grid and
+Box3D's answer to the hit met at another fraction of a tick, 0.15-1.02 mm a
+table, which `test_body_sync_checks --mug-table` re-derives from the scene;
+under INTERACTION by the host's rest hold, 3.4 mm). The whole of `scenarios/edge_throw_cut.scn`:
 
 ```text
 # A guest throws, and its link is cut while the body flies.

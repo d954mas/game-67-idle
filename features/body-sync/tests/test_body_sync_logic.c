@@ -16,7 +16,7 @@ static const char *const shipped[] = {"two_walk",       "stack_punch", "pile_thr
                                       "throw_dummy",      "throw_glass_door", "throw_walker",
                                       "recall_flight",    "recall_carry",     "remove_owned",
                                       "catch_guest_throw_100", "catch_guest_throw_250", "catch_race", "catch_miss",
-                                      "mug_table_100", "mug_table_250"};
+                                      "mug_table_100", "mug_table_250", "mug_table_jitter"};
 
 static body_sync_scenario_t scenario;
 static body_sync_scene_t scene;

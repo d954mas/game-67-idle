@@ -728,11 +728,125 @@ static void test_moved_solo_holds_the_host_to_the_throw_and_fails_on_a_harder_pu
     }
 }
 
+/* The table's travel when a mug in `state` (position, velocity, rotation x y z w, spin) strikes
+   it from `phase` of a tick earlier along its path and `oy`, `oz` off it, on a world of the scene
+   alone: the solo hit at phase 0, offset 0. */
+static float table_travel_from(uint32_t table, const float state[13], float phase, float oy, float oz) {
+    static stand_world_t w;
+    memset(&w, 0, sizeof(w));
+    body_sync_error_t error;
+    TEST_ASSERT_TRUE_MESSAGE(stand_world_build(&w, &scene, 2, &error), error.text);
+    float h = STAND_DT * phase;
+    b3Vec3 p = {state[0] - state[3] * h, state[1] - state[4] * h - 0.5f * STAND_GRAVITY * h * h + oy, state[2] - state[5] * h + oz};
+    b3Vec3 v = {state[3], state[4] + STAND_GRAVITY * h, state[5]};
+    float wx = state[10], wy = state[11], wz = state[12];
+    b3Quat q = {{state[6], state[7], state[8]}, state[9]};
+    /* back by the spin over h: q - h/2 (0, w) q */
+    b3Quat back = {{q.v.x - 0.5f * h * (wx * q.s + wy * q.v.z - wz * q.v.y), q.v.y - 0.5f * h * (wy * q.s + wz * q.v.x - wx * q.v.z),
+                    q.v.z - 0.5f * h * (wz * q.s + wx * q.v.y - wy * q.v.x)},
+                   q.s + 0.5f * h * (wx * q.v.x + wy * q.v.y + wz * q.v.z)};
+    float n = sqrtf(back.v.x * back.v.x + back.v.y * back.v.y + back.v.z * back.v.z + back.s * back.s);
+    back = (b3Quat){{back.v.x / n, back.v.y / n, back.v.z / n}, back.s / n};
+    uint32_t mug = table + 1u;
+    b3Body_SetTransform(w.slots[mug].body, p, back);
+    b3Body_SetLinearVelocity(w.slots[mug].body, v);
+    b3Body_SetAngularVelocity(w.slots[mug].body, (b3Vec3){wx, wy, wz});
+    b3Vec3 from = b3Body_GetPosition(w.slots[table].body);
+    for (int k = 0; k < 240; k++) {
+        stand_world_step(&w);
+    }
+    b3Vec3 to = b3Body_GetPosition(w.slots[table].body);
+    stand_world_destroy(&w);
+    return sqrtf((to.x - from.x) * (to.x - from.x) + (to.y - from.y) * (to.y - from.y) + (to.z - from.z) * (to.z - from.z));
+}
+
+/* The HOST margins of mug_table are derived, and this re-derives them from the scene and the
+   throws as they are. The owner's mugs are read on the guest's world the tick before each first
+   meets its table (its copy of the table there does not move, but the flight up to it is the
+   solo one). Two terms:
+   - the velocity grid: the host's copy strikes no faster than the owner's speed as played, which
+     the 1/32 m/s grid leaves up to sqrt(3)/64 m/s over it, and the slide grows with the square
+     of the speed: 2 x (sqrt(3)/64) / v of the largest slide a mug of that speed can give the
+     table, (m v / (m + M))^2 / (2 mu g);
+   - the hit's phase: the copy plays its owner's clock at fractional ticks, so it meets the table
+     anywhere within a tick of where the owner did, a little off its path; Box3D's answer to the
+     same hit over that tick (21 phases) and 1 cm off it (the jitter sweep's largest offset was
+     7.5 mm) may pass the solo slide, by most on the turning hit.
+   Each table's HOST margin in every mug_table scene covers the two. */
+static void test_mug_table_host_margins_cover_the_hits_phase_and_the_grid(void) {
+    char path[512], text[8192];
+    snprintf(path, sizeof(path), "%s/mug_table_100.scn", BODY_SYNC_SCENARIOS_DIR);
+    FILE *f = fopen(path, "rb");
+    TEST_ASSERT_NOT_NULL_MESSAGE(f, path);
+    size_t n = fread(text, 1, sizeof(text) - 1, f);
+    fclose(f);
+    text[n] = 0;
+    body_sync_error_t error;
+    TEST_ASSERT_TRUE_MESSAGE(body_sync_scenario_parse(text, strlen(text), &scenario, &error), error.text);
+    scene_named(scenario.scene)->build(&scene);
+    body_sync_stand_config_t config = {.scene = &scene, .scenario = &scenario};
+    body_sync_stand_t *stand = body_sync_stand_create(&config, &error);
+    TEST_ASSERT_NOT_NULL_MESSAGE(stand, error.text);
+    static const char *tables[3] = {"table_a", "table_b", "table_c"};
+    float last[3][13], strike[3][13];
+    bool seen[3] = {false, false, false}, struck[3] = {false, false, false};
+    while (body_sync_stand_tick(stand)) {
+        stand_world_t *w = stand_testing_world(stand, 1);
+        for (int t = 0; t < 3; t++) {
+            uint32_t mug = body_sync_scene_find_body(&scene, tables[t]) + 1u;
+            b3Vec3 p = b3Body_GetPosition(w->slots[mug].body), v = b3Body_GetLinearVelocity(w->slots[mug].body),
+                   s = b3Body_GetAngularVelocity(w->slots[mug].body);
+            b3Quat q = b3Body_GetRotation(w->slots[mug].body);
+            float now[13] = {p.x, p.y, p.z, v.x, v.y, v.z, q.v.x, q.v.y, q.v.z, q.s, s.x, s.y, s.z};
+            /* A flight towards its table (+x, faster than a lean) whose step lost most of that. */
+            if (seen[t] && !struck[t] && last[t][3] > 1.0f && v.x < 0.5f * last[t][3]) {
+                struck[t] = true;
+                memcpy(strike[t], last[t], sizeof(strike[t]));
+            }
+            memcpy(last[t], now, sizeof(now));
+            seen[t] = true;
+        }
+    }
+    body_sync_stand_destroy(stand);
+    const body_sync_body_desc_t *floor = &scene.bodies[body_sync_scene_find_body(&scene, "floor")];
+    double need[3];
+    for (int t = 0; t < 3; t++) {
+        TEST_ASSERT_TRUE_MESSAGE(struck[t], "a mug never met its table on the guest's world");
+        uint32_t table = body_sync_scene_find_body(&scene, tables[t]);
+        const body_sync_body_desc_t *td = &scene.bodies[table], *md = &scene.bodies[table + 1u];
+        float speed = sqrtf(strike[t][3] * strike[t][3] + strike[t][4] * strike[t][4] + strike[t][5] * strike[t][5]);
+        float mu = sqrtf(td->friction * floor->friction), u = md->mass * speed / (md->mass + td->mass);
+        float grid = 2.0f * (sqrtf(3.0f) / 64.0f) / speed * u * u / (2.0f * mu * STAND_GRAVITY);
+        float solo = table_travel_from(table, strike[t], 0.0f, 0.0f, 0.0f), worst = solo;
+        for (int k = 0; k < 21 * 9; k++) {
+            float d = table_travel_from(table, strike[t], (float)(k % 21) / 20.0f, 0.01f * (float)((k / 21) % 3 - 1), 0.01f * (float)(k / 63 - 1));
+            worst = d > worst ? d : worst;
+        }
+        need[t] = (double)(grid + worst - solo);
+    }
+    static const char *scenes[] = {"mug_table_100", "mug_table_250", "mug_table_jitter"};
+    for (size_t k = 0; k < sizeof(scenes) / sizeof(scenes[0]); k++) {
+        snprintf(path, sizeof(path), "%s/%s.scn", BODY_SYNC_SCENARIOS_DIR, scenes[k]);
+        TEST_ASSERT_TRUE_MESSAGE(body_sync_scenario_load(path, &scenario, &error), error.text);
+        for (int t = 0; t < 3; t++) {
+            double margin = -1.0;
+            for (uint32_t i = 0; i < scenario.expect_count; i++) {
+                const body_sync_expect_t *x = &scenario.expects[i];
+                margin = x->kind == BODY_SYNC_EXPECT_MOVED && x->solo && !x->at_least && strcmp(x->body, tables[t]) == 0 ? x->limit : margin;
+            }
+            char what[200];
+            snprintf(what, sizeof(what), "%s %s: margin %.2f mm under the derived %.2f mm", scenes[k], tables[t], margin * 1000.0, need[t] * 1000.0);
+            TEST_ASSERT_TRUE_MESSAGE(margin >= need[t], what);
+        }
+    }
+}
+
 /* --mug-table runs the mug_table cases alone: twenty stand runs, a slow test of their own. */
 int main(int argc, char **argv) {
     if (argc > 1 && strcmp(argv[1], "--mug-table") == 0) {
         UNITY_BEGIN();
         RUN_TEST(test_moved_solo_holds_the_host_to_the_throw_and_fails_on_a_harder_push);
+        RUN_TEST(test_mug_table_host_margins_cover_the_hits_phase_and_the_grid);
         return UNITY_END();
     }
     UNITY_BEGIN();

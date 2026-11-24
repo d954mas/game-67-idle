@@ -24,23 +24,24 @@ expect result lift_a granted
 expect result lift_b granted
 expect result lift_c granted
 expect result throw_c done
-# Derived margins, one a mode. A table leaves a hit at m v / (m + M) at most (0.3 kg mug, 6 kg
+# Derived margins, a mode and a table. A table leaves a hit at m v / (m + M) at most (0.3 kg mug, 6 kg
 # table) and friction (sqrt(0.6 x 0.3), g 12) stops it over u^2 / (2 mu g): at most 1.1, 1.8 and
 # 2.7 cm at 7, 9 and 11 m/s, growing with the square of the hit's speed.
-# HOST, 0.2 mm: the host simulates the table, struck by its dynamic copy of the mug. Near the
-# host's bodies the seam moves a flight no faster than the thrower's mug as played, driven or
-# coasting, so it strikes at her speed to the velocity grid (1/32 m/s a component: 0.027 m/s),
-# 2 x 0.027 / v of the slide: 0.13 mm at 11 m/s. Where it strikes: driven by velocity, the copy
-# falls 1/2 g dt^2 a tick below its played path and its correction holds it within three ticks
-# of that, 5 mm low; moving the contact 5 mm changes the impulse by 0.1 % (the mug's own mass
-# bounds it) and the slide by 0.2 %: 0.05 mm. 0.18 mm in all.
+# HOST, a margin a table (test_body_sync_checks --mug-table re-derives them): the host simulates
+# the table, struck by its dynamic copy of the mug. Near the host's bodies, and when the host
+# takes the flight back from it, the copy moves no faster than the thrower's mug as played, which
+# the velocity grid leaves up to sqrt(3)/64 m/s over her speed: 2 x that / v of the largest slide,
+# 0.10, 0.11 and 0.14 mm. The copy plays her clock at fractional ticks, so it meets the table
+# anywhere within a tick of where she did and a little off her path: Box3D's answer to the same
+# hit over that tick and 1 cm off it passes the solo slide by up to 0.13, 0.04 and 0.88 mm (the
+# turning hit). 0.23, 0.15 and 1.02 mm in all.
 # INTERACTION, 3.4 mm: the thrower takes the table (under the 20 kg light mass) at the hit and
 # simulates it with her own mug, solo's physics less what her copy kept of the hit in that step;
 # the host's dynamic copy follows her and is left as its world settled it within SYNC_SOFT_HOLD_M
 # of her rest pose.
-expect moved table_a <= solo 0.02cm interaction 0.34cm
+expect moved table_a <= solo 0.03cm interaction 0.34cm
 expect moved table_b <= solo 0.02cm interaction 0.34cm
-expect moved table_c <= solo 0.02cm interaction 0.34cm
+expect moved table_c <= solo 0.11cm interaction 0.34cm
 # Every mug hit its table: a travel past the rest hold's 3.4 mm is no rounding of a pose at rest.
 # (Under heavy loss a refused take can miss one: a missed effect, README "Contact claims".)
 expect moved table_a >= 0.34cm
