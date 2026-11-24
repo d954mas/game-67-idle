@@ -10,17 +10,18 @@ import math
 from dataclasses import dataclass, field
 
 import numpy as np
-from scipy.spatial import cKDTree
-
-from garment_proxy import classify_edges, EDGE_WARP
 
 from . import bind as B
+from .colliders import round_cone_distance
 from . import body as body_maps
 from . import model as M
 from . import sim
 from .sidecar import read
+from .sim import EDGE_WARP, classify_edges
 
 REST = "rest"
+# m: below a micron a violation is the float32 storage of the sidecar (its step near 1 m is 6e-8), not content.
+RESOLUTION = 1e-6
 LOOK_WEIGHT = 0.002
 
 
@@ -35,6 +36,7 @@ class GateData:
     fabrics: dict
     clips: list
     looks: list = field(default_factory=list)
+    seats: dict = field(default_factory=dict)
 
 
 def shapes_from(colliders):
@@ -43,25 +45,6 @@ def shapes_from(colliders):
         return dict(spheres=[], cones=[])
     return dict(spheres=[(s["bone"], tuple(s["center"]), float(s["radius"])) for s in colliders["spheres"]],
                 cones=[tuple(c) for c in colliders["cones"]])
-
-
-def round_cone_distance(points, a, b, ra, rb):
-    """Signed distance of points (N, 3) to the round cone between spheres (a, ra) and (b, rb), negative inside; the
-    closed form of contact.c."""
-    pa, ba = points - a, b - a
-    len2 = float(ba @ ba)
-    dr = ra - rb
-    if len2 <= 1e-12 or dr * dr >= len2:
-        return np.linalg.norm(points - a, axis=1) - ra if ra >= rb else np.linalg.norm(points - b, axis=1) - rb
-    length = math.sqrt(len2)
-    u = ba / length
-    y = pa @ u
-    x = np.linalg.norm(pa - y[:, None] * u, axis=1)
-    side = math.sqrt(max(0.0, len2 - dr * dr))
-    s = (-x * dr + y * side) / length
-    out = (x * side + y * dr) / length - ra
-    out = np.where(s <= 0, np.linalg.norm(points - a, axis=1) - ra, out)
-    return np.where(s >= side, np.linalg.norm(points - b, axis=1) - rb, out)
 
 
 class Pose:
@@ -99,27 +82,27 @@ def _frame(record, clip, t, violation, vertices=None):
     """Fold one frame's per-vertex (or per-edge) violation in metres into a record."""
     record["frames"] += 1
     worst = float(np.max(violation, initial=-np.inf))
-    if worst <= 0:
+    if worst <= RESOLUTION:
         return
     record["failed"] = True
     record["frames_failed"] += 1
     record["clips"][clip] = max(record["clips"].get(clip, 0.0), round(worst * 1000, 1))
     if record["worst"] is None or worst * 1000 > record["worst"]["value_mm"]:
         order = np.argsort(-violation)
-        bad = order[violation[order] > 0][:12]
+        bad = order[violation[order] > RESOLUTION][:12]
         ids = bad if vertices is None else vertices[bad]
         record["worst"] = dict(clip=clip, t=round(float(t), 4), value_mm=round(worst * 1000, 1),
                                vertices=[int(v) for v in np.asarray(ids).ravel()][:12])
 
 
-def clip_gates(data, clip, gates=("G4", "G5", "G6", "G7", "G8")):
+def clip_gates(data, clip, gates=("G4", "G5", "G6", "G7", "G8", "G10")):
     """The per-frame gates over one clip (or the rest pose): {(gate, piece): record}."""
     pose = Pose(data)
     times, matrices = pose.matrices(clip)
     name = clip[0]
     body_points, body_faces, body_weights, complete = data.body
     out = {}
-    posed_body = M.skin_points(body_points, body_weights, matrices) if "G4" in gates else None
+    posed_body = M.skin_points(body_points, body_weights, matrices) if {"G4", "G7"} & set(gates) else None
     centres, radii = [], []
     for joint, centre, radius in data.shapes["spheres"]:
         j = pose.joints.index(joint)
@@ -137,23 +120,13 @@ def clip_gates(data, clip, gates=("G4", "G5", "G6", "G7", "G8")):
         r = p.r.astype(float)
         pins = r == 0
         ref = refs[p.id]
+        reach = None
+        if "G4" in gates or "G7" in gates:
+            reach = [body_maps.reach_violation(ref[k], posed_body[k], body_faces, r, t_fab) for k in range(len(times))]
         if "G4" in gates:
             rec = out[("G4", p.id)] = _record("G4", p.id, complete)
             for k, t in enumerate(times):
-                # A free vertex with r >= t fails only inside the body deeper than r - t, so one whose nearest body
-                # vertex (an upper bound of its distance) is nearer passes without a sign; the rest need the
-                # winding number, the costly part.
-                near = cKDTree(posed_body[k]).query(ref[k])[0]
-                need = pins | (r < t_fab) | (near > r - t_fab)
-                violation = np.zeros(len(r))
-                if need.any():
-                    q = ref[k][need]
-                    inside = body_maps.winding(q, posed_body[k][body_faces]) > 0.5
-                    dist = sim.closest(q, posed_body[k], body_faces)[2]
-                    sd = np.where(inside, -dist, dist)
-                    # A pin follows skinning: it fails only inside the body itself.
-                    violation[need] = np.where(pins[need], -sd, -(sd - t_fab) - r[need])
-                _frame(rec, name, t, violation)
+                _frame(rec, name, t, reach[k])
         if "G5" in gates:
             rec = out[("G5", p.id)] = _record("G5", p.id, True)
             e = sim.edges(p.faces)
@@ -177,8 +150,14 @@ def clip_gates(data, clip, gates=("G4", "G5", "G6", "G7", "G8")):
                 for s in range(len(radii)):
                     if s not in in_cone:
                         sd = np.minimum(sd, np.linalg.norm(ref[k] - centres[s][k], axis=1) - radii[s])
-                violation = np.where(pins, -sd, -(sd - t_fab) - r)
-                _frame(rec, name, t, violation)
+                # As the runtime's held measure: a shape holds a vertex, pin or not, deeper than r inside its surface
+                # grown by the fabric thickness.
+                violation = -(sd - t_fab) - r
+                # A reference that is itself inside the skin deeper than its r fails G4, not the shape (as the
+                # collider fit counts it).
+                masked = (reach[k] > RESOLUTION) & (violation > RESOLUTION)
+                rec["masked_by_g4"] = rec.get("masked_by_g4", 0) + int(masked.sum())
+                _frame(rec, name, t, np.where(masked, 0.0, violation))
     if "G6" in gates and radii:
         _, rest_m = pose.matrices((REST, None))
         for p in pose.sc.pieces:
@@ -191,6 +170,16 @@ def clip_gates(data, clip, gates=("G4", "G5", "G6", "G7", "G8")):
                 for limb in limbs:
                     violation = np.maximum(violation, limb.crossing(refs[p.id][k], matrices[k], r, t_fab))
                 _frame(rec, name, t, violation)
+    if "G10" in gates and name in data.seats:
+        # The game's seat check: in a seated clip the posed body must not sink into the seat deeper than the
+        # fabric that lies between them (the thickest of the outfit's).
+        planes = np.asarray(data.seats[name], float).reshape(-1, 4)
+        thickness = max(float(f["thickness"]) for f in data.fabrics.values())
+        rec = out[("G10", "body")] = _record("G10", "body", True)
+        posed = M.skin_points(body_points, body_weights, matrices)
+        for k, t in enumerate(times):
+            depth = -np.max(posed[k] @ planes[:, :3].T + planes[:, 3], axis=1)
+            _frame(rec, name, t, depth - thickness)
     if "G8" in gates:
         for outer_id, inner_id in pose.sc.layers:
             o, i = pose.sc.piece(outer_id), pose.sc.piece(inner_id)
@@ -201,7 +190,12 @@ def clip_gates(data, clip, gates=("G4", "G5", "G6", "G7", "G8")):
                 continue
             corners = i.faces[hit_face[hit]]
             r_in = np.einsum("nk,nk->n", hit_bary[hit], i.r.astype(float)[corners])
-            need = o.d.astype(float)[hit] + r_in + data.fabrics[outer_id]["thickness"] + data.fabrics[inner_id]["thickness"]
+            # The outer comes toward the inner by at most its backstop distance, and not at all where it is pinned.
+            reach = np.minimum(o.d, o.r).astype(float)[hit]
+            # The fabric thickness keeps moving cloth apart; where neither side moves the model's own distance holds
+            # and only the order matters.
+            moves = (reach + r_in) > 0
+            need = reach + r_in + moves * (data.fabrics[outer_id]["thickness"] + data.fabrics[inner_id]["thickness"])
             for k, t in enumerate(times):
                 inner_point = np.einsum("nk,nkj->nj", hit_bary[hit], refs[inner_id][k][corners])
                 gap = np.einsum("nj,nj->n", inner_point - refs[outer_id][k][hit], dirs[outer_id][k][hit])

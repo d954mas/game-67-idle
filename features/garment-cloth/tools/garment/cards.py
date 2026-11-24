@@ -8,6 +8,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 from . import model as M
+from .sim import vertex_normals
 from .view import camera, _font
 
 BACKGROUND = (248, 247, 244)
@@ -71,9 +72,10 @@ def _panel(size, yaw, pitch, bounds, scale, body, cloth, cloth_rgb, wire, dots, 
             draw.line([tuple(np.array([xa, ya]) + s * side * ra * scale), tuple(np.array([xb, yb]) + s * side * rb * scale)],
                       fill=SHAPE, width=2)
     if arrows is not None:
-        start, end = (_project(a, right, up, bounds, scale, height) for a in arrows)
+        colour = arrows[2] if len(arrows) > 2 else MARK
+        start, end = (_project(a, right, up, bounds, scale, height) for a in arrows[:2])
         for a, b in zip(start, end):
-            draw.line([tuple(a), tuple(b)], fill=MARK, width=1)
+            draw.line([tuple(a), tuple(b)], fill=colour, width=1)
     for points, colour, r in dots:
         for x, y in _project(np.asarray(points, float).reshape(-1, 3), right, up, bounds, scale, height):
             draw.ellipse([x - r, y - r, x + r, y + r], fill=colour)
@@ -218,3 +220,99 @@ def piece_card(path, piece, layer="wire", matrices=None, marks=(), lines=(), yaw
     return draw(path, body, x, piece.faces, values=values, low=low, high=high, unit=unit, special=special,
                 pins=pins if layer in ("wire", "fail", "b") or layer.startswith("weights") else None, marks=marks,
                 arrows=arrows, shapes=shapes, title=title or f"{piece.id}: {layer}", lines=list(lines) + why, yaws=yaws)
+
+
+def bind_card(path, body, render_points, render_faces, triangle, sim_points, sim_faces, amount=None, title="",
+              lines=(), yaws=(0, 90, 180)):
+    """The render binding (layer `bind`): each render triangle in the colour of the sim triangle its first corner
+    binds to, so a patch of one colour is the render surface one sim triangle carries; the sim wire over it; render
+    triangles that follow plain skinning (amount 0 at every corner) drawn black. A patch that jumps across a slit or
+    onto another fold shows as a colour out of place."""
+    render_points, render_faces = np.asarray(render_points, float), np.asarray(render_faces, np.int64)
+    bound = triangle[render_faces[:, 0]]
+    keep = bound >= 0
+    tris, bound = render_points[render_faces[keep]], bound[keep]
+    hue = (bound * 0.618034) % 1.0
+    rgb = np.stack([0.5 + 0.5 * np.cos(2 * np.pi * (hue + k / 3)) for k in range(3)], 1) * 200 + 40
+    if amount is not None:
+        rigid = (np.asarray(amount)[render_faces[keep]] == 0).all(1)
+        rgb[rigid] = PIN
+    e = np.unique(np.sort(np.concatenate([sim_faces[:, [0, 1]], sim_faces[:, [1, 2]], sim_faces[:, [2, 0]]]), 1), axis=0)
+    # The wire sits a millimetre in front so it reads over the render surface it shares; its back side is hidden.
+    lift = 0.001
+    normals = vertex_normals(np.asarray(sim_points, float), np.asarray(sim_faces))
+    everything = np.concatenate([np.asarray(body, float).reshape(-1, 3), tris.reshape(-1, 3)])
+    font = _font(15)
+    w, h = 420, 620
+    panels = []
+    for yaw in yaws:
+        right, up, toward = camera(yaw)
+        x, y = everything @ right, everything @ up
+        bounds = (x.min() - 0.03, x.max() + 0.03, y.min() - 0.03, y.max() + 0.03)
+        scale = min(w / (bounds[1] - bounds[0]), h / (bounds[3] - bounds[2]))
+        size = (int((bounds[1] - bounds[0]) * scale), int((bounds[3] - bounds[2]) * scale))
+        facing = e[(normals[e] @ toward > 0).all(1)]
+        arrows = (sim_points[facing[:, 0]] + lift * toward, sim_points[facing[:, 1]] + lift * toward, WIRE)
+        panels.append(_panel(size, yaw, 12.0, bounds, scale, np.asarray(body, float).reshape(-1, 3, 3), tris, rgb, None,
+                             [], arrows, {}, []))
+    text = [piece for line in [title] + list(lines) for piece in _wrap(line, font, sum(p.size[0] for p in panels) - 16)]
+    sheet = Image.new("RGB", (sum(p.size[0] for p in panels), max(p.size[1] for p in panels) + 20 * len(text) + 10),
+                      BACKGROUND)
+    d = ImageDraw.Draw(sheet)
+    x = 0
+    for yaw, panel in zip(yaws, panels):
+        sheet.paste(panel, (x, 0))
+        d.text((x + 6, 4), f"yaw {yaw}", font=font, fill=INK)
+        x += panel.size[0]
+    for i, line in enumerate(text):
+        d.text((8, max(p.size[1] for p in panels) + 6 + 20 * i), line, font=font, fill=INK)
+    if path:
+        sheet.save(path)
+    return sheet
+
+
+def raster(size, layers, yaw, bounds, scale, pitch=12.0):
+    """A z-buffered image (PIL, RGB) of triangle layers [(triangles (F, 3, 3), colours (F, 3) or one colour)], lit
+    as the cards are; for pictures where layers lie close (a jacket over a blouse), which drawing far to near mixes
+    up. Pixel centres inside a triangle take its colour where it is nearest the camera."""
+    right, up, toward = camera(yaw, pitch)
+    light = -0.35 * right + 0.55 * up + 0.75 * toward
+    light /= np.linalg.norm(light)
+    width, height = size
+    image = np.tile(np.asarray(BACKGROUND, float), (height, width, 1))
+    depth = np.full((height, width), -np.inf)
+    x0, _, y0, _ = bounds
+    for triangles, colours in layers:
+        tri = np.asarray(triangles, float).reshape(-1, 3, 3)
+        if not len(tri):
+            continue
+        colours = np.broadcast_to(np.asarray(colours, float), (len(tri), 3))
+        n = np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0])
+        n /= np.maximum(np.linalg.norm(n, axis=1, keepdims=True), 1e-12)
+        lit = 0.45 + 0.55 * np.abs(n @ light)
+        lit = np.where(n @ toward >= 0, lit, 0.6 * lit)
+        rgb = np.clip(lit[:, None] * colours, 0, 255)
+        px = (tri @ right - x0) * scale
+        py = height - (tri @ up - y0) * scale
+        pz = tri @ toward
+        for (ax, bx, cx), (ay, by, cy), (az, bz, cz), c in zip(px, py, pz, rgb):
+            i0, i1 = max(int(np.floor(min(ax, bx, cx))), 0), min(int(np.ceil(max(ax, bx, cx))), width - 1)
+            j0, j1 = max(int(np.floor(min(ay, by, cy))), 0), min(int(np.ceil(max(ay, by, cy))), height - 1)
+            if i0 > i1 or j0 > j1:
+                continue
+            area = (bx - ax) * (cy - ay) - (cx - ax) * (by - ay)
+            if abs(area) < 1e-12:
+                continue
+            gx, gy = np.meshgrid(np.arange(i0, i1 + 1) + 0.5, np.arange(j0, j1 + 1) + 0.5)
+            u = ((bx - gx) * (cy - gy) - (cx - gx) * (by - gy)) / area
+            v = ((cx - gx) * (ay - gy) - (ax - gx) * (cy - gy)) / area
+            w = 1 - u - v
+            inside = (u >= 0) & (v >= 0) & (w >= 0)
+            if not inside.any():
+                continue
+            z = u * az + v * bz + w * cz
+            block = depth[j0:j1 + 1, i0:i1 + 1]
+            nearer = inside & (z > block)
+            block[nearer] = z[nearer]
+            image[j0:j1 + 1, i0:i1 + 1][nearer] = c
+    return Image.fromarray(image.astype(np.uint8))

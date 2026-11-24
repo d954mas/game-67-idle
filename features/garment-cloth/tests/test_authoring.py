@@ -366,6 +366,70 @@ class TestSideGate(unittest.TestCase):
         np.testing.assert_allclose(limb.crossing(points @ turn[:3, :3].T, turn[None], r, 0.004), 0)
 
 
+class TestCook(unittest.TestCase):
+    def setUp(self):
+        self.scene = Scene(cylinder_scene())
+        self.o = self.scene.outfit()
+
+    def tearDown(self):
+        self.scene.close()
+
+    def test_blob_carries_the_sidecar_and_the_binding_follows_the_pins(self):
+        from garment import cook as C
+        from garment_blob import decode
+        p = skirt(self.o)
+        data = sc.write(self.o.built())
+        blob, streams, report = C.cook("synthetic", data, self.o.model, {"plain": FABRIC}, None, (0.45, 0.35))
+        piece = decode(blob)["pieces"][0]
+        stored = sc.read(data).piece("skirt")
+        np.testing.assert_array_equal(piece["mesh"]["rest"], stored.points)
+        np.testing.assert_array_equal(piece["mesh"]["max_distance"], stored.r)
+        np.testing.assert_array_equal(piece["direction"], stored.b)
+        self.assertEqual(report[0]["pins"], int((stored.r == 0).sum()))
+        k = self.o.model.primitive("cloth")
+        labelled = self.o.model.labels[k] == 1
+        self.assertTrue(streams[k][labelled].any(1).any())
+        self.assertFalse(streams[k][~labelled].any())
+        staged = C.stage_model(self.scene.root / "model.glb", streams)
+        self.assertIn(b"_GARMENT", staged[:4096])
+
+    def test_pin_bound_makes_the_seam_follow_skinning(self):
+        from garment import bind as Bd, gates
+        p = skirt(self.o)
+        k = self.o.model.primitive("cloth")
+        added = p.pin_bound(-1.0)
+        stored = sc.read(sc.write(self.o.built())).piece("skirt")
+        binding = Bd.grow(self.o.model.positions[k], self.o.model.faces[k], self.o.model.labels[k] == 1,
+                          stored.points.astype(float), stored.faces, stored.r == 0)
+        seam, _ = Bd.seam_breaks(binding, self.o.model.faces[k], self.o.model.labels[k] == 1, stored.r == 0)
+        self.assertGreaterEqual(added, 0)
+        self.assertEqual(len(seam), 0)
+        self.assertTrue(all(not f["failed"] for f in gates.g2_g3(self.o.model, sc.read(sc.write(self.o.built())))))
+
+    def test_layer_keeps_the_order_at_rest(self):
+        from garment import gates
+        inner = skirt(self.o)
+        outer = self.o.piece("over", 2, "plain")
+        x, f = tube(0.0, 0.16, 0.55, 0.88, around=24, rows=8)
+        outer.set_mesh(x, f)
+        outer.pin(outer.f.y > 0.879)
+        outer.weights_transfer(Surface(inner.x, inner.faces, inner.w, inner.joints))
+        outer.gradient(rate=0.5, cap=0.2)
+        outer.backstop_from_body()
+        data = sc.write(self.o.built())
+        body = (self.o.body.points, self.o.body.faces, self.o.body.weights, False)
+        gd = gates.GateData(sidecar=data, model=str(self.scene.root / "model.glb"), body=body,
+                            shapes=dict(spheres=[], cones=[]), fabrics={"skirt": FABRIC, "over": FABRIC}, clips=[])
+        self.o.over("over", "skirt")
+        before = gates.clip_gates(gates.GateData(**{**gd.__dict__, "sidecar": sc.write(self.o.built())}),
+                                  (gates.REST, None), ("G8",))
+        self.assertTrue(before[("G8", "over>skirt")]["failed"])
+        self.o.layer("over", "skirt")
+        after = gates.clip_gates(gates.GateData(**{**gd.__dict__, "sidecar": sc.write(self.o.built())}),
+                                 (gates.REST, None), ("G8",))
+        self.assertFalse(after[("G8", "over>skirt")]["failed"], after[("G8", "over>skirt")]["worst"])
+
+
 class TestBody(unittest.TestCase):
     def test_winding_number_is_one_inside_a_closed_box_and_zero_outside(self):
         corners = np.array([[x, y, z] for x in (0, 1) for y in (0, 1) for z in (0, 1)], float)

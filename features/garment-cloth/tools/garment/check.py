@@ -22,7 +22,7 @@ from garment import cards, gates as G, model as M  # noqa: E402
 from garment.outfit import Outfit  # noqa: E402
 from garment.sidecar import read  # noqa: E402
 
-PER_FRAME = ("G4", "G5", "G6", "G7", "G8")
+PER_FRAME = ("G4", "G5", "G6", "G7", "G8", "G10")
 CHUNK = 16
 
 
@@ -64,7 +64,8 @@ def gate_data(outfit, data):
     return G.GateData(sidecar=data, model=str(outfit.model_path),
                       body=(body.points, body.faces, body.weights, body.complete), shapes=G.shapes_from(colliders),
                       fabrics={p.id: outfit.fabrics[p.fabric] for p in outfit.pieces}, clips=clips,
-                      looks=[str(p) for p in outfit.looks])
+                      looks=[str(p) for p in outfit.looks],
+                      seats={clip: np.asarray(planes, float) for clip, planes in outfit.seats.items()})
 
 
 def run_gates(outfit, data, wanted, clip_names=None, workers=None):
@@ -116,7 +117,7 @@ def posed_shapes(outfit, matrices):
 
 def failure_card(outfit, finding, folder):
     worst = finding["worst"]
-    piece_id = finding["piece"].split(">")[0].split("/")[0] if finding["gate"] != "G9" else None
+    piece_id = finding["piece"].split(">")[0].split("/")[0] if finding["gate"] not in ("G9", "G10") else None
     if not worst or piece_id is None:
         return None
     piece = outfit.get(piece_id)
@@ -139,7 +140,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("script", type=Path)
     parser.add_argument("--sidecar", type=Path)
-    parser.add_argument("--gates", default="G1,G2,G3,G4,G5,G6,G7,G8,G9")
+    parser.add_argument("--gates", default="G1,G2,G3,G4,G5,G6,G7,G8,G9,G10")
     parser.add_argument("--clips")
     parser.add_argument("--cards", type=Path)
     parser.add_argument("--report", type=Path)

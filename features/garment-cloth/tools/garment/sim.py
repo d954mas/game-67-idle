@@ -3,11 +3,160 @@ counter-clockwise triangles (F, 3) whose front faces away from the body.
 
 A topology edit returns new points and triangles and a sparse matrix P (V_new x V_old) that says where every new
 vertex came from, so per-vertex data follows it: new = P @ old. A row of P sums to 1."""
+import heapq
+
 import numpy as np
 from scipy.sparse import coo_matrix, csr_matrix, identity
 from scipy.sparse.csgraph import connected_components, dijkstra
+from scipy.spatial import cKDTree
 
-from garment_proxy import closest_surface_points
+
+
+EDGE_WARP, EDGE_WEFT, EDGE_DIAG = 0, 1, 2
+
+def _closest_on_triangles(p, a, b, c):
+    """Ericson's closest point on each triangle row; returns the point and its barycentric coordinates."""
+    ab, ac, ap = b - a, c - a, p - a
+    d1, d2 = np.einsum("ij,ij->i", ab, ap), np.einsum("ij,ij->i", ac, ap)
+    bp = p - b
+    d3, d4 = np.einsum("ij,ij->i", ab, bp), np.einsum("ij,ij->i", ac, bp)
+    cp = p - c
+    d5, d6 = np.einsum("ij,ij->i", ab, cp), np.einsum("ij,ij->i", ac, cp)
+    va, vb, vc = d3 * d6 - d5 * d4, d5 * d2 - d1 * d6, d1 * d4 - d3 * d2
+    with np.errstate(divide="ignore", invalid="ignore"):
+        denom = va + vb + vc
+        v, w = vb / denom, vc / denom
+        bary = np.column_stack([1 - v - w, v, w])
+        t_ab, t_ac = d1 / (d1 - d3), d2 / (d2 - d6)
+        t_bc = (d4 - d3) / ((d4 - d3) + (d5 - d6))
+    cases = [((d1 <= 0) & (d2 <= 0), np.array([1, 0, 0])), ((d3 >= 0) & (d4 <= d3), np.array([0, 1, 0])),
+             ((d6 >= 0) & (d5 <= d6), np.array([0, 0, 1]))]
+    out = bary.copy()
+    edge = [((vc <= 0) & (d1 >= 0) & (d3 <= 0), lambda t: np.column_stack([1 - t, t, 0 * t]), t_ab),
+            ((vb <= 0) & (d2 >= 0) & (d6 <= 0), lambda t: np.column_stack([1 - t, 0 * t, t]), t_ac),
+            ((va <= 0) & (d4 - d3 >= 0) & (d5 - d6 >= 0), lambda t: np.column_stack([0 * t, 1 - t, t]), t_bc)]
+    done = np.zeros(len(p), bool)
+    for mask, corner in cases:
+        m = mask & ~done
+        out[m] = corner
+        done |= m
+    for mask, make, t in edge:
+        m = mask & ~done
+        if m.any():
+            out[m] = make(t[m])
+        done |= m
+    point = out[:, :1] * a + out[:, 1:2] * b + out[:, 2:] * c
+    return point, out
+
+
+def closest_surface_points(points, vertices, faces):
+    """Exact closest point on a triangle mesh: (face, barycentrics, distance) per query point."""
+    points, vertices, faces = np.asarray(points, float), np.asarray(vertices, float), np.asarray(faces)
+    tri = vertices[faces]
+    centers = tri.mean(1)
+    radius = np.linalg.norm(tri - centers[:, None], axis=2).max(1)
+    tree = cKDTree(centers)
+    _, near = tree.query(points, k=min(8, len(faces)))
+    near = near.reshape(len(points), -1)
+    best_face = np.zeros(len(points), int)
+    best_bary = np.zeros((len(points), 3))
+    best = np.full(len(points), np.inf)
+
+    def consider(rows, cand):
+        nonlocal best
+        q, bary = _closest_on_triangles(points[rows], tri[cand, 0], tri[cand, 1], tri[cand, 2])
+        d = np.linalg.norm(points[rows] - q, axis=1)
+        better = d < best[rows]
+        r = rows[better]
+        best[r], best_face[r], best_bary[r] = d[better], cand[better], bary[better]
+
+    every = np.arange(len(points))
+    for k in range(near.shape[1]):
+        consider(every, near[:, k])
+    # A triangle can be closer than its centroid suggests: test every one whose bounding sphere reaches the bound.
+    rmax = radius.max()
+    for i, cand in enumerate(tree.query_ball_point(points, best + rmax)):
+        cand = np.asarray(cand, int)
+        cand = cand[np.linalg.norm(centers[cand] - points[i], axis=1) - radius[cand] <= best[i]]
+        if len(cand):
+            consider(np.full(len(cand), i), cand)
+    return best_face, best_bary, best
+
+
+def geodesic_depth(points, faces, pins):
+    """Return (distance_m, normalized_01) shortest edge-path distance from pinned seam vertices."""
+    pts = np.asarray(points, dtype=np.float64)
+    if pts.ndim != 2 or pts.shape[1] != 3 or not np.isfinite(pts).all():
+        raise ValueError("invalid proxy vertex coordinates")
+    pin_set = {int(p) for p in pins}
+    if not pin_set:
+        raise ValueError("geodesic_depth requires at least one pinned vertex")
+    edges = _unique_edges(faces)
+    graph = [[] for _ in range(len(pts))]
+    for a, b in edges:
+        length = float(np.linalg.norm(pts[b] - pts[a]))
+        graph[a].append((b, length))
+        graph[b].append((a, length))
+    dist = np.full(len(pts), np.inf, dtype=np.float64)
+    queue = []
+    for p in pin_set:
+        if not 0 <= p < len(pts):
+            raise ValueError(f"pin index {p} out of range")
+        dist[p] = 0.0
+        heapq.heappush(queue, (0.0, p))
+    while queue:
+        d, u = heapq.heappop(queue)
+        if d > dist[u]:
+            continue
+        for v, w in graph[u]:
+            nd = d + w
+            if nd < dist[v]:
+                dist[v] = nd
+                heapq.heappush(queue, (nd, v))
+    if not np.isfinite(dist).all():
+        raise ValueError("disconnected proxy island has no pinned seam vertex")
+    span = float(dist.max())
+    norm = dist / span if span > 1e-12 else np.zeros_like(dist)
+    return dist, norm
+
+
+def _unique_edges(faces):
+    f = np.asarray(faces, dtype=np.int64)
+    pairs = np.concatenate([f[:, [0, 1]], f[:, [1, 2]], f[:, [2, 0]]], axis=0)
+    return np.unique(np.sort(pairs, axis=1), axis=0)
+
+
+def classify_edges(points, faces, pins, *, uv=None):
+    """Classify each undirected edge (min(a,b), max(a,b)) into WARP (0), WEFT (1), or DIAG (2)."""
+    pts = np.asarray(points, dtype=np.float64)
+    edges = _unique_edges(faces)
+    kinds = {}
+    if uv is not None:
+        coords = np.asarray(uv, dtype=np.float64)
+        if coords.shape != (len(pts), 2) or not np.isfinite(coords).all():
+            raise ValueError("uv must be finite (N, 2)")
+        for a, b in edges:
+            du = abs(float(coords[b, 0] - coords[a, 0]))
+            dv = abs(float(coords[b, 1] - coords[a, 1]))
+            if dv >= 2.0 * du and dv > 1e-9:
+                kinds[(int(a), int(b))] = EDGE_WARP
+            elif du >= 2.0 * dv and du > 1e-9:
+                kinds[(int(a), int(b))] = EDGE_WEFT
+            else:
+                kinds[(int(a), int(b))] = EDGE_DIAG
+        return kinds
+
+    dist_m, _ = geodesic_depth(pts, faces, pins)
+    for a, b in edges:
+        length = float(np.linalg.norm(pts[b] - pts[a]))
+        slope = abs(float(dist_m[b] - dist_m[a])) / max(length, 1e-12)
+        if slope >= 0.72:
+            kinds[(int(a), int(b))] = EDGE_WARP
+        elif slope <= 0.28:
+            kinds[(int(a), int(b))] = EDGE_WEFT
+        else:
+            kinds[(int(a), int(b))] = EDGE_DIAG
+    return kinds
 
 
 def edges(faces):
@@ -322,8 +471,10 @@ def relax(points, faces, mask, iterations=4):
 
 
 def offset(points, faces, mask, distance_m):
-    """Move the masked vertices along their normals, outward (away from the body) for a positive distance."""
+    """Move the masked vertices along their normals, outward (away from the body) for a positive distance (a number or
+    one per vertex)."""
     x = np.asarray(points, float).copy()
     mask = np.asarray(mask, bool)
-    x[mask] += distance_m * vertex_normals(x, faces)[mask]
+    distance = np.broadcast_to(np.asarray(distance_m, float), (len(x),))
+    x[mask] += distance[mask, None] * vertex_normals(x, faces)[mask]
     return x

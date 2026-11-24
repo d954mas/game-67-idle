@@ -8,7 +8,7 @@ from pathlib import Path
 
 import numpy as np
 
-from garment_proxy import outer_faces, sewn_sheet
+from .sheet import outer_faces, sewn_sheet
 
 STUDIO = Path(__file__).resolve().parents[4]
 LABEL = "_CLOTH_PIECE"
@@ -70,6 +70,34 @@ class RenderModel:
     def unlabelled_points(self):
         return np.concatenate([x[label == 0] for x, label in zip(self.positions, self.labels)])
 
+    def marks(self, label):
+        """Per primitive (None where the label is absent), over its render vertices:
+        - labelled: the vertex carries the label;
+        - height: 0 at the top of the piece's region and 1 at its bottom (NaN off the region), over every corner of
+          the region in every primitive with the label, the unlabelled row it is sewn to included;
+        - split: a labelled vertex at the position of an unlabelled one, which must stay with it or the seam cracks;
+        - seam: a labelled vertex of a triangle with an unlabelled corner, sewn to skinned render geometry."""
+        from scipy.spatial import cKDTree
+        regions = [f[(lab == label)[f].any(1)] if np.any(lab == label) else None for f, lab in zip(self.faces, self.labels)]
+        y = np.concatenate([x[np.unique(r), 1] for x, r in zip(self.positions, regions) if r is not None])
+        top, span = y.max(), max(np.ptp(y), 1e-12)
+        unlabelled = cKDTree(self.unlabelled_points())
+        out = []
+        for x, f, lab, region in zip(self.positions, self.faces, self.labels, regions):
+            if region is None:
+                out.append(None)
+                continue
+            labelled = lab == label
+            height = np.full(len(x), np.nan)
+            used = np.unique(region)
+            height[used] = (top - x[used, 1]) / span
+            seam = np.zeros(len(x), bool)
+            mixed = region[(lab[region] == 0).any(1)]
+            seam[mixed.ravel()] = True
+            gap, _ = unlabelled.query(x, distance_upper_bound=COINCIDENT_M)
+            out.append(dict(labelled=labelled, height=height, split=labelled & np.isfinite(gap), seam=seam & labelled))
+        return out
+
     def piece(self, label, material, outer=None):
         return RenderPiece(self, label, self.primitive(material), outer)
 
@@ -117,7 +145,8 @@ class RenderPiece:
     - labelled: the vertex carries this piece's label;
     - height: 0 at the top of the piece's region and 1 at its bottom (NaN off the region in this primitive), over
       every corner of the region in every primitive with the label, the unlabelled row it is sewn to included;
-    - split: a labelled vertex at the position of an unlabelled one, which must stay with it or the seam cracks.
+    - split: a labelled vertex at the position of an unlabelled one, which must stay with it or the seam cracks;
+    - seam: a labelled vertex of a triangle with an unlabelled corner (see RenderModel.marks).
     sheet: the outer sewn sheet of the region (its points, triangles and the render vertex of each sheet vertex),
     which `Piece.create` turns into the sim mesh."""
 
@@ -129,20 +158,8 @@ class RenderPiece:
         self.region = faces[self.labelled[faces].any(1)]
         if not len(self.region):
             raise ValueError(f"{model.path}: piece label {label} has no {model.materials[k]!r} triangles")
-        # The height spans the piece's region in every primitive that carries the label (a trim in another
-        # material moves with the piece too).
-        heights = []
-        for j, (x, f, lab) in enumerate(zip(model.positions, model.faces, model.labels)):
-            if np.any(lab == self.label):
-                heights.append(x[np.unique(f[(lab == self.label)[f].any(1)]), 1])
-        heights = np.concatenate(heights)
-        top, span = heights.max(), max(np.ptp(heights), 1e-12)
-        used = np.unique(self.region)
-        self.height = np.full(len(self.positions), np.nan)
-        self.height[used] = (top - self.positions[used, 1]) / span
-        from scipy.spatial import cKDTree
-        gap, _ = cKDTree(model.unlabelled_points()).query(self.positions, distance_upper_bound=COINCIDENT_M)
-        self.split = self.labelled & np.isfinite(gap)
+        marks = model.marks(label)[k]
+        self.height, self.split, self.seam = marks["height"], marks["split"], marks["seam"]
         self.sheet_points, self.sheet_faces, self.sheet_render, _ = sewn_sheet(
             self.positions, outer_faces(self.positions, self.region, outer))
         self.weights = model.weights(k)

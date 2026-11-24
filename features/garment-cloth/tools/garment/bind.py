@@ -12,9 +12,8 @@ import numpy as np
 from scipy.sparse.csgraph import dijkstra
 from scipy.spatial import cKDTree
 
-from garment_proxy import _closest_on_triangles
-
 from . import sim
+from .sim import _closest_on_triangles
 
 PATH_STRETCH = 2 / np.sqrt(3)
 
@@ -145,3 +144,23 @@ def seam_breaks(binding, faces, labelled, kinematic):
     amount = binding.amount(kinematic)
     bad = np.flatnonzero(seam & (binding.triangle >= 0) & (amount > 0))
     return bad, amount[bad]
+
+
+def pack(v0, v1, v2, w0, w1, w2, amount=1.0):
+    """One `_GARMENT` row: three 1-based sim vertex ids (11 bits each) and three weights (10 bits each) that sum to
+    `amount` x 1023, the cloth's share against plain skinning; bit 31 of the high word marks the 3-vertex form. A
+    vertex whose quantised weight is 0 is written as id 0."""
+    if not (0 <= v0 <= 2047 and 0 <= v1 <= 2047 and 0 <= v2 <= 2047):
+        raise ValueError("sim vertex id exceeds the 11-bit render palette (2047)")
+    total = int(round(float(np.clip(amount, 0.0, 1.0)) * 1023.0))
+    ws = np.maximum(np.array([w0, w1, w2], float), 0.0)
+    if total <= 0 or ws.sum() <= 1e-12:
+        return (0, 0, 0, 0)
+    raw = ws / ws.sum() * total
+    q = np.floor(raw).astype(int)
+    for k in np.argsort(-(raw - q))[:total - int(q.sum())]:
+        q[k] += 1
+    v0, v1, v2 = (v if w else 0 for v, w in zip((v0, v1, v2), q))
+    lo = (v0 & 0x7FF) | ((v1 & 0x7FF) << 11) | ((int(q[0]) & 0x3FF) << 22)
+    hi = (v2 & 0x7FF) | ((int(q[1]) & 0x3FF) << 11) | ((int(q[2]) & 0x3FF) << 21) | (1 << 31)
+    return (lo & 0xFFFF, (lo >> 16) & 0xFFFF, hi & 0xFFFF, (hi >> 16) & 0xFFFF)

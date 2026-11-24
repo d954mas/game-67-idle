@@ -8,15 +8,80 @@ edge), behind which the body is unknown."""
 import math
 
 import numpy as np
-
-from garment_cook import BodySurface
-from garment_proxy import closest_surface_points
+from scipy.sparse import csr_matrix
+from scipy.sparse.csgraph import dijkstra
 
 from . import sim
+from .sim import closest_surface_points
 
 # Below this a cloth vertex sits on the body and its direction to the closest point is noise; the body normal
 # stands in for it.
 ON_BODY_M = 1e-4
+
+
+# Smallest singular value over the largest of a curvature fit's design on steps scaled to its disc: below it the
+# vertices barely span two tangent directions and the fitted curvature is noise.
+FIT_CONDITION = 1e-3
+
+
+class BodySurface:
+    """The body behind the cloth at rest: triangles welded across attribute seams, so geodesic patches cross them."""
+
+    def __init__(self, vertices, faces, normals):
+        self.vertices, self.faces, self.normals = (np.asarray(vertices, float), np.asarray(faces), np.asarray(normals, float))
+        _, first, weld = np.unique(np.round(self.vertices, 6), axis=0, return_index=True, return_inverse=True)
+        weld = weld.ravel()
+        self.points = self.vertices[first]
+        self.welded = weld[self.faces]
+        edges = np.unique(np.sort(np.concatenate([self.welded[:, [0, 1]], self.welded[:, [1, 2]],
+                                                  self.welded[:, [2, 0]]]), axis=1), axis=0)
+        edges = edges[edges[:, 0] != edges[:, 1]]
+        length = np.linalg.norm(self.points[edges[:, 0]] - self.points[edges[:, 1]], axis=1)
+        n = len(self.points)
+        self.graph = csr_matrix((np.r_[length, length], (np.r_[edges[:, 0], edges[:, 1]], np.r_[edges[:, 1], edges[:, 0]])),
+                                shape=(n, n))
+        normals = np.zeros_like(self.points)
+        np.add.at(normals, weld, self.normals)
+        self.point_normals = normals / np.maximum(np.linalg.norm(normals, axis=1, keepdims=True), 1e-12)
+
+    def radius(self, face, point, normal):
+        """The body radius behind point: 1 / the largest principal curvature there, from the shape operator S that
+        carries a tangent step to the turn of the normal (dn = S dp), fitted to the body vertices nearest to point
+        along the surface whose normals face the side of normal, on the smallest geodesic disc that determines S.
+        The backstop is a local model of the body behind the vertex: a wider disc wraps past the side of a thin limb.
+        The normals carry the smooth surface, so the tessellation does not set the radius. Returns +inf where the
+        body is flat or concave there and None where no disc determines the fit."""
+        seeds = self.welded[face]
+        offset = np.linalg.norm(self.points[seeds] - point, axis=1)
+        u = np.cross(normal, [1.0, 0.0, 0.0] if abs(normal[0]) < 0.9 else [0.0, 1.0, 0.0])
+        u /= np.linalg.norm(u)
+        v = np.cross(normal, u)
+        limit = 2 * offset.max() + 1e-3
+        while True:
+            reach = dijkstra(self.graph, indices=seeds, limit=limit)
+            geodesic = (reach + offset[:, None]).min(0)
+            near = np.flatnonzero(np.isfinite(geodesic) & (self.point_normals @ normal > 0))
+            near = near[np.argsort(geodesic[near], kind="stable")]
+            rel, turn = self.points[near] - point, self.point_normals[near]
+            x, y = rel @ u, rel @ v
+            zero = np.zeros(len(x))
+            # Unknowns (s11, s12, s22): rows of dn.u = s11 x + s12 y, then of dn.v = s12 x + s22 y.
+            design = np.stack([np.column_stack([x, y, zero]), np.column_stack([zero, x, y])], axis=1)
+            target = np.column_stack([turn @ u, turn @ v])
+            for n in range(2, len(x) + 1):
+                rows = design[:n].reshape(-1, 3)
+                # Judged on steps scaled to the disc, so the units do not decide.
+                span = max(float(np.abs(rows).max()), 1e-12)
+                singular = np.linalg.svd(rows / span, compute_uv=False)
+                if singular[-1] > FIT_CONDITION * singular[0]:
+                    s11, s12, s22 = np.linalg.lstsq(rows, target[:n].reshape(-1), rcond=None)[0]
+                    curvature = np.linalg.eigvalsh([[s11, s12], [s12, s22]]).max()
+                    # A turn of the normal across the disc below what the fit resolves is a flat body; it also keeps
+                    # R within the range a float sphere centre can carry.
+                    return 1.0 / curvature if curvature * span > FIT_CONDITION else math.inf
+            if limit > 1.0 or len(near) == len(self.points):
+                return None
+            limit *= 2
 
 
 class Body:
@@ -28,7 +93,8 @@ class Body:
         self.normals = np.asarray(normals, float)
         self.weights, self.joints, self.complete = np.asarray(weights, float), list(joints), complete
         self.surface = BodySurface(self.points, self.faces, self.normals)
-        rim = sim.boundary_edges(self.surface.welded)
+        # A declared body is complete: its open edges (the neck under the head, say) are not holes over the cloth.
+        rim = sim.boundary_edges(self.surface.welded) if not complete else np.zeros((0, 2), np.int64)
         self._rim_edges = {tuple(e) for e in rim.tolist()}
         self._rim_points = np.zeros(len(self.surface.points), bool)
         self._rim_points[rim.ravel()] = True
@@ -111,6 +177,24 @@ def winding(points, triangles, chunk=24):
         den = la * lb * lc + np.einsum("pfi,pfi->pf", a, b) * lc + np.einsum("pfi,pfi->pf", b, c) * la \
             + np.einsum("pfi,pfi->pf", c, a) * lb
         out[s:s + chunk] = np.arctan2(det, den).sum(1) / (2 * math.pi)
+    return out
+
+
+def reach_violation(points, vertices, faces, r, thickness):
+    """Gate G4 per point (m, > 0 fails): how far a reference lies deeper in the posed body than its max distance
+    allows, sd(ref, body + thickness) < -r; a pin (r = 0) fails only inside the body itself, since it follows
+    skinning and no body collider acts on it. The side is the generalised winding number (exact on a closed body;
+    a hole of a fallback body makes it fractional there). A free vertex with r >= thickness fails only deeper than
+    r - thickness, so one whose nearest body vertex (an upper bound of its distance) is nearer passes unsigned."""
+    from scipy.spatial import cKDTree
+    points, r = np.asarray(points, float), np.asarray(r, float)
+    pins = r == 0
+    near = cKDTree(vertices).query(points)[0]
+    need = pins | (r < thickness) | (near > r - thickness)
+    out = np.zeros(len(points))
+    if need.any():
+        sd = signed_distance(points[need], vertices, faces)
+        out[need] = np.where(pins[need], -sd, -(sd - thickness) - r[need])
     return out
 
 

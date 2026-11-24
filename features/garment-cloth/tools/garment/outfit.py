@@ -23,11 +23,11 @@ import numpy as np
 from scipy.spatial import cKDTree
 
 from garment_blob import single
-from garment_proxy import geodesic_depth, simplify
-
 from . import body as body_maps
 from . import sidecar as sc
 from . import sim
+from .sheet import simplify
+from .sim import geodesic_depth
 from .model import RenderModel, Surface
 
 PACKAGE = Path(__file__).resolve().parent
@@ -229,8 +229,8 @@ class Piece:
         self._mark("mesh", self._mask(mask))
 
     def offset(self, mask, mm):
-        """Move the masked vertices along their normals, outward for positive mm. Maps stay; rerun
-        `backstop_from_body` when the gap to the body matters."""
+        """Move the masked vertices along their normals, outward for positive mm (a number or one per vertex). Maps
+        stay; rerun `backstop_from_body` when the gap to the body matters."""
         self.x = sim.offset(self.x, self.faces, self._mask(mask), mm / 1000)
         self._mark("mesh", self._mask(mask))
 
@@ -259,6 +259,33 @@ class Piece:
         mask = self._mask(mask)
         self.r[mask] = 0
         self._mark("r", mask)
+
+    def pin_bound(self, height):
+        """Pin the sim vertices that carry render vertices which must follow skinning, in every primitive with the
+        label: the seam (labelled vertices beside unlabelled ones), their split copies and the band within `height`
+        of the top of the piece's height. Afterwards each of them binds only to kinematic corners (amount 0, gate G2),
+        so the seam stays exact. Repeats until the grown binding, which starts from the pins, adds no pin."""
+        from . import bind
+        model = self.outfit.model
+        before = self.pins.copy()
+        for _ in range(8):
+            added = False
+            for k, marks in enumerate(model.marks(self.label)):
+                if marks is None:
+                    continue
+                must = marks["labelled"] & (marks["seam"] | marks["split"] | (marks["height"] <= height))
+                # Bound as the cook will bind it: on the sim mesh as the sidecar stores it.
+                binding = bind.grow(model.positions[k], model.faces[k], marks["labelled"], single(self.x).astype(float),
+                                    self.faces, self.pins)
+                carried = self.faces[binding.triangle[must]][binding.bary[must] > 0]
+                new = np.setdiff1d(carried, np.flatnonzero(self.pins))
+                if len(new):
+                    self.r[new] = 0
+                    added = True
+            if not added:
+                break
+        self._mark("r", self.pins & ~before)
+        return int((self.pins & ~before).sum())
 
     def unpin(self, mask):
         """Free the masked pins; their r is unset until `gradient` or `paint` writes it."""
@@ -417,6 +444,15 @@ class Piece:
                         correctives={k: (single(dx), single(db)) for k, (dx, db) in self.correctives.items()})
 
 
+def layer_rays(outer, inner, reach):
+    """Per outer vertex the first hit of its body direction on the inner mesh within reach: (t, face, bary)."""
+    t, f, b = np.full(len(outer.x), np.inf), np.full(len(outer.x), -1), np.zeros((len(outer.x), 3))
+    for v in range(len(outer.x)):
+        hit = sim.ray_hits(outer.x[v:v + 1], outer.b[v:v + 1], inner.x, inner.faces, reach[v])
+        t[v], f[v], b[v] = hit[0][0], hit[1][0], hit[2][0]
+    return t, f, b
+
+
 def overlap(outer_x, outer_faces, outer_b, inner_x, inner_faces, inner_b, outer_reach=np.inf, inner_reach=np.inf):
     """Where an outer layer lies over an inner one at rest: per outer vertex the gap g along its body direction to
     the inner mesh (inf where the ray misses it within outer_reach, the distance to the body), and per inner vertex
@@ -430,17 +466,26 @@ def overlap(outer_x, outer_faces, outer_b, inner_x, inner_faces, inner_b, outer_
     return g_out, g_in
 
 
+def stages():
+    """The content stages a build includes: GARMENT_STAGES, or all of them. A script reads it to choose an input that
+    a later stage changes (the declared body)."""
+    return int(os.environ.get("GARMENT_STAGES", "1000000"))
+
+
 class Outfit:
     """One outfit model and its pieces.
 
-    script: the authoring script's path (its hash goes into the sidecar), or None; root: the game root; model: the render model (relative); body: the body surface, the model's own primitives by
-    material name until the declared body of R4 exists (then reach gates are reported, not enforced); fabrics:
-    the fabrics file ({"fabrics": {name: ClothMaterial fields}}) or a dict; colliders, clips, looks: inputs of the
-    checks only (the body shapes file, the clip manifest and the look models that share this sidecar)."""
+    script: the authoring script's path (its hash goes into the sidecar), or None; root: the game root; model: the
+    render model (relative); body: the declared body file (B.3: complete, on the model's skeleton, its hash a build
+    input), or the model's own primitives by material name as a fallback with holes (reach gates against it are
+    reported, not enforced); fabrics: the fabrics file ({"fabrics": {name: ClothMaterial fields}}) or a dict;
+    colliders, clips, looks: inputs of the checks only (the body shapes file, the clip manifest and the look models
+    that share this sidecar); seats: {seated clip: the game's seat convex as (n, d) plane rows in actor space}, the
+    input of the game's gate G10."""
 
     instances = []
 
-    def __init__(self, script, root, model, body, fabrics, colliders=None, clips=None, looks=()):
+    def __init__(self, script, root, model, body, fabrics, colliders=None, clips=None, looks=(), seats=None):
         self.root = Path(root).resolve()
         self.script = None if script is None else Path(script).resolve()
         self.inputs = {}
@@ -450,18 +495,27 @@ class Outfit:
             self.fabrics = fabrics
         else:
             self.fabrics = json.loads(self._input(fabrics).read_text(encoding="utf-8"))["fabrics"]
-        self.body_primitives = list(body)
-        surface = self.model.surface(set(self.body_primitives))
-        self.body = body_maps.Body(surface.points, surface.faces, self.model.normals(set(self.body_primitives)),
-                                   surface.weights, surface.joints, complete=False)
+        if isinstance(body, (str, Path)):
+            # The declared body (B.3): complete, on the model's own skeleton.
+            source = RenderModel(self._input(body))
+            if source.joints != self.model.joints or not np.array_equal(
+                    np.asarray(source.glb.inverse_binds(), np.float32), np.asarray(self.model.glb.inverse_binds(), np.float32)):
+                raise ValueError(f"{body}: the body's joints or inverse binds differ from the model's")
+            materials, complete = set(source.materials), True
+        else:
+            source, materials, complete = self.model, set(body), False
+        surface = source.surface(materials)
+        self.body = body_maps.Body(surface.points, surface.faces, source.normals(materials), surface.weights,
+                                   surface.joints, complete=complete)
         self.colliders = None if colliders is None else self.root / colliders
         self.clips = None if clips is None else self.root / clips
         self.looks = [self.root / look for look in looks]
+        self.seats = dict(seats or {})
         self.pieces = []
         self.layers = []
         # GARMENT_STAGES=n builds the script's content up to its stage n (`if o.stages >= 2:` blocks), to compare a
         # content fix with what came before it.
-        self.stages = int(os.environ.get("GARMENT_STAGES", "1000000"))
+        self.stages = stages()
         Outfit.instances.append(self)
 
     def _input(self, relative):
@@ -489,6 +543,25 @@ class Outfit:
         if (outer, inner) not in self.layers:
             self.layers.append((outer, inner))
 
+    def separate(self, outer, inner):
+        """Where the outer piece's free vertices lie over the inner piece closer than the two fabrics are thick, move
+        them outward by the difference (spec B.6: a gap thinner than the fabrics is fixed by offsetting the outer sim
+        mesh), then recompute the outer backstop. Returns the count moved. Run it before `layer`."""
+        o, i = self.get(outer), self.get(inner)
+        t = o.thickness + i.thickness
+        moved = np.zeros(len(o.x), bool)
+        # The gap is measured along the body direction and the offset goes along the normal, so a tilted vertex
+        # needs a second look.
+        for _ in range(8):
+            g, _ = overlap(o.x, o.faces, o.b, i.x, i.faces, i.b, self.body.closest(o.x)[2], np.inf)
+            thin = np.isfinite(g) & (g < t) & ~o.pins
+            if not thin.any():
+                break
+            o.offset(thin, np.where(thin, t - np.where(np.isfinite(g), g, t), 0) * 1000)
+            o.backstop_from_body()
+            moved |= thin
+        return int(moved.sum())
+
     def layer(self, outer, inner):
         """The layer rule of spec B.6 for an outer piece over an inner one, without cloth-to-cloth contact: where the
         outer lies over the inner at rest with gap g, r_in = d_out = (g - t_in - t_out) / 2, so neither may reach the
@@ -509,6 +582,15 @@ class Outfit:
         hit_i = np.isfinite(g_in) & ~i.pins
         share_i = np.maximum((g_in - t) / 2, 0)
         i.r[hit_i] = np.minimum(i.r[hit_i], share_i[hit_i])
+        # Where any outer vertex's ray lands on an inner triangle (a pin's too), every free corner of it keeps within
+        # what the outer leaves of the gap: g - t - its reach toward the inner, so G8 holds at the hit as well.
+        gap, face, _ = layer_rays(o, i, self.body.closest(o.x)[2])
+        reach = np.minimum(o.d, o.r)
+        for v in np.flatnonzero(np.isfinite(gap)):
+            corners = i.faces[face[v]]
+            free = corners[i.r[corners] > 0]
+            i.r[free] = np.minimum(i.r[free], max(gap[v] - t - reach[v], 0.0))
+            hit_i[free] = True
         i.R[i.d >= i.r] = 0
         i._mark("r", hit_i)
         self.over(outer, inner)
