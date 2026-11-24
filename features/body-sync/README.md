@@ -632,9 +632,14 @@ ignores the mode.
   evidence's reach over the same capped span, the fastest approach, and the
   end's age. A guest that acknowledges late raises its measured round trip:
   the cap keeps it from widening a take's or a contact's reach and the grace
-  past 1 s. The seam sets no threshold and judges no effect: the game dedupes
-  per target effect, not per claim, since after an end the host's own
-  simulation, or the next owner, may meet the same target again.
+  past 1 s. A seat that left gets nothing of a grace. The seam sets no
+  threshold and judges no effect: the game dedupes per target effect across
+  seats, not per claim key (seat, agent, number, target). After an arbitrated
+  end both seats may get OK for the same contact for up to the grace (1 s at
+  most), and after any end the host's own simulation may meet the same target
+  again. A guest that released a body it only claimed or took cannot know the
+  host's number (a withdrawal or refusal moves none, a crossed grant two) and
+  names none for a re-take until it hears a newer one.
 
 `body_sync_traffic` counts the takes, refusals, take-backs and returns
 (`takes`, `take_refusals`, `reclaims`, `returns`); the stand reports them per

@@ -318,6 +318,91 @@ static void test_contact_of_a_retake_before_the_release_is_heard(void) {
     TEST_ASSERT_TRUE(sync_authority_local(&guest, sync_authority_body(&guest, A)));
 }
 
+/* The guest takes A again with no see_host first. `known`: it can know the host's number, and
+   names the grant's while the take waits; else it names none (no claim on a guessed number).
+   Either way it names the grant's once it hears. */
+static void retake_names_the_grant(bool known, const char *what) {
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_take(&guest, A));
+    uint16_t named = 0;
+    bool names = sync_authority_contact_number(&guest, sync_authority_body(&guest, A), &named);
+    deliver(&guest, 1, &host, BODY_SYNC_SEAT_HOST);
+    const sync_authority_body_t *h = sync_authority_body(&host, A);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(1, h->seat, what);
+    if (known) {
+        TEST_ASSERT_TRUE_MESSAGE(names, what);
+        TEST_ASSERT_EQUAL_UINT16_MESSAGE(h->number, named, what);
+    } else {
+        TEST_ASSERT_FALSE_MESSAGE(names, what);
+    }
+    deliver(&host, BODY_SYNC_SEAT_HOST, &guest, 1);
+    TEST_ASSERT_TRUE_MESSAGE(sync_authority_contact_number(&guest, sync_authority_body(&guest, A), &named), what);
+    TEST_ASSERT_EQUAL_UINT16_MESSAGE(h->number, named, what);
+    TEST_ASSERT_EQUAL_MESSAGE(BODY_SYNC_CONTACT_OK, check(1, named), what);
+}
+
+/* A claim released before its answer: the host withdraws it and moves nothing. Its relayed states
+   name no newer number, so the guest still cannot know, however late it takes again. */
+static void test_contact_of_a_retake_after_a_withdrawn_claim(void) {
+    contact_start();
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_claim(&guest, A, BODY_SYNC_HOLD_UNTIL_SETTLED));
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_release(&guest, A));
+    deliver(&guest, 1, &host, BODY_SYNC_SEAT_HOST);
+    TEST_ASSERT_EQUAL_UINT16(0, sync_authority_body(&host, A)->number);
+    see_host(&guest); /* the host's states, seconds later: the same number */
+    host.now += 600;
+    retake_names_the_grant(false, "a re-take after a withdrawn claim");
+}
+
+/* A release that crosses its take's grant: the host moves twice. Heard in any order, the guest
+   ends on the host's number. */
+static void test_contact_of_a_retake_after_a_release_crossed_the_grant(void) {
+    static const char *orders[] = {"re-take before hearing anything", "the host's move of the release heard first",
+                                   "the grant heard before the release reached the host"};
+    for (int order = 0; order < 3; order++) {
+        contact_start();
+        see_host(&guest);
+        TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_take(&guest, A));
+        deliver(&guest, 1, &host, BODY_SYNC_SEAT_HOST); /* granted */
+        TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_release(&guest, A));
+        if (order == 2) {
+            deliver(&host, BODY_SYNC_SEAT_HOST, &guest, 1); /* a stale grant */
+        }
+        deliver(&guest, 1, &host, BODY_SYNC_SEAT_HOST); /* the release crosses the grant */
+        TEST_ASSERT_EQUAL_UINT8(BODY_SYNC_SEAT_HOST, sync_authority_body(&host, A)->seat);
+        TEST_ASSERT_EQUAL_UINT16(2, sync_authority_body(&host, A)->number);
+        if (order >= 1) {
+            deliver(&host, BODY_SYNC_SEAT_HOST, &guest, 1);
+        }
+        retake_names_the_grant(order >= 1, orders[order]);
+    }
+}
+
+/* A take refused while the guest released it: no move, a refusal mark. The re-take names nothing
+   until it hears, then the number two on. */
+static void test_contact_of_a_retake_after_a_refused_released_take(void) {
+    contact_start();
+    sync_authority_host_active(&host, A, true);
+    see_host(&guest);
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_take(&guest, A));
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_release(&guest, A));
+    deliver(&guest, 1, &host, BODY_SYNC_SEAT_HOST);
+    TEST_ASSERT_EQUAL_UINT16(0, sync_authority_body(&host, A)->number);
+    deliver(&host, BODY_SYNC_SEAT_HOST, &guest, 1); /* the refusal */
+    sync_authority_host_active(&host, A, false);
+    retake_names_the_grant(false, "a re-take after a refused take it released");
+    TEST_ASSERT_EQUAL_UINT16(2, sync_authority_body(&host, A)->number);
+}
+
+/* A seat that left gets nothing of an end's grace: its session is over. */
+static void test_contact_of_an_arbitrated_end_lapses_when_the_seat_leaves(void) {
+    contact_start();
+    uint16_t n = own_by_take(&guest, 1);
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_reclaim(&host, A));
+    TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_OK, check(1, n));
+    sync_authority_seat_left(&host, 1);
+    TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_STALE, check(1, n));
+}
+
 /* Arbitration: the host settles a contest. The guest simulated on until it heard, so its claims
    of the old number count through the grace. */
 static void test_contact_after_a_take_back_counts_within_the_grace(void) {
@@ -473,6 +558,10 @@ int main(int argc, char **argv) {
     RUN_TEST(test_contact_after_a_take_by_another_seat);
     RUN_TEST(test_contact_after_a_flight_returns);
     RUN_TEST(test_contact_of_a_retake_before_the_release_is_heard);
+    RUN_TEST(test_contact_of_a_retake_after_a_withdrawn_claim);
+    RUN_TEST(test_contact_of_a_retake_after_a_release_crossed_the_grant);
+    RUN_TEST(test_contact_of_a_retake_after_a_refused_released_take);
+    RUN_TEST(test_contact_of_an_arbitrated_end_lapses_when_the_seat_leaves);
     RUN_TEST(test_contact_after_a_take_back_counts_within_the_grace);
     RUN_TEST(test_contact_after_a_host_claim_counts_within_the_grace);
     RUN_TEST(test_contact_after_a_grant_to_another_seat_counts_within_the_grace);

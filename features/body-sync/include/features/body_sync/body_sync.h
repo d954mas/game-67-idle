@@ -263,9 +263,11 @@ bool body_sync_contact_number(const body_sync_t *sync, body_sync_id_t id, uint16
      ownership of the body (one is kept per seat and body), any ownership from before a seat
      joined again.
    For an ended ownership `out` measures the agent where that seat's last state the host took
-   put it (another seat may fly the body since); no such state gives gap INFINITY. The seam
-   judges no effect: the game dedupes per target effect, not per claim, since after an end the
-   host's own simulation, or the next owner, may meet the same target again. */
+   put it (another seat may fly the body since); no such state gives gap INFINITY. A seat not
+   joined gets nothing of a grace. The seam judges no effect: the game dedupes per target effect
+   across seats, not per claim key (seat, agent, number, target): after an arbitrated end both
+   seats may get OK for the same contact for up to the grace (1 s at most), and after any end the
+   host's own simulation may meet the same target again. */
 body_sync_contact_verdict_t body_sync_check_contact(const body_sync_t *sync, uint8_t seat, body_sync_id_t agent, uint16_t number,
                                                     body_sync_id_t target, body_sync_contact_t *out);
 

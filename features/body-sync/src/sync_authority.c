@@ -156,13 +156,14 @@ static void guest_authority(sync_authority_t *a, sync_authority_body_t *b, const
         b->claim_pending = false;
     }
     /* The host marks every take it refuses of a body this seat does not own, one released while
-       it waited too. */
+       it waited too, and a take whose grant a release crossed before the answer left. */
     bool answers_take = from_record && r->sequence != 0 && b->claim_take && r->sequence == b->claim_seq;
     b->take_refused = b->take_refused || (answers_take && r->seat != me);
     if (newer16(r->number, b->number)) {
         b->number = r->number;
-        b->release_unheard = false;
         bool stale_grant = r->seat == me && !answers_mine && r->sequence != 0 && !r->forced;
+        /* A grant of a claim released since: the host still owes the release's move. */
+        b->number_lag = stale_grant ? SYNC_LAG_UNKNOWN : SYNC_LAG_NONE;
         b->seat = stale_grant ? BODY_SYNC_SEAT_HOST : r->seat;
         /* Any move to this seat, stale grant or not, is the one the host skipped a number on. */
         b->take_refused = b->take_refused && r->seat != me;
@@ -330,9 +331,9 @@ body_sync_result_t sync_authority_release(sync_authority_t *a, body_sync_id_t id
     if (!queue_push(a, &record)) {
         return BODY_SYNC_FULL;
     }
+    b->number_lag = b->seat == a->self ? SYNC_LAG_ONE : SYNC_LAG_UNKNOWN;
     b->seat = BODY_SYNC_SEAT_HOST;
     b->claim_pending = false;
-    b->release_unheard = true;
     b->hold = BODY_SYNC_HOLD_UNTIL_RELEASE;
     b->holder = BODY_SYNC_ID_NONE;
     return BODY_SYNC_OK;
@@ -593,7 +594,11 @@ body_sync_result_t sync_authority_receive(sync_authority_t *a, uint8_t seat, uin
         /* A release counts at the number its sender saw, or for the grant it crossed; an older
            one (the host moved the body by force since) is stale and changes nothing. */
         if (b->seat == seat && (r.number == b->number || (r.sequence != 0 && r.sequence == b->granted_seq))) {
+            /* The take's answer, not sent yet, now leaves naming the host: the seat reads it as a
+               refusal and declares two on for its next take, so the host skips the same. */
+            bool crossed_take = r.number != b->number && b->hold == BODY_SYNC_HOLD_UNTIL_REST && a->answer[seat][slot] == r.sequence;
             host_move(a, b, BODY_SYNC_SEAT_HOST, BODY_SYNC_HOLD_UNTIL_RELEASE, 0, false, SYNC_END_VOLUNTARY);
+            a->refused[seat][slot / 64] |= crossed_take ? 1ull << (slot % 64) : 0ull;
             take_record(b, &r, false);
         } else if (!withdrew) {
             (*stale)++;
@@ -756,7 +761,7 @@ body_sync_result_t sync_authority_take(sync_authority_t *a, body_sync_id_t id) {
 
 uint16_t sync_authority_declared_number(const sync_authority_t *a, const sync_authority_body_t *b) {
     bool taking = !sync_authority_is_host(a) && b->claim_pending && b->hold == BODY_SYNC_HOLD_UNTIL_REST && b->seat != a->self;
-    uint16_t base = (uint16_t)(b->number + (b->release_unheard ? 1u : 0u));
+    uint16_t base = (uint16_t)(b->number + (b->number_lag == SYNC_LAG_ONE ? 1u : 0u));
     return taking ? (uint16_t)(base + (b->take_refused ? 2u : 1u)) : b->number;
 }
 
@@ -781,7 +786,7 @@ body_sync_contact_verdict_t sync_authority_check_contact(const sync_authority_t 
     }
     /* A claim of an ended ownership is one the guest sent before it heard of the end: within a
        round trip and a delay of it. Later, the window would credit a body somebody else flies. */
-    if (e->how != SYNC_END_REVOKED && a->now - e->tick > grace_ticks) {
+    if (e->how != SYNC_END_REVOKED && (!a->joined[seat] || a->now - e->tick > grace_ticks)) {
         return BODY_SYNC_CONTACT_STALE;
     }
     *ended = e;
@@ -793,7 +798,7 @@ bool sync_authority_contact_number(const sync_authority_t *a, const sync_authori
         return false;
     }
     uint16_t declared = sync_authority_declared_number(a, b);
-    if (!sync_authority_is_host(a) && b->claim_pending && declared == b->number) {
+    if (!sync_authority_is_host(a) && b->claim_pending && (declared == b->number || b->number_lag == SYNC_LAG_UNKNOWN)) {
         return false;
     }
     *number = declared;

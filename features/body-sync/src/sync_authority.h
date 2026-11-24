@@ -68,13 +68,22 @@ typedef struct sync_authority_body {
     bool takable;        /* light for the interaction policy: class LIGHT within light_mass_max */
     bool claim_take;     /* guest: the pending claim is a take (sync_authority_take) */
     bool take_refused;   /* guest: a take of it was refused and no move to this seat came since */
-    bool release_unheard; /* guest: released, and no newer number heard since: the host's is one on */
+    uint8_t number_lag; /* guest: sync_number_lag_t, what the host's number is against b->number */
     /* Host: the owner's newest state the shell took, for the end of its ownership. */
     bool has_pose;
     uint8_t pose_seat;
     float pose_position[3];
     float pose_speed;
 } sync_authority_body_t;
+
+/* Guest: what its release did to the host's number, until it hears a newer one. */
+typedef enum sync_number_lag {
+    SYNC_LAG_NONE = 0,
+    SYNC_LAG_ONE,     /* it released a body it owned: the host's move adds one */
+    /* It released a body it only claimed or took: the host withdrew or refused that (no move),
+       or granted it and then took the release (two), or still owes a crossed release's move. */
+    SYNC_LAG_UNKNOWN,
+} sync_number_lag_t;
 
 typedef struct sync_authority_pending {
     bool active;
@@ -250,8 +259,10 @@ body_sync_result_t sync_authority_take(sync_authority_t *a, body_sync_id_t id);
    for its next take as well. A state of the refused take declared at most the claimant's
    number then plus one, and the claimant's number never passes the host's, which is N when
    that later move comes: N + 2 is one no such state carries, however the number moved while
-   the refusal was on its way. A guest that released the body and has heard no newer number
-   counts from one on, as the host's move of the release did (or a forced move before it). */
+   the refusal was on its way. A guest that released a body it owned and has heard no newer
+   number counts from one on, as the host's move of the release did (or a forced move before
+   it); one that released a body it only claimed or took cannot know the host's number until it
+   hears a newer one (sync_authority_contact_number names none meanwhile). */
 uint16_t sync_authority_declared_number(const sync_authority_t *a, const sync_authority_body_t *b);
 /* Bodies `seat` owns by interaction now (a hold until rest); this guest's own count includes its
    takes waiting for the grant. */
