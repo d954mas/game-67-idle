@@ -15,7 +15,8 @@ GarmentHost *gh_load(const void *blob, uint32_t size, int joint_count, const cha
 void gh_free(GarmentHost *h);
 int gh_piece_vertices(const GarmentHost *h, int piece);
 bool gh_step(GarmentHost *h, const float *pose, const float *world, float dt, bool reset, bool render, bool measure,
-             const ClothConvex *convexes, int convex_count, float max_distance_scale, float max_distance_bias);
+             const ClothConvex *convexes, int convex_count, float max_distance_scale, float max_distance_bias,
+             const float *corrective_weight);
 bool gh_positions(const GarmentHost *h, int piece, float *out);
 bool gh_metrics(const GarmentHost *h, float out[8]);
 
@@ -75,13 +76,13 @@ static void test_the_host_steps_the_solver_it_is_built_from(void) {
     const ClothFrame frame = {.linear_inertia = piece->linear_inertia, .angular_inertia = piece->angular_inertia};
 
     const float pose[12] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0};
-    TEST_ASSERT_TRUE(gh_step(host, pose, NULL, 0.0F, true, true, true, &floor, 1, 1.0F, 0.0F));
+    TEST_ASSERT_TRUE(gh_step(host, pose, NULL, 0.0F, true, true, true, &floor, 1, 1.0F, 0.0F, NULL));
     TEST_ASSERT_TRUE(cloth_reset(&direct, mesh, &piece->material, ref, NULL, &shapes));
     shapes.convex_move = still;
     unsigned substeps = 0;
     float metrics[8];
     for (int frame_index = 0; frame_index < 30; ++frame_index) {
-        TEST_ASSERT_TRUE(gh_step(host, pose, NULL, 1.0F / 30.0F, false, true, true, &floor, 1, 1.0F, 0.0F));
+        TEST_ASSERT_TRUE(gh_step(host, pose, NULL, 1.0F / 30.0F, false, true, true, &floor, 1, 1.0F, 0.0F, NULL));
         TEST_ASSERT_TRUE(gh_metrics(host, metrics));
         for (; substeps < (unsigned)metrics[1]; ++substeps)
             cloth_step(&direct, mesh, &piece->material, 1.0F / 180.0F, &frame, ref, NULL, &shapes);

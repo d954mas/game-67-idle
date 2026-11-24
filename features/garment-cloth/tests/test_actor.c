@@ -211,6 +211,100 @@ static void test_shared_asset_instances_keep_their_own_state(void) {
     TEST_ASSERT_TRUE(actors[0].spheres[0].c[1] > 0.5F);
 }
 
+/* The panel with one corrective that lifts the free corner off the arm and turns its body direction toward +X. */
+static const GarmentCorrective lift[] = {{{0, 0, 0}, {0, 0, 0}}, {{0, 0, 0}, {0, 0, 0}}, {{0, 0.2F, 0.3F}, {1, 0, 1}}};
+static const char *const lift_names[] = {"sit"};
+static const GarmentAsset lifted = {.id = "panel", .mesh = &mesh, .skin = skin, .direction = direction, .corrective = lift,
+                                    .material = {.density = 0.2F, .stretch = 0.03F, .iterations = 1, .friction = 0.5F}};
+static const GarmentSet corrected = {.id = "arm", .bones = bones, .bone_count = 2, .spheres = &hand, .sphere_count = 1,
+                                     .pieces = &lifted, .piece_count = 1, .corrective_names = lift_names, .corrective_count = 1};
+
+static const ClothReference *reference_at(GarmentActor *actor, const nt_skeletal_mat34_t *pose, float weight, bool reset,
+                                          float dt) {
+    const GarmentInput in = {.pose = pose, .world = identity_world, .dt = dt, .reset = reset, .render = true,
+                             .max_distance_scale = 1.0F, .corrective_weight = &weight};
+    TEST_ASSERT_TRUE(garment_actor_update(actor, &corrected, &rig, &in));
+    const ClothReference *ref = NULL;
+    TEST_ASSERT_TRUE(garment_actor_piece(actor, 0, NULL, &ref));
+    return ref;
+}
+
+static void test_a_corrective_is_found_by_name(void) {
+    TEST_ASSERT_EQUAL_INT(0, garment_set_corrective(&corrected, "sit"));
+    TEST_ASSERT_EQUAL_INT(-1, garment_set_corrective(&corrected, "stand"));
+    TEST_ASSERT_EQUAL_INT(-1, garment_set_corrective(&set, "sit"));
+}
+
+/* The reference of a corrective at weight 1 is the skinned corrected rest, the body direction the skinned corrected one;
+   at weight 0 it is the plain reference, bit for bit. */
+static void test_a_corrective_at_full_weight_is_the_skinned_corrected_rest(void) {
+    nt_skeletal_mat34_t pose[2];
+    arm(0.7F, pose);
+    const ClothReference *ref = reference_at(&actors[0], pose, 1.0F, true, 0.0F);
+    const float shifted[3] = {rest[2][0] + lift[2].delta[0], rest[2][1] + lift[2].delta[1], rest[2][2] + lift[2].delta[2]};
+    const float turned[3] = {direction[2][0] + lift[2].direction[0], direction[2][1] + lift[2].direction[1],
+                             direction[2][2] + lift[2].direction[2]};
+    const float length = sqrtf(turned[0] * turned[0] + turned[1] * turned[1] + turned[2] * turned[2]);
+    for (int i = 0; i < 3; ++i) {
+        float x = 0.0F, b = 0.0F;
+        for (int j = 0; j < 3; ++j) {
+            x += pose[0].r[i][j] * shifted[j];
+            b += pose[0].r[i][j] * turned[j] / length;
+        }
+        NEAR(1e-5F, x, ref[2].x[i]);
+        NEAR(1e-5F, b, ref[2].b[i]);
+    }
+    const GarmentInput plain = {.pose = pose, .world = identity_world, .reset = true, .render = true, .max_distance_scale = 1.0F};
+    TEST_ASSERT_TRUE(garment_actor_update(&actors[1], &set, &rig, &plain));
+    const ClothReference *base = NULL;
+    TEST_ASSERT_TRUE(garment_actor_piece(&actors[1], 0, NULL, &base));
+    ref = reference_at(&actors[0], pose, 0.0F, true, 0.0F);
+    TEST_ASSERT_EQUAL_MEMORY(base, ref, 3 * sizeof *ref);
+}
+
+/* Skinning is linear in the rest point, so the reference at a weight lies that fraction of the way between the plain
+   and the fully corrected one. */
+static void test_corrective_weights_blend_linearly(void) {
+    nt_skeletal_mat34_t pose[2];
+    arm(-0.4F, pose);
+    ClothReference ends[2], mid;
+    memcpy(&ends[0], &reference_at(&actors[0], pose, 0.0F, true, 0.0F)[2], sizeof mid);
+    memcpy(&ends[1], &reference_at(&actors[0], pose, 1.0F, true, 0.0F)[2], sizeof mid);
+    memcpy(&mid, &reference_at(&actors[0], pose, 0.3F, true, 0.0F)[2], sizeof mid);
+    for (int k = 0; k < 3; ++k) NEAR(1e-5F, ends[0].x[k] + 0.3F * (ends[1].x[k] - ends[0].x[k]), mid.x[k]);
+}
+
+/* A reset puts the cloth on the corrected reference; a weight changed between frames reaches its new reference by the
+   frame's end. */
+static void test_a_reset_with_a_corrective_puts_the_cloth_on_the_corrected_reference(void) {
+    GarmentActor *actor = &actors[0];
+    nt_skeletal_mat34_t pose[2];
+    arm(0.3F, pose);
+    const ClothReference *ref = reference_at(actor, pose, 1.0F, true, 0.0F);
+    const ClothState *cloth = NULL;
+    TEST_ASSERT_TRUE(garment_actor_piece(actor, 0, &cloth, NULL));
+    for (int v = 0; v < 3; ++v)
+        for (int k = 0; k < 3; ++k) NEAR(1e-6F, ref[v].x[k], cloth->x[v][k]);
+    (void)reference_at(actor, pose, 0.0F, true, 0.0F);
+    ClothReference full;
+    memcpy(&full, &reference_at(&actors[1], pose, 1.0F, true, 0.0F)[2], sizeof full);
+    ref = reference_at(actor, pose, 1.0F, false, 6.0F / 180.0F);
+    TEST_ASSERT_EQUAL_UINT(6, actor->stats.steps);
+    for (int k = 0; k < 3; ++k) NEAR(1e-6F, full.x[k], ref[2].x[k]);
+    TEST_ASSERT_TRUE(actor->corrective_weight[0] == 1.0F);
+}
+
+static void test_a_corrective_weight_outside_zero_to_one_is_refused(void) {
+    nt_skeletal_mat34_t pose[2];
+    arm(0.0F, pose);
+    const float weights[] = {1.5F, -0.1F, NAN};
+    for (int i = 0; i < 3; ++i) {
+        const GarmentInput in = {.pose = pose, .world = identity_world, .reset = true, .max_distance_scale = 1.0F,
+                                 .corrective_weight = &weights[i]};
+        TEST_ASSERT_FALSE(garment_actor_update(&actors[0], &corrected, &rig, &in));
+    }
+}
+
 static void test_missing_joint_or_bad_input_is_refused(void) {
     nt_skeletal_mat34_t pose[2];
     arm(0.0F, pose);
@@ -238,5 +332,10 @@ int main(void) {
     RUN_TEST(test_scale_zero_makes_every_vertex_kinematic);
     RUN_TEST(test_shared_asset_instances_keep_their_own_state);
     RUN_TEST(test_missing_joint_or_bad_input_is_refused);
+    RUN_TEST(test_a_corrective_is_found_by_name);
+    RUN_TEST(test_a_corrective_at_full_weight_is_the_skinned_corrected_rest);
+    RUN_TEST(test_corrective_weights_blend_linearly);
+    RUN_TEST(test_a_reset_with_a_corrective_puts_the_cloth_on_the_corrected_reference);
+    RUN_TEST(test_a_corrective_weight_outside_zero_to_one_is_refused);
     return UNITY_END();
 }

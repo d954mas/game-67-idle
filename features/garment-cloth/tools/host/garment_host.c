@@ -17,12 +17,12 @@
 typedef struct GarmentHost {
     void *blob; /* the view points into it */
     const GarmentSet *view;
-    /* The actor's set: a copy of the view whose meshes and directions a reference override may redirect. */
+    /* The actor's set: a copy of the view whose pieces read their correctives from the host's own, writable copy, so a
+       bake can store a shape and step on it through the runtime's own evaluation. */
     GarmentSet set;
     GarmentAsset pieces[GARMENT_PIECES_MAX];
     ClothMesh meshes[GARMENT_PIECES_MAX];
-    float (*rest[GARMENT_PIECES_MAX])[3];
-    float (*direction[GARMENT_PIECES_MAX])[3];
+    GarmentCorrective *corrective[GARMENT_PIECES_MAX];
     uint16_t *parent;
     uint32_t *joint_id;
     nt_skeletal_skeleton_t skel;
@@ -33,18 +33,15 @@ GH_API void gh_free(GarmentHost *h) {
     if (!h) return;
     garment_actor_clear(&h->actor);
     garment_asset_free(h->view);
-    for (int p = 0; p < GARMENT_PIECES_MAX; ++p) {
-        free(h->rest[p]);
-        free(h->direction[p]);
-    }
+    for (int p = 0; p < GARMENT_PIECES_MAX; ++p) free(h->corrective[p]);
     free(h->parent);
     free(h->joint_id);
     free(h->blob);
     free(h);
 }
 
-/* The render transfer frames come from the authored rest, as the game's do: a reference override is a corrective of the
-   reference, and the shader's frames do not move with it. */
+/* The render transfer frames come from the authored rest, as the game's do: a corrective moves the reference, and the
+   shader's frames do not move with it. */
 static bool prepare_transfer(GarmentHost *h) {
     GarmentActor *a = &h->actor;
     int total = 0;
@@ -85,10 +82,16 @@ GH_API GarmentHost *gh_load(const void *blob, uint32_t size, int joint_count, co
     h->view = garment_asset_view(h->blob, size);
     if (!h->view) goto fail;
     h->set = *h->view;
+    const size_t shapes = (size_t)h->set.corrective_count;
     for (int p = 0; p < h->set.piece_count; ++p) {
         h->pieces[p] = h->view->pieces[p];
         h->meshes[p] = *h->view->pieces[p].mesh;
         h->pieces[p].mesh = &h->meshes[p];
+        if (!shapes) continue;
+        const size_t records = shapes * (size_t)h->meshes[p].vertices;
+        if (!(h->corrective[p] = calloc(records, sizeof *h->corrective[p]))) goto fail;
+        if (h->view->pieces[p].corrective) memcpy(h->corrective[p], h->view->pieces[p].corrective, records * sizeof *h->corrective[p]);
+        h->pieces[p].corrective = h->corrective[p];
     }
     h->set.pieces = h->pieces;
     if (!garment_actor_prepare(&h->actor, &h->set, &h->skel) || !prepare_transfer(h)) goto fail;
@@ -104,17 +107,19 @@ GH_API int gh_piece_vertices(const GarmentHost *h, int piece) {
     return h && piece >= 0 && piece < h->set.piece_count ? h->meshes[piece].vertices : 0;
 }
 
+GH_API int gh_corrective_count(const GarmentHost *h) { return h ? h->set.corrective_count : 0; }
+
 /* pose: joint_count model-space 3x4 row-major matrices; world: the actor root, column-major 4x4, NULL for identity;
-   convexes in world space. The rest is GarmentInput. */
+   convexes in world space; corrective_weight: gh_corrective_count weights, NULL for all 0. The rest is GarmentInput. */
 GH_API bool gh_step(GarmentHost *h, const float *pose, const float *world, float dt, bool reset, bool render,
                     bool measure, const ClothConvex *convexes, int convex_count, float max_distance_scale,
-                    float max_distance_bias) {
+                    float max_distance_bias, const float *corrective_weight) {
     static const float identity[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
     if (!h || !pose) return false;
     const GarmentInput in = {.pose = (const nt_skeletal_mat34_t *)pose, .world = world ? world : identity, .dt = dt,
                              .reset = reset, .render = render, .convexes = convexes, .convex_count = convex_count,
                              .max_distance_scale = max_distance_scale, .max_distance_bias = max_distance_bias,
-                             .measure = measure};
+                             .corrective_weight = corrective_weight, .measure = measure};
     return garment_actor_update(&h->actor, &h->set, &h->skel, &in);
 }
 
@@ -152,26 +157,11 @@ GH_API bool gh_metrics(const GarmentHost *h, float out[8]) {
     return true;
 }
 
-/* Replace a piece's skinned rest (vertices x 3) and body direction at rest (vertices x 3, normalized after skinning,
-   as the runtime does) with a corrected shape; NULL restores the cooked one. Takes effect at the next update. */
-GH_API bool gh_override(GarmentHost *h, int piece, const float *rest, const float *direction) {
-    if (!h || piece < 0 || piece >= h->set.piece_count) return false;
-    const int n = h->meshes[piece].vertices;
-    const GarmentAsset *cooked = &h->view->pieces[piece];
-    struct {
-        float (**store)[3];
-        const float *source;
-    } fields[2] = {{&h->rest[piece], rest}, {&h->direction[piece], direction}};
-    for (int k = 0; k < 2; ++k) {
-        if (!fields[k].source) {
-            free(*fields[k].store);
-            *fields[k].store = NULL;
-            continue;
-        }
-        if (!*fields[k].store && !(*fields[k].store = malloc((size_t)n * sizeof **fields[k].store))) return false;
-        memcpy(*fields[k].store, fields[k].source, (size_t)n * sizeof **fields[k].store);
-    }
-    h->meshes[piece].rest = h->rest[piece] ? (const float (*)[3])h->rest[piece] : cooked->mesh->rest;
-    h->pieces[piece].direction = h->direction[piece] ? (const float (*)[3])h->direction[piece] : cooked->direction;
+/* Store a piece's corrective shape `index` (vertices x 6: position delta, body direction delta, rest space); it takes
+   effect at the next update and lasts until the host is freed. */
+GH_API bool gh_corrective(GarmentHost *h, int piece, int index, const float *shape) {
+    if (!h || !shape || piece < 0 || piece >= h->set.piece_count || index < 0 || index >= h->set.corrective_count) return false;
+    const size_t n = (size_t)h->meshes[piece].vertices;
+    memcpy(h->corrective[piece] + (size_t)index * n, shape, n * sizeof *h->corrective[piece]);
     return true;
 }

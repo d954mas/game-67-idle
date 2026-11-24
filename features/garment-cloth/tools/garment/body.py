@@ -138,16 +138,26 @@ def backstop(points, faces, r, body, thickness):
     points, r = np.asarray(points, float), np.asarray(r, float)
     if body is None:
         return -sim.vertex_normals(points, faces), np.zeros(len(points)), np.zeros(len(points)), np.zeros(len(points), bool)
-    face, _, distance, closest, normal, rim = body.closest(points)
-    signed = np.einsum("nj,nj->n", points - closest, normal)
-    toward = (closest - points) / np.maximum(distance, 1e-12)[:, None]
-    direction = np.where(((signed > ON_BODY_M) & (distance > ON_BODY_M))[:, None], toward, -normal)
-    direction = smooth_directions(direction, faces)
+    direction, (face, closest, normal, rim, signed) = _directions(points, faces, body)
     d = np.maximum(np.maximum(signed, 0) - thickness, 0)
     R = np.zeros(len(points))
     for i in np.flatnonzero((r > 0) & (d < r) & ~rim):
         R[i] = body.radius(face[i], closest[i], normal[i])
     return direction, d, R, rim
+
+
+def directions(points, faces, body):
+    """The body direction b of each sim vertex by backstop's rule, against any pose of the body (a posed Body): for a
+    corrective, from the settled cloth to the body posed in the key."""
+    return _directions(np.asarray(points, float), faces, body)[0]
+
+
+def _directions(points, faces, body):
+    face, _, distance, closest, normal, rim = body.closest(points)
+    signed = np.einsum("nj,nj->n", points - closest, normal)
+    toward = (closest - points) / np.maximum(distance, 1e-12)[:, None]
+    direction = np.where(((signed > ON_BODY_M) & (distance > ON_BODY_M))[:, None], toward, -normal)
+    return smooth_directions(direction, faces), (face, closest, normal, rim, signed)
 
 
 def smooth_directions(directions, faces, iterations=4):

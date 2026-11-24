@@ -5,8 +5,14 @@
 
 Prints one JSON finding per gate and piece (see gates.py), then a summary line, and exits 1 when an enforced gate
 or the rebuild fails. A failing gate never stops the sidecar: the findings are the content to-do. --sidecar is the
-committed file to compare (default: beside the model); --cards writes a card of each failure's worst frame."""
+committed file to compare (default: beside the model); --cards writes a card of each failure's worst frame and one
+per corrective (the reference at its key without and with it, and the cloth the runtime holds on it).
+
+Each corrective is gated at its key with the reference the game evaluates there (G4-G8 on rest + delta), its bake's
+residual drift is reported ("bake"), and a clip whose manifest entry names a corrective the outfit lacks is reported
+("correctives")."""
 import argparse
+import copy
 import json
 import os
 import runpy
@@ -85,12 +91,15 @@ def run_gates(outfit, data, wanted, clip_names=None, workers=None):
             frames = 1 if c[0] == G.REST else len(M.load(c[1]).key_times())
             # Runs of frames, so a long clip spreads over the workers.
             clips += [c] if c[0] == G.REST else [(*c, s, s + CHUNK) for s in range(0, frames, CHUNK)]
+        clips += [c for c in G.corrective_specs(sc, gd.clips)
+                  if clip_names is None or c[2].get("clip") in clip_names or "pose" in c[2]]
         with ProcessPoolExecutor(max_workers=workers or min(8, os.cpu_count() or 1)) as pool:
             parts = list(pool.map(G.clip_gates, [gd] * len(clips), clips, [per_frame] * len(clips)))
         findings += list(G.merge(parts).values())
     if "G9" in wanted:
         findings += G.g9_looks(outfit.model, outfit.looks)
     findings += G.holes(sc, outfit.body)
+    findings += G.bake_findings(sc) + G.corrective_coverage(sc, outfit.clips)
     return findings
 
 
@@ -117,14 +126,29 @@ def posed_shapes(outfit, matrices):
 
 def failure_card(outfit, finding, folder):
     worst = finding["worst"]
-    piece_id = finding["piece"].split(">")[0].split("/")[0] if finding["gate"] not in ("G9", "G10") else None
-    if not worst or piece_id is None:
+    if finding["gate"] in ("G9", "G10", "bake", "correctives") or not worst:
         return None
+    piece_id = finding["piece"].split(">")[0].split("/")[0]
     piece = outfit.get(piece_id)
-    matrices = pose_matrices(outfit, worst["clip"], worst["t"])
-    name = f"{finding['gate']}-{Path(outfit.model_path).stem}-{finding['piece'].replace('/', '-').replace('>', '-over-')}.png"
+    name = f"{finding['gate']}-{Path(outfit.model_path).stem}-{finding['piece'].replace('/', '-').replace('>', '-over-')}"
+    if finding.get("corrective"):
+        # The corrected reference fails here, so the card draws it: the piece's rest moved by the corrective.
+        from garment import corrective as C
+        record = next(r for r in outfit.corrective_records.values() if r["name"] == finding["corrective"])
+        _, worlds = C.key_of(outfit, record)
+        glb = outfit.model.glb
+        matrices = M.skin_matrices(glb, outfit.model.joints, glb.inverse_binds(), worlds)[0]
+        piece = copy.copy(piece)
+        piece.x = piece.x + piece.correctives[finding["corrective"]][0]
+        name += f"-{finding['corrective']}"
+    else:
+        matrices = pose_matrices(outfit, worst["clip"], worst["t"])
+    name += ".png"
     value = f"{worst['value_mm']} mm" if worst.get("value_mm") is not None else ""
-    if finding["frames"] > 1:
+    if finding.get("corrective"):
+        title = (f"{finding['gate']} {finding['piece']} with corrective {finding['corrective']} at its key ({worst['clip']}) "
+                 f"{value}; marked: the failing sim vertices")
+    elif finding["frames"] > 1:
         title = (f"{finding['gate']} {finding['piece']}: worst at {worst['clip']} @ {worst['t']} s {value}; "
                  f"{finding['frames_failed']} of {finding['frames']} frames fail")
     else:
@@ -134,6 +158,19 @@ def failure_card(outfit, finding, folder):
                      shapes=posed_shapes(outfit, matrices) if finding["gate"] in ("G6", "G7") else None, title=title,
                      yaws=(0, 90, 180, 270))
     return str(Path(folder) / name)
+
+
+def corrective_cards(outfit, data, folder):
+    """A card per corrective: the reference at its key without it, with it, and the cloth the runtime holds on it after
+    a reset there (heat: distance from the corrected reference). Needs the garment_host library."""
+    from garment import corrective as C
+    out = []
+    sc = read(data)
+    for record in sc.correctives:
+        path = Path(folder) / f"corrective-{Path(outfit.model_path).stem}-{record['name']}.png"
+        C.card(outfit, sc, record, path)
+        out.append(str(path))
+    return out
 
 
 def main(argv=None):
@@ -159,6 +196,8 @@ def main(argv=None):
         for f in findings:
             if f.get("failed") and f["gate"] != "rebuild":
                 f["card"] = failure_card(outfit, f, args.cards)
+        for card in corrective_cards(outfit, data, args.cards):
+            print(json.dumps(dict(card=card)))
     for f in findings:
         print(json.dumps(f))
     failed = [f for f in findings if f.get("failed") and f["enforced"]]

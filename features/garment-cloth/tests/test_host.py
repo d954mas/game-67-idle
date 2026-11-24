@@ -1,8 +1,9 @@
 """The offline host on a synthetic sheet over a cylinder.
 
 `--emit <blob>` writes the outfit test_host.c steps through the host and through the solver directly. With the
-garment_host library as the argument it runs the Python side: a ramp reaches its key pose, and an injected reference
-is the reference the solver sees."""
+garment_host library as the argument it runs the Python side: a ramp reaches its key pose, a stored corrective is the
+reference the solver sees, and a bake converges to a drape that is an equilibrium of the runtime."""
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -10,10 +11,13 @@ from pathlib import Path
 import numpy as np
 
 TOOLS = Path(__file__).resolve().parents[1] / "tools"
-sys.path.insert(0, str(TOOLS))
+sys.path[:0] = [str(TOOLS), str(Path(__file__).resolve().parent)]
 from garment_blob import decode, encode  # noqa: E402
 from garment.cook import cook_mesh  # noqa: E402
-from garment.host import Host, Skeleton, ramp  # noqa: E402
+from garment import corrective as C  # noqa: E402
+from garment.body import Body  # noqa: E402
+from garment.host import Host, Skeleton, bake, deltas, ramp  # noqa: E402
+from garment.outfit import Outfit  # noqa: E402
 
 LIBRARY = None
 THICKNESS = 0.004
@@ -22,8 +26,9 @@ MATERIAL = dict(density=0.33, stretch=8e-6, bend=450.0, drag=0.4, thickness=THIC
                 weft_max_strain=0.18, friction=0.4, compression_limit=0.25)
 
 
-def sheet_over_cylinder():
-    """A 0.4 m sheet 6 mm above a cylinder of radius 0.1 along Z, pinned along the cylinder's top line, on one joint."""
+def sheet_over_cylinder(correctives=()):
+    """A 0.4 m sheet 6 mm above a cylinder of radius 0.1 along Z, pinned along the cylinder's top line, on one joint;
+    with corrective names, each a zero shape to store a bake in."""
     n = 9
     xs = np.linspace(-0.2, 0.2, n)
     points = np.array([(x, 0.11, z) for z in xs for x in xs])
@@ -40,10 +45,26 @@ def sheet_over_cylinder():
     mesh = cook_mesh("sheet", points, faces, pins, wearable=True, tether_slack=1.12, max_distance=r, backstop=backstop)
     skin = dict(bone=np.zeros((len(points), 4), int), weight=np.tile([1.0, 0, 0, 0], (len(points), 1)))
     piece = dict(id="sheet", mesh=mesh, skin=skin, direction=direction, material=MATERIAL, render_vertices=len(points),
-                 linear_inertia=0.45, angular_inertia=0.35)
+                 linear_inertia=0.45, angular_inertia=0.35, correctives=np.zeros((len(correctives), len(points), 6)))
     identity = np.eye(4)[:3].ravel()
     return encode("cylinder", [piece], bones=[("root", identity)],
-                  spheres=[(0, (0, 0, -0.3), 0.1), (0, (0, 0, 0.3), 0.1)], cones=[(0, 1)])
+                  spheres=[(0, (0, 0, -0.3), 0.1), (0, (0, 0, 0.3), 0.1)], cones=[(0, 1)], correctives=correctives)
+
+
+def cylinder_body(pose):
+    """The cylinder as a closed body surface on the one joint, posed: what the body direction rule reads."""
+    angles = np.linspace(0, 2 * np.pi, 33)[:-1]
+    zs = np.linspace(-0.4, 0.4, 9)
+    ring = np.column_stack([0.1 * np.cos(angles), 0.1 * np.sin(angles)])
+    points = np.array([(x, y, z) for z in zs for x, y in ring])
+    normals = np.array([(x / 0.1, y / 0.1, 0.0) for z in zs for x, y in ring])
+    n = len(angles)
+    faces = [t for j in range(len(zs) - 1) for i in range(n)
+             for a, b, c, d in [(j * n + i, j * n + (i + 1) % n, (j + 1) * n + i, (j + 1) * n + (i + 1) % n)]
+             for t in ((a, b, d), (a, d, c))]
+    m = pose[0]
+    return Body(points @ m[:3, :3].T + m[:3, 3], faces, normals @ m[:3, :3].T, np.ones((len(points), 1)), ["root"],
+                complete=True)
 
 
 def turned(angle):
@@ -89,22 +110,90 @@ class TestHost(unittest.TestCase):
         for a, b in zip(ramped, direct):
             np.testing.assert_allclose(a, b, atol=1e-6)
 
-    def test_an_injected_reference_is_the_reference_the_solver_sees(self):
-        piece = decode(self.blob)["pieces"][0]
-        rest = piece["mesh"]["rest"] + [0.0, 0.05, 0.0]
-        direction = piece["direction"] * 3.0
+    def test_a_stored_corrective_is_the_reference_the_solver_sees(self):
+        blob = sheet_over_cylinder(["lift"])
+        piece = decode(blob)["pieces"][0]
+        free = (piece["mesh"]["max_distance"] > 0)[:, None]
+        delta = np.where(free, [0.0, 0.05, 0.0], 0.0)
         pose = turned(0.3)
-        with Host(self.blob, self.skeleton, LIBRARY) as host:
-            host.override(0, rest, direction)
-            host.step(pose, 0.0, reset=True)
+        with Host(blob, self.skeleton, LIBRARY) as host:
+            self.assertEqual(host.corrective_count, 1)
+            host.set_corrective(0, 0, delta, np.zeros_like(delta))
+            host.step(pose, 0.0, reset=True, weights=[1.0])
             x, b = host.reference(0)
-            np.testing.assert_allclose(x, rest @ pose[0, :3, :3].T + pose[0, :3, 3], atol=1e-6)
+            np.testing.assert_allclose(x, (piece["mesh"]["rest"] + delta) @ pose[0, :3, :3].T, atol=1e-6)
             np.testing.assert_allclose(b, piece["direction"] @ pose[0, :3, :3].T, atol=1e-6)
             # Lifted clear of the cylinder, the reset puts the cloth on that reference.
             np.testing.assert_allclose(host.positions(0), x, atol=1e-6)
-            host.override(0)
-            host.step(pose, 0.0, reset=True)
+            host.step(pose, 0.0, reset=True, weights=[0.0])
             np.testing.assert_allclose(host.reference(0)[0], piece["mesh"]["rest"] @ pose[0, :3, :3].T, atol=1e-6)
+
+    def test_a_drape_stored_as_a_corrective_is_the_reference_at_its_key(self):
+        blob = sheet_over_cylinder(["drape"])
+        decoded = decode(blob)
+        key = turned(0.5)
+        with Host(blob, self.skeleton, LIBRARY) as host:
+            drape = bake(host, turned(0.0), key, fixed=[[0, 1, 0, 0.3]], settle_s=1.0)
+            shapes = deltas(decoded, key, self.skeleton, drape, [C.body_maps.directions(drape[0],
+                            decoded["pieces"][0]["mesh"]["faces"], cylinder_body(key))])
+            host.set_corrective(0, 0, *shapes[0])
+            host.step(key, 0.0, reset=True, weights=[1.0])
+            np.testing.assert_allclose(host.reference(0)[0], drape[0], atol=1e-5)
+            np.testing.assert_allclose(host.positions(0), drape[0], atol=1e-5)
+
+    def test_a_bake_repeats_until_its_drape_is_an_equilibrium(self):
+        blob = sheet_over_cylinder(["drape"])
+        key = turned(0.5)
+        shapes, record = C.bake(blob, 0, self.skeleton, turned(0.0), key, [], cylinder_body(key), [THICKNESS],
+                                floor=[[0, 1, 0, 0.3]], procedure=dict(settle_s=1.0), library=LIBRARY)
+        self.assertTrue(record["converged"])
+        self.assertLessEqual(record["drift_mm"]["sheet"], THICKNESS * 1000)
+        self.assertEqual(record["passes"], len(record["drift_by_pass_mm"]))
+        # Reset onto the stored corrective and held, the cloth stays within the fabric's thickness of it.
+        with Host(blob, self.skeleton, LIBRARY) as host:
+            host.set_corrective(0, 0, *shapes[0])
+            host.step(key, 0.0, reset=True, convexes=[[[0, 1, 0, 0.3]]], weights=[1.0])
+            for _ in range(60):
+                host.step(key, 1 / 30, convexes=[[[0, 1, 0, 0.3]]], weights=[1.0])
+            gap = np.linalg.norm(host.positions(0) - host.reference(0)[0], axis=1)
+            self.assertLessEqual(float(np.percentile(gap, 99)), THICKNESS)
+
+    def test_an_outfit_bakes_a_corrective_into_its_sidecar(self):
+        import json
+        import test_authoring as A
+        from garment import sidecar as sc
+        scene = A.Scene(A.cylinder_scene())
+        try:
+            (scene.root / "colliders.json").write_text(json.dumps(dict(
+                schema="garment.colliders.v1", body_sha256="", cones=[[0, 1]],
+                spheres=[dict(name="a", bone="root", center=[0, 0, 0], radius=0.1),
+                         dict(name="b", bone="root", center=[0, 1, 0], radius=0.1)])), encoding="utf-8")
+            o = Outfit(None, scene.root, "model.glb", body=["skin"], fabrics={"plain": A.FABRIC}, colliders="colliders.json")
+            p = A.skirt(o)
+            key = np.tile(np.eye(4), (3, 1, 1))
+            key[1, 2, 3] = 0.06  # the joint the skirt's lower half follows steps forward into the body's side
+            # The outfit bakes through the library GARMENT_HOST names, the one under test here.
+            previous = os.environ.get("GARMENT_HOST")
+            if LIBRARY:
+                os.environ["GARMENT_HOST"] = str(LIBRARY)
+            try:
+                record = o.corrective("lean", pose=key, convexes=[])
+            finally:
+                if LIBRARY:
+                    os.environ.pop("GARMENT_HOST") if previous is None else os.environ.__setitem__("GARMENT_HOST", previous)
+            self.assertTrue(record["converged"])
+            self.assertIn("colliders.json", o.inputs)
+            data = sc.read(o.write().read_bytes())
+            self.assertEqual(data.corrective_names, ["lean"])
+            delta, _ = data.piece("skirt").correctives["lean"]
+            self.assertTrue(np.all(delta[data.piece("skirt").r == 0] == 0))
+            self.assertGreater(float(np.abs(delta).max()), 0.01)
+            # An edit after the bake would leave the corrective describing another piece: the outfit refuses it.
+            p.paint("r", p.f.all & ~p.pins, 0.05)
+            with self.assertRaisesRegex(ValueError, "baked before a later edit"):
+                o.write()
+        finally:
+            scene.close()
 
     def test_a_skeleton_without_the_blob_joints_is_refused(self):
         with self.assertRaisesRegex(ValueError, "missing joints"):

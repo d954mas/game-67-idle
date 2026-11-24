@@ -87,13 +87,16 @@ class TestSidecar(unittest.TestCase):
             o = scene.outfit()
             p = skirt(o)
             p.R[np.flatnonzero(~p.pins)[:3]] = np.inf
-            p.correctives["sit"] = (np.full_like(p.x, 0.01), np.zeros_like(p.x))
+            p.correctives["sit"] = (np.where(p.pins[:, None], 0.0, np.full_like(p.x, 0.01)), np.zeros_like(p.x))
+            from garment.corrective import state_digest
+            o.corrective_records["sit"] = dict(name="sit", clip="sit", t=1.5, pieces_sha256=state_digest([p.built()]))
             data = sc.write(o.built())
             back = sc.read(data)
             self.assertEqual(sc.write(back), data)
             piece = back.piece("skirt")
             self.assertTrue(np.isinf(piece.R).sum() == 3)
             self.assertEqual(list(piece.correctives), ["sit"])
+            self.assertEqual(back.correctives[0]["clip"], "sit")
             self.assertEqual(back.joint_names, JOINTS)
             np.testing.assert_array_equal(back.inverse_bind_matrices()[1], np.eye(4))
             np.testing.assert_allclose(piece.weights.sum(1), 1, atol=1e-6)
@@ -437,6 +440,33 @@ class TestCook(unittest.TestCase):
         after = gates.clip_gates(gates.GateData(**{**gd.__dict__, "sidecar": sc.write(self.o.built())}),
                                  (gates.REST, None), ("G8",))
         self.assertFalse(after[("G8", "over>skirt")]["failed"], after[("G8", "over>skirt")]["worst"])
+
+
+    def test_a_corrective_is_gated_at_its_key_with_the_reference_it_gives(self):
+        from garment import gates
+        from garment.corrective import state_digest
+        p = skirt(self.o)
+        # A corrective that draws the free cloth halfway into the body: the plain reference passes the reach gate, the
+        # corrected one at its key does not, and its record names the corrective.
+        inward = np.where(p.pins[:, None], 0.0, (p.x * [1, 0, 1]) * -(CLOTH_R - 0.5 * BODY_R) / CLOTH_R)
+        p.correctives["in"] = (inward, np.zeros_like(p.x))
+        record = dict(name="in", pose=dict(joints=JOINTS, matrices=np.tile(np.eye(4), (3, 1, 1)).tolist()),
+                      pieces_sha256=state_digest([p.built()]), drift_mm={"skirt": 9.0}, thickness_mm={"skirt": 4.0},
+                      passes=24, converged=False)
+        self.o.corrective_records["in"] = record
+        data = sc.write(self.o.built())
+        body = (self.o.body.points, self.o.body.faces, self.o.body.weights, True)
+        gd = gates.GateData(sidecar=data, model=str(self.scene.root / "model.glb"), body=body,
+                            shapes=dict(spheres=[], cones=[]), fabrics={"skirt": FABRIC}, clips=[])
+        plain = gates.clip_gates(gd, (gates.REST, None), ("G4",))
+        self.assertFalse(plain[("G4", "skirt")]["failed"])
+        spec, = gates.corrective_specs(sc.read(data), [])
+        corrected = gates.clip_gates(gd, spec, ("G4", "G10"))
+        self.assertEqual(set(corrected), {("G4", "skirt", "in")})
+        self.assertTrue(corrected[("G4", "skirt", "in")]["failed"])
+        self.assertEqual(corrected[("G4", "skirt", "in")]["corrective"], "in")
+        bake, = gates.bake_findings(sc.read(data))
+        self.assertEqual((bake["gate"], bake["failed"], bake["enforced"]), ("bake", True, False))
 
 
 class TestBody(unittest.TestCase):

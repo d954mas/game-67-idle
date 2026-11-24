@@ -169,9 +169,16 @@ def cook(outfit_id, sidecar_data, model, fabrics, colliders, inertia):
 
     sidecar_data: the sidecar bytes; model: a model.RenderModel whose skin the sidecar was built on; fabrics:
     {name: ClothMaterial fields}; colliders: a garment.colliders.v1 document or None; inertia: (linear, angular)
-    share of the root's motion the reference frame passes to the cloth. Corrective morph targets in the sidecar are
-    carried by the format; the blob gains them with the runtime that evaluates them."""
+    share of the root's motion the reference frame passes to the cloth."""
     sc = read(sidecar_data)
+    data, report = cook_blob(outfit_id, sc, model, fabrics, colliders, inertia)
+    return data, bind_model(model, sc), report
+
+
+def cook_blob(outfit_id, sc, model, fabrics, colliders, inertia):
+    """(blob, report) of a read Sidecar, without the render binding: what the runtime loads, for the game's cook and for
+    a bake that steps the outfit through the host. The sidecar's corrective morph targets become the blob's
+    correctives, in the sidecar's order."""
     joints = sc.joint_names
     if joints != model.joints:
         raise ValueError(f"{outfit_id}: the sidecar's skeleton is not the model's skin")
@@ -180,6 +187,7 @@ def cook(outfit_id, sidecar_data, model, fabrics, colliders, inertia):
         raise ValueError(f"{outfit_id}: the sidecar's inverse binds differ from the model's")
     spheres, cones = shapes(colliders, joints, ibm) if colliders else ([], [])
     used = {s[0] for s in spheres}
+    names = sc.corrective_names
     records, report = [], []
     for p in sc.pieces:
         name = f"{outfit_id}/{p.id}"
@@ -195,23 +203,25 @@ def cook(outfit_id, sidecar_data, model, fabrics, colliders, inertia):
         lanes = p.joints.astype(int)
         used |= set(np.unique(lanes[p.weights > 0]).tolist())
         render = sum(int(np.count_nonzero(label == p.label)) for label in model.labels)
+        shapes_of = (np.stack([np.concatenate(p.correctives[k], axis=1) for k in names]).astype(np.float64)
+                     if names else None)
         records.append(dict(id=p.id, mesh=mesh, skin=dict(bone=lanes, weight=p.weights.astype(np.float64)),
                             direction=p.b.astype(np.float64), material=material, render_vertices=render,
-                            linear_inertia=inertia[0], angular_inertia=inertia[1]))
+                            linear_inertia=inertia[0], angular_inertia=inertia[1], correctives=shapes_of))
         report.append(dict(id=p.id, sim_vertices=len(points), pins=len(pins), render_vertices=render,
                            correctives=list(p.correctives)))
     if sum(len(p.points) for p in sc.pieces) > PALETTE_MAX:
         raise ValueError(f"{outfit_id}: sim vertices exceed the {PALETTE_MAX}-entry render palette")
-    names = sorted(joints[j] for j in used)
+    bone_names = sorted(joints[j] for j in used)
     index = np.full(len(joints), -1)
-    for i, n in enumerate(names):
+    for i, n in enumerate(bone_names):
         index[joints.index(n)] = i
     for record in records:
         record["skin"]["bone"] = index[record["skin"]["bone"]]
-    bones = [(n, ibm[joints.index(n)][:3].ravel()) for n in names]
-    blob = encode(outfit_id, records, bones=bones, spheres=[(int(index[j]), c[:3], rad) for j, c, rad in spheres],
-                  cones=cones)
-    return blob, bind_model(model, sc), report
+    bones = [(n, ibm[joints.index(n)][:3].ravel()) for n in bone_names]
+    data = encode(outfit_id, records, bones=bones, spheres=[(int(index[j]), c[:3], rad) for j, c, rad in spheres],
+                  cones=cones, correctives=names)
+    return data, report
 
 
 def bind_model(model, sc):

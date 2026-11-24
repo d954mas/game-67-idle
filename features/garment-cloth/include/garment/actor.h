@@ -19,7 +19,7 @@ typedef struct {
 } GarmentStats;
 
 /* GARMENT_JOINTS_MAX bounds the used joints plus their ancestors, which the actor interpolates. */
-enum { GARMENT_PIECES_MAX = 8, GARMENT_BONES_MAX = 160, GARMENT_JOINTS_MAX = 128 };
+enum { GARMENT_PIECES_MAX = 8, GARMENT_BONES_MAX = 160, GARMENT_JOINTS_MAX = 128, GARMENT_CORRECTIVES_MAX = 16 };
 
 typedef struct {
     const char *name;
@@ -37,11 +37,17 @@ typedef struct {
 typedef struct {
     uint16_t a, b;
 } GarmentCone;
+/* One vertex of a corrective shape: rest-space deltas of the position and of the body direction (spec B.5). */
+typedef struct {
+    float delta[3], direction[3];
+} GarmentCorrective;
 typedef struct GarmentAsset {
     const char *id;
     const ClothMesh *mesh;
     const GarmentSkin *skin;      /* Outfit bones. */
     const float (*direction)[3];  /* Body direction at rest, skinned like a normal. */
+    /* The set's corrective_count shapes, corrective-major (k * vertices + i); NULL when every delta is zero. */
+    const GarmentCorrective *corrective;
     ClothMaterial material;
     int render_vertices;
     float linear_inertia, angular_inertia;
@@ -56,7 +62,12 @@ typedef struct {
     int cone_count;
     const GarmentAsset *pieces;
     int piece_count;
+    const char *const *corrective_names; /* Outfit-wide: every piece carries a shape for each, or none. */
+    int corrective_count;
 } GarmentSet;
+
+/* Index of the named corrective in the set, for GarmentInput.corrective_weight; -1 when the set has none of that name. */
+int garment_set_corrective(const GarmentSet *set, const char *name);
 
 typedef struct {
     const nt_skeletal_mat34_t *pose; /* Model-space joint matrices of the frame. */
@@ -70,6 +81,10 @@ typedef struct {
     /* r' = max(0, r * scale + bias) where the cooked r > 0, else 0: 1 and 0 simulate as cooked; scale 0 and bias 0 is
        kinematic and skips the solve. */
     float max_distance_scale, max_distance_bias;
+    /* The set's corrective_count weights in [0, 1] (index from garment_set_corrective), or NULL for all 0. The
+       reference is skin(rest + sum_k weight_k delta_k); a weight change between frames is blended across the substeps
+       as the joints are, so a ramp over a transition moves the reference smoothly. */
+    const float *corrective_weight;
     /* Fill the stats' strain, max-distance, backstop and held measures (lab, probes, tests); costs a pass per frame. */
     bool measure;
 } GarmentInput;
@@ -89,6 +104,7 @@ typedef struct {
     float root_q[4], root_t[3];         /* Root at the last sample. */
     float sim_root_q[4], sim_root_t[3]; /* Root at the last substep. */
     ClothSphere spheres[CLOTH_SHAPES];  /* Actor space at the last substep. */
+    float corrective_weight[GARMENT_CORRECTIVES_MAX]; /* Weights of the last update, where the next one blends from. */
     float remainder, origin[3], prev_vel[3];
     float yaw, prev_yaw_vel;
     bool velocity_known; /* prev_vel and prev_yaw_vel come from a timed frame since the last reset */

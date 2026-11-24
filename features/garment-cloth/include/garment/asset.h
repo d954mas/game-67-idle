@@ -17,6 +17,7 @@ enum { GARMENT_BLOB_VERSION = 3, GARMENT_BLOB_ALIGN = 16, GARMENT_BLOB_OUTFIT = 
 #define GARMENT_SECTION_BONES GARMENT_BLOB_TAG('B', 'O', 'N', 'E')        /* outfit: GarmentBlobBone */
 #define GARMENT_SECTION_SPHERES GARMENT_BLOB_TAG('S', 'P', 'H', 'R')      /* outfit: GarmentSphere, optional */
 #define GARMENT_SECTION_CONES GARMENT_BLOB_TAG('C', 'O', 'N', 'E')        /* outfit: GarmentCone, optional */
+#define GARMENT_SECTION_CORRECTIVE_NAMES GARMENT_BLOB_TAG('C', 'N', 'A', 'M') /* outfit: uint32 string offset, optional */
 #define GARMENT_SECTION_PIECE GARMENT_BLOB_TAG('P', 'I', 'E', 'C')        /* GarmentBlobPiece, one */
 #define GARMENT_SECTION_REST GARMENT_BLOB_TAG('R', 'E', 'S', 'T')         /* float[3] */
 #define GARMENT_SECTION_INV_AREA GARMENT_BLOB_TAG('I', 'N', 'V', 'A')     /* float */
@@ -27,6 +28,8 @@ enum { GARMENT_BLOB_VERSION = 3, GARMENT_BLOB_ALIGN = 16, GARMENT_BLOB_OUTFIT = 
 #define GARMENT_SECTION_MAX_DISTANCE GARMENT_BLOB_TAG('M', 'A', 'X', 'D') /* float, m */
 #define GARMENT_SECTION_BACKSTOP GARMENT_BLOB_TAG('B', 'K', 'S', 'T')     /* ClothBackstop */
 #define GARMENT_SECTION_DIRECTION GARMENT_BLOB_TAG('B', 'D', 'I', 'R')    /* float[3], unit */
+/* GarmentCorrective, corrective-major: (corrective count) x vertices; optional, absent where every delta is zero. */
+#define GARMENT_SECTION_CORRECTIVES GARMENT_BLOB_TAG('C', 'O', 'R', 'R')
 
 typedef struct {
     uint32_t magic;

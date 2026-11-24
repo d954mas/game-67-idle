@@ -46,6 +46,16 @@ The maps follow from meaning, not from tuning against old frames:
 - weights: the render weights (`weights_transfer`), or the body's under the cloth averaged within `r`
   (`weights_follow_body`); `Outfit.layer` makes an outer piece and the piece under it ride one skinning.
 
+A pose that holds the legs far from the rest (sitting) gets a corrective, baked last in the script by the runtime
+itself through the `garment_host` library (build it with `node ai_studio/feature_testing/run.mjs`):
+
+```python
+o.corrective("sit", clip="sit", t=2.0)   # the drape in that key, on the seat the outfit declares for the clip
+```
+
+The game weights it by name: `garment_set_corrective(set, "sit")` once per loaded set, then
+`GarmentInput.corrective_weight[index]` 1 while a clip holding that pose plays, ramped over the transitions.
+
 `python tools/garment/check.py <script>` rebuilds the sidecar in scratch, compares its bytes with the committed one and
 runs the gates (C.3 of the scheme); `garment.cards` draws what the script authored.
 

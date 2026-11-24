@@ -8,6 +8,7 @@ breaking it there, worst first. A gate against the fallback body (B.3) is report
 Thresholds are meanings, not tuned numbers: the fabric thickness, its strain limit, a triangle's longest edge."""
 import math
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import numpy as np
 
@@ -22,6 +23,8 @@ from .sim import EDGE_WARP, classify_edges
 
 REST = "rest"
 LOOK_WEIGHT = 0.002
+# A clip spec ("corrective:<name>", clip path or None, record) is the corrected reference at the corrective's key.
+CORRECTIVE = "corrective:"
 
 
 @dataclass
@@ -62,10 +65,19 @@ class Pose:
             self.dense[p.id] = w
 
     def matrices(self, clip):
-        """(times, (frames, J, 4, 4)) of a clip (name, path) or a run of its key frames (name, path, start, stop)."""
+        """(times, (frames, J, 4, 4)) of a clip (name, path), a run of its key frames (name, path, start, stop), or a
+        corrective's key (corrective spec)."""
         name, path = clip[:2]
         if name == REST:
             return np.zeros(1), M.skin_matrices(self.glb, self.joints, self.ibm, M.rest_worlds(self.glb))
+        if name.startswith(CORRECTIVE):
+            record = clip[2]
+            if "pose" in record:
+                worlds = {self.glb.node_index(n): np.asarray(m, float)[None]
+                          for n, m in zip(record["pose"]["joints"], record["pose"]["matrices"])}
+                return np.zeros(1), M.skin_matrices(self.glb, self.joints, self.ibm, worlds)
+            times = np.array([record["t"]], float)
+            return times, M.skin_matrices(self.glb, self.joints, self.ibm, M.clip_worlds(self.glb, M.load(path), times))
         animation = M.load(path)
         times = animation.key_times()
         if len(clip) == 4:
@@ -94,11 +106,23 @@ def _frame(record, clip, t, violation, vertices=None):
                                vertices=[int(v) for v in np.asarray(ids).ravel()][:12])
 
 
+def corrective_specs(sc, clips):
+    """A clip spec per corrective of a sidecar, for clip_gates: its key and the record of its bake."""
+    paths = dict(clips)
+    return [(CORRECTIVE + c["name"], paths.get(c.get("clip")), c) for c in sc.correctives]
+
+
 def clip_gates(data, clip, gates=("G4", "G5", "G6", "G7", "G8", "G10")):
-    """The per-frame gates over one clip (or the rest pose): {(gate, piece): record}."""
+    """The per-frame gates over one clip (or the rest pose), or over a corrective's corrected reference at its key:
+    {(gate, piece[, corrective]): record}."""
     pose = Pose(data)
     times, matrices = pose.matrices(clip)
     name = clip[0]
+    corrective = name[len(CORRECTIVE):] if name.startswith(CORRECTIVE) else None
+    if corrective is not None:
+        # The reference the game evaluates while the corrective's clip holds: weight 1. A seat is the game's own gate.
+        gates = tuple(g for g in gates if g != "G10")
+        name = f"{clip[2].get('clip', 'pose')} with {corrective}"
     body_points, body_faces, body_weights, complete = data.body[:4]
     rim_faces = data.body[4] if len(data.body) > 4 else None
     out = {}
@@ -112,8 +136,12 @@ def clip_gates(data, clip, gates=("G4", "G5", "G6", "G7", "G8", "G10")):
     refs, dirs = {}, {}
     for p in pose.sc.pieces:
         w = pose.dense[p.id]
-        refs[p.id] = M.skin_points(p.points.astype(float), w, matrices)
-        dirs[p.id] = M.skin_directions(p.b.astype(float), w, matrices)
+        points, b = p.points.astype(float), p.b.astype(float)
+        if corrective is not None:
+            delta, turn = p.correctives[corrective]
+            points, b = points + delta, b + turn
+        refs[p.id] = M.skin_points(points, w, matrices)
+        dirs[p.id] = M.skin_directions(b, w, matrices)
     for p in pose.sc.pieces:
         fabric = data.fabrics[p.id]
         t_fab = float(fabric["thickness"])
@@ -201,7 +229,41 @@ def clip_gates(data, clip, gates=("G4", "G5", "G6", "G7", "G8", "G10")):
                 inner_point = np.einsum("nk,nkj->nj", hit_bary[hit], refs[inner_id][k][corners])
                 gap = np.einsum("nj,nj->n", inner_point - refs[outer_id][k][hit], dirs[outer_id][k][hit])
                 _frame(rec, name, t, need - gap, vertices=hit)
+    if corrective is not None:
+        out = {(*key, corrective): dict(rec, corrective=corrective) for key, rec in out.items()}
     return out
+
+
+def bake_findings(sc):
+    """Per corrective and piece the bake's residual drift (reported): the cloth reset onto the corrected reference and
+    held must stay within the fabric's thickness of it, or the drape is not an equilibrium of the runtime and the game
+    will see it move off the corrective."""
+    out = []
+    for c in sc.correctives:
+        for piece, drift_mm in c.get("drift_mm", {}).items():
+            limit = c["thickness_mm"][piece]
+            out.append(dict(gate="bake", piece=piece, corrective=c["name"], enforced=False, failed=drift_mm > limit,
+                            worst=dict(clip=c.get("clip", "pose"), t=c.get("t"), value_mm=drift_mm, vertices=[]),
+                            passes=c["passes"], converged=c["converged"], thickness_mm=limit, frames=1,
+                            frames_failed=int(drift_mm > limit), clips={}))
+    return out
+
+
+def corrective_coverage(sc, manifest):
+    """The clips of the manifest whose `game.corrective` names a corrective the sidecar lacks (reported): the game
+    then plays that clip on the plain reference."""
+    import json
+    if manifest is None:
+        return []
+    have = set(sc.corrective_names)
+    clips = json.loads(Path(manifest).read_text(encoding="utf-8"))["animations"]
+    missing = {}
+    for c in clips:
+        wanted = c.get("game", {}).get("corrective")
+        if wanted and wanted not in have:
+            missing.setdefault(wanted, []).append(c["name"])
+    return [dict(gate="correctives", piece=None, corrective=name, enforced=False, failed=True, clips=dict.fromkeys(used, 0),
+                 worst=None, frames=0, frames_failed=0) for name, used in sorted(missing.items())]
 
 
 class Limb:

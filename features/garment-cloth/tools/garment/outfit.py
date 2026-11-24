@@ -527,6 +527,7 @@ class Outfit:
         self.seats = dict(seats or {})
         self.pieces = []
         self.layers = []
+        self.corrective_records = {}
         # GARMENT_STAGES=n builds the script's content up to its stage n (`if o.stages >= 2:` blocks), to compare a
         # content fix with what came before it.
         self.stages = stages(script)
@@ -536,6 +537,30 @@ class Outfit:
         path = self.root / relative
         self.inputs[Path(relative).as_posix()] = sha256(path)
         return path
+
+    def input(self, path):
+        """Declare a file (relative to the game root, or under it) a build input: its hash goes into the sidecar, so
+        the cook refuses the sidecar once the file changes. A script calls it for a file whose content it reads into
+        the cloth, such as the seat a corrective was baked on."""
+        path = Path(path)
+        return self._input(path.resolve().relative_to(self.root) if path.is_absolute() else path)
+
+    def corrective(self, name, clip=None, t=None, pose=None, convexes=None, max_passes=None):
+        """Bake the named corrective of every piece (spec B.5, E.1) through the feature's own runtime and store it: the
+        drape the runtime settles to in the key pose, as rest-space deltas of the reference and the body direction.
+        The game weights it by name while a clip holds that pose (the clip manifest's `game.corrective`).
+
+        The key is a clip of the outfit's manifest and a time t (s), or a pose ((joints, 4, 4) model space, the skin's
+        joints in skeleton order). convexes are what the cloth rests on besides the floor, as (n, d) plane rows in
+        actor space; by default the outfit's declared seat for that clip. Call it after the last edit of every piece:
+        a later edit makes the corrective stale and `write` refuses it. The bake needs the garment_host library built
+        from the current runtime (`node ai_studio/feature_testing/run.mjs`) and the outfit's colliders. Returns the
+        bake's record (passes, residual drift per piece, converged), which the sidecar keeps and `check.py` reports."""
+        from . import corrective as C
+        if name in self.corrective_records:
+            raise ValueError(f"corrective {name!r} is already baked")
+        return C.outfit_corrective(self, name, clip=clip, t=t, pose=pose, convexes=convexes,
+                                   max_passes=max_passes or C.MAX_PASSES)
 
     def piece(self, piece_id, label, fabric):
         """A new piece moving the render vertices labelled `label`, made of the named fabric."""
@@ -681,14 +706,21 @@ class Outfit:
         folder = os.environ.get("GARMENT_SIDECAR_DIR")
         return Path(folder) / name if folder else self.model_path.with_name(name)
 
-    def built(self):
-        """The Sidecar of the current state."""
+    def built(self, check_correctives=True):
+        """The Sidecar of the current state. A corrective baked before a later edit of a piece is refused."""
         nodes, joints, ibm = sc.skeleton(self.model.glb)
         build = {"script_sha256": sha256(self.script) if self.script and self.script.is_file() else None,
                  "inputs": dict(sorted(self.inputs.items())), "library": LIBRARY_VERSION}
         build["stages"] = self.stages
-        return sc.Sidecar(nodes=nodes, joints=joints, inverse_binds=ibm, pieces=[p.built() for p in self.pieces],
-                          build=build, layers=list(self.layers))
+        pieces = [p.built() for p in self.pieces]
+        if check_correctives and self.corrective_records:
+            from .corrective import state_digest
+            digest = state_digest(pieces)
+            stale = [n for n, r in self.corrective_records.items() if r["pieces_sha256"] != digest]
+            if stale:
+                raise ValueError(f"correctives {stale} were baked before a later edit of a piece: bake them last")
+        return sc.Sidecar(nodes=nodes, joints=joints, inverse_binds=ibm, pieces=pieces, build=build,
+                          layers=list(self.layers), correctives=list(self.corrective_records.values()))
 
     def write(self):
         """Write the sidecar and return its path; a file with the same bytes is left untouched."""

@@ -55,6 +55,7 @@ static bool bind_actor(GarmentActor *a, const GarmentSet *set, const nt_skeletal
     a->stats.id = set->id;
     a->stats.finite = true;
     NT_ASSERT(set->pieces && set->piece_count > 0 && set->piece_count <= GARMENT_PIECES_MAX);
+    NT_ASSERT(set->corrective_count >= 0 && set->corrective_count <= GARMENT_CORRECTIVES_MAX);
     if (!skel->joint_id || !skel->parent) return false;
     a->pieces = calloc((size_t)set->piece_count, sizeof *a->pieces);
     if (!a->pieces) {
@@ -217,19 +218,62 @@ static void skin_matrices(const GarmentActor *a) {
     }
 }
 
-/* ref = sum_j w_j S_j rest and b = normalize(sum_j w_j R_j b_rest), at the evaluated joints. */
-static bool evaluate_reference(const GarmentAsset *g, ClothReference *out) {
-    for (int i = 0; i < g->mesh->vertices; ++i) {
+int garment_set_corrective(const GarmentSet *set, const char *name) {
+    if (!set || !name) return -1;
+    for (int k = 0; k < set->corrective_count; ++k)
+        if (strcmp(set->corrective_names[k], name) == 0) return k;
+    return -1;
+}
+
+/* The correctives with a nonzero weight at one instant; an empty blend evaluates the plain reference. */
+typedef struct {
+    int count;
+    int index[GARMENT_CORRECTIVES_MAX];
+    float weight[GARMENT_CORRECTIVES_MAX];
+} Blend;
+
+/* Weights a fraction u from the last update's to this one's. */
+static Blend blend_at(const GarmentActor *a, const float *current, float u) {
+    Blend out = {0};
+    for (int k = 0; current && k < a->set->corrective_count; ++k) {
+        const float w = a->corrective_weight[k] + u * (current[k] - a->corrective_weight[k]);
+        if (w == 0.0F) continue;
+        out.index[out.count] = k;
+        out.weight[out.count++] = w;
+    }
+    return out;
+}
+
+/* ref = sum_j w_j S_j (rest + sum_k a_k delta_k) and b = normalize(sum_j w_j R_j (b_rest + sum_k a_k delta_b_k)), at the
+   evaluated joints. */
+static bool evaluate_reference(const GarmentAsset *g, const Blend *blend, ClothReference *out) {
+    const int n = g->mesh->vertices;
+    const int shapes = g->corrective ? blend->count : 0;
+    for (int i = 0; i < n; ++i) {
         const GarmentSkin *v = &g->skin[i];
         float *x = out[i].x, *b = out[i].b;
+        const float *rest = g->mesh->rest[i], *d = g->direction[i];
+        float corrected[3], turned[3];
+        if (shapes > 0) {
+            memcpy(corrected, rest, sizeof corrected);
+            memcpy(turned, d, sizeof turned);
+            for (int c = 0; c < shapes; ++c) {
+                const GarmentCorrective *shape = &g->corrective[(size_t)blend->index[c] * (size_t)n + (size_t)i];
+                for (int k = 0; k < 3; ++k) {
+                    corrected[k] += blend->weight[c] * shape->delta[k];
+                    turned[k] += blend->weight[c] * shape->direction[k];
+                }
+            }
+            rest = corrected;
+            d = turned;
+        }
         memset(x, 0, 3 * sizeof(float));
         memset(b, 0, 3 * sizeof(float));
         for (int j = 0; j < 4; ++j) {
             if (v->weight[j] == 0) continue;
             const nt_skeletal_mat34_t *m = &scratch.skin[v->bone[j]];
-            const float *d = g->direction[i];
             float influenced[3];
-            point(m, g->mesh->rest[i], influenced);
+            point(m, rest, influenced);
             for (int k = 0; k < 3; ++k) {
                 x[k] += v->weight[j] * influenced[k];
                 b[k] += v->weight[j] * (m->r[k][0] * d[0] + m->r[k][1] * d[1] + m->r[k][2] * d[2]);
@@ -305,14 +349,18 @@ static void record_measure(GarmentStats *stats, const ClothMetrics *mt) {
     if (!mt->finite) stats->finite = false;
 }
 
-static bool inputs_valid(const GarmentInput *in) {
-    return in && in->pose && in->world && isfinite(in->dt) && in->dt >= 0 && in->convex_count >= 0 &&
-           in->convex_count <= CLOTH_CONVEXES && (!in->convex_count || in->convexes) &&
-           isfinite(in->max_distance_scale) && in->max_distance_scale >= 0 && isfinite(in->max_distance_bias);
+static bool inputs_valid(const GarmentSet *set, const GarmentInput *in) {
+    if (!in || !in->pose || !in->world || !isfinite(in->dt) || in->dt < 0 || in->convex_count < 0 ||
+        in->convex_count > CLOTH_CONVEXES || (in->convex_count && !in->convexes) || !isfinite(in->max_distance_scale) ||
+        in->max_distance_scale < 0 || !isfinite(in->max_distance_bias))
+        return false;
+    for (int k = 0; in->corrective_weight && k < set->corrective_count; ++k)
+        if (!(in->corrective_weight[k] >= 0.0F && in->corrective_weight[k] <= 1.0F)) return false;
+    return true;
 }
 
 static bool simulate(GarmentActor *a, const GarmentSet *set, const nt_skeletal_skeleton_t *skel, const GarmentInput *in) {
-    if (!set || !skel || !inputs_valid(in) || !garment_actor_prepare(a, set, skel)) return false;
+    if (!set || !skel || !inputs_valid(set, in) || !garment_actor_prepare(a, set, skel)) return false;
     float root_q[4], root_t[3];
     if (!root_of(in->world, root_q, root_t) || !chain_locals(a, skel, in->pose, scratch.current)) return false;
     const float *world = in->world;
@@ -325,7 +373,11 @@ static bool simulate(GarmentActor *a, const GarmentSet *set, const nt_skeletal_s
         memcpy(a->sim_root_q, root_q, sizeof root_q);
         memcpy(a->sim_root_t, root_t, sizeof root_t);
         a->remainder = 0.0F;
+        for (int k = 0; k < set->corrective_count; ++k)
+            a->corrective_weight[k] = in->corrective_weight ? in->corrective_weight[k] : 0.0F;
     }
+    static const float none[GARMENT_CORRECTIVES_MAX];
+    const float *weights = in->corrective_weight ? in->corrective_weight : none;
     float dyaw = reset ? 0.0F : wrap_angle(yaw - a->yaw);
     const float step = 1.0F / (float)GARMENT_SIM_HZ;
     float clamped_dt = fminf(in->dt, (float)GARMENT_MAX_SUBSTEPS * step);
@@ -372,8 +424,9 @@ static bool simulate(GarmentActor *a, const GarmentSet *set, const nt_skeletal_s
     /* The frame pose: every piece's frame reference, and the whole state on a reset. */
     interpolate_joints(a, in->pose, 1.0F);
     skin_matrices(a);
+    const Blend at_frame = blend_at(a, weights, 1.0F);
     for (int p = 0; p < set->piece_count; ++p) {
-        if (!evaluate_reference(&set->pieces[p], a->pieces[p].frame)) return false;
+        if (!evaluate_reference(&set->pieces[p], &at_frame, a->pieces[p].frame)) return false;
         runtime_max_distance(&set->pieces[p], in, a->pieces[p].r);
     }
     if (reset || kinematic) {
@@ -411,10 +464,11 @@ static bool simulate(GarmentActor *a, const GarmentSet *set, const nt_skeletal_s
         for (int i = 0; i < set->sphere_count; ++i) memcpy(scratch.spheres[i].prev, a->spheres[i].c, sizeof scratch.spheres[i].prev);
         ClothFrame frame = {.linear_accel = {local_accel[0], local_accel[1], local_accel[2]}, .angular_vel_y = yaw_vel,
                             .angular_accel_y = yaw_accel};
+        const Blend at_step = blend_at(a, weights, u);
         for (int p = 0; p < set->piece_count; ++p) {
             const GarmentAsset *g = &set->pieces[p];
             GarmentPiece *s = &a->pieces[p];
-            if (!evaluate_reference(g, scratch.ref)) return false;
+            if (!evaluate_reference(g, &at_step, scratch.ref)) return false;
             frame.linear_inertia = g->linear_inertia;
             frame.angular_inertia = g->angular_inertia;
             cloth_step(&s->cloth, g->mesh, &g->material, step, &frame, scratch.ref, s->r, &shapes);
@@ -434,6 +488,7 @@ static bool simulate(GarmentActor *a, const GarmentSet *set, const nt_skeletal_s
     }
     if (!stats->finite) return false;
     memcpy(a->previous, scratch.current, (size_t)a->chain_count * sizeof a->previous[0]);
+    memcpy(a->corrective_weight, weights, (size_t)set->corrective_count * sizeof a->corrective_weight[0]);
     memcpy(a->root_q, root_q, sizeof root_q);
     memcpy(a->root_t, root_t, sizeof root_t);
     a->primed = true;

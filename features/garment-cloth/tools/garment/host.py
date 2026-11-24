@@ -1,9 +1,11 @@
 """The feature's own runtime offline, through the garment_host library (tools/host/garment_host.c).
 
-Load a cooked blob on a skeleton, feed model-space joint poses, world convexes and a reference override, step, and
-read positions, references, render records and metrics. Poses come from glTF files through the shared GLB library
-(ai_studio/assets/tools/blender/lib/glb.py). Corrective shapes are baked here by the procedure of the spec: rest,
-a ramp into the key pose by local slerp, the convexes raised from below, a settle with the pose frozen.
+Load a cooked blob on a skeleton, feed model-space joint poses, world convexes and corrective weights, store a
+corrective shape, step, and read positions, references, render records and metrics. Poses come from glTF files
+through the shared GLB library (ai_studio/assets/tools/blender/lib/glb.py). `bake` drapes the cloth into a key pose by
+the procedure of the spec (rest, a ramp by local slerp, the convexes raised from below, a settle with the pose frozen)
+and `deltas` turns a drape into rest-space corrective deltas; garment.corrective repeats them until the drape is an
+equilibrium of the runtime.
 
 Callers put features/garment-cloth/tools on sys.path, as the cook's callers do.
 """
@@ -18,6 +20,10 @@ FEATURE = Path(__file__).resolve().parents[2]
 STUDIO = FEATURE.parents[1]
 # The feature-test consumer builds the library (node ai_studio/feature_testing/run.mjs); GARMENT_HOST names another.
 LIBRARY = STUDIO / "ai_studio/feature_testing/consumer/build/feature-verify/_garment_cloth/garment_host.dll"
+BUILD = "node ai_studio/feature_testing/run.mjs"
+# The runtime the default library is built from: a library older than any of them steps another runtime than the game's.
+RUNTIME = [*sorted((FEATURE / "src").glob("*.c")), *sorted((FEATURE / "include/garment").glob("*.h")),
+           FEATURE / "tools/host/garment_host.c"]
 SIM_HZ = 180
 POSE_HZ = 30
 CONVEX_PLANES = 48
@@ -173,17 +179,26 @@ class Host:
     def __exit__(self, *_):
         self.close()
 
-    def step(self, pose, dt, reset=False, convexes=(), render=True, measure=True, world=None, scale=1.0, bias=0.0):
-        """One runtime update: pose (joints, 4, 4) or (joints, 3, 4) model space, dt in s, convexes as plane rows."""
+    @property
+    def corrective_count(self):
+        return self.lib.gh_corrective_count(self.handle)
+
+    def step(self, pose, dt, reset=False, convexes=(), render=True, measure=True, world=None, scale=1.0, bias=0.0,
+             weights=None):
+        """One runtime update: pose (joints, 4, 4) or (joints, 3, 4) model space, dt in s, convexes as plane rows,
+        weights one per corrective of the blob (None: all 0)."""
         rows = np.ascontiguousarray(np.asarray(pose, float)[:, :3, :4], np.float32)
         if rows.shape[0] != len(self.skeleton.names):
             raise ValueError("the pose has another joint count than the skeleton")
         shapes = (Convex * max(1, len(convexes)))(*[convex(c) for c in convexes])
         frame = None if world is None else np.ascontiguousarray(world, np.float32).T.ravel()
-        ok = self.lib.gh_step(self.handle, rows.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
-                              None if frame is None else frame.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
-                              float(dt), bool(reset), bool(render), bool(measure), shapes, len(convexes),
-                              float(scale), float(bias))
+        if weights is not None:
+            weights = np.ascontiguousarray(weights, np.float32)
+            if weights.shape != (self.corrective_count,):
+                raise ValueError(f"the blob has {self.corrective_count} correctives, not {weights.shape} weights")
+        pointer = lambda a: None if a is None else a.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
+        ok = self.lib.gh_step(self.handle, pointer(rows), pointer(frame), float(dt), bool(reset), bool(render),
+                              bool(measure), shapes, len(convexes), float(scale), float(bias), pointer(weights))
         if not ok:
             raise RuntimeError("garment_host: the update failed (non-finite state or invalid input)")
 
@@ -212,36 +227,45 @@ class Host:
         self.lib.gh_metrics(self.handle, out)
         return dict(zip(METRICS, list(out)))
 
-    def override(self, piece, rest=None, direction=None):
-        """Use a corrected rest shape and body direction as the piece's reference; None restores the cooked one."""
-        arrays = [None if a is None else np.ascontiguousarray(a, np.float32).reshape(self.vertices[piece], 3)
-                  for a in (rest, direction)]
-        pointers = [None if a is None else a.ctypes.data_as(ctypes.POINTER(ctypes.c_float)) for a in arrays]
-        if not self.lib.gh_override(self.handle, piece, *pointers):
-            raise ValueError(f"no piece {piece}")
+    def set_corrective(self, piece, index, delta, direction):
+        """Store corrective `index` of a piece: rest-space position and body direction deltas (vertices, 3) each. The
+        runtime evaluates it with its weight from the next update on."""
+        shape = np.ascontiguousarray(np.concatenate([np.reshape(delta, (-1, 3)), np.reshape(direction, (-1, 3))], 1),
+                                     np.float32)
+        if shape.shape != (self.vertices[piece], 6):
+            raise ValueError(f"piece {piece} has {self.vertices[piece]} vertices, the shape {len(shape)}")
+        if not self.lib.gh_corrective(self.handle, piece, index, shape.ctypes.data_as(ctypes.POINTER(ctypes.c_float))):
+            raise ValueError(f"no piece {piece} or corrective {index}")
 
 
 def _library(path=None):
-    path = Path(path or os.environ.get("GARMENT_HOST") or LIBRARY)
+    chosen = path or os.environ.get("GARMENT_HOST")
+    path = Path(chosen or LIBRARY)
     if not path.is_file():
-        raise FileNotFoundError(f"{path}: build the host with `node ai_studio/feature_testing/run.mjs`, or set GARMENT_HOST")
+        raise FileNotFoundError(f"{path}: the garment_host library (the feature's runtime for offline tools) is not built; "
+                                f"build it with `{BUILD}`, or set GARMENT_HOST")
+    if not chosen:
+        newer = [str(f.relative_to(STUDIO)) for f in RUNTIME if f.stat().st_mtime > path.stat().st_mtime]
+        if newer:
+            raise FileNotFoundError(f"{path} is older than the runtime ({', '.join(newer[:3])}): rebuild it with `{BUILD}`")
     lib = ctypes.CDLL(str(path))
     f, i, b, p = ctypes.POINTER(ctypes.c_float), ctypes.c_int, ctypes.c_bool, ctypes.c_void_p
     signatures = {
         "gh_load": (p, [ctypes.c_char_p, ctypes.c_uint32, i, ctypes.POINTER(ctypes.c_char_p), ctypes.POINTER(ctypes.c_uint16)]),
         "gh_free": (None, [p]), "gh_piece_count": (i, [p]), "gh_piece_vertices": (i, [p, i]),
-        "gh_step": (b, [p, f, f, ctypes.c_float, b, b, b, ctypes.POINTER(Convex), i, ctypes.c_float, ctypes.c_float]),
+        "gh_step": (b, [p, f, f, ctypes.c_float, b, b, b, ctypes.POINTER(Convex), i, ctypes.c_float, ctypes.c_float, f]),
         "gh_positions": (b, [p, i, f]), "gh_reference": (b, [p, i, f]), "gh_records": (i, [p, f]),
-        "gh_metrics": (b, [p, f]), "gh_override": (b, [p, i, f, f])}
+        "gh_metrics": (b, [p, f]), "gh_corrective_count": (i, [p]), "gh_corrective": (b, [p, i, i, f])}
     for name, (restype, argtypes) in signatures.items():
         getattr(lib, name).restype, getattr(lib, name).argtypes = restype, argtypes
     return lib
 
 
-def run(host, poses, convexes, dt=1 / POSE_HZ, reset=False, bias=0.0):
+def run(host, poses, convexes, dt=1 / POSE_HZ, reset=False, bias=0.0, weights=None):
     """Step through a sequence of poses, each with its convex list; the first update resets when asked."""
     for k, (pose, shapes) in enumerate(zip(poses, convexes)):
-        host.step(pose, 0.0 if reset and k == 0 else dt, reset=reset and k == 0, convexes=shapes, bias=bias)
+        host.step(pose, 0.0 if reset and k == 0 else dt, reset=reset and k == 0, convexes=shapes, bias=bias,
+                  weights=weights)
 
 
 def bake(host, rest, key, rising=(), fixed=(), settle_in_s=0.5, ramp_s=1.0, rise_s=0.5, settle_s=2.0, hz=POSE_HZ,
@@ -285,23 +309,21 @@ def blended(piece, matrices):
     return np.einsum("vk,vkij->vij", skin["weight"].astype(float), matrices[skin["bone"].astype(int)])
 
 
-def corrective(decoded, pose, skeleton, settled, directions=None):
-    """Per piece the corrected rest and body direction (spec B.5): rest + delta = (sum_j w_j S_j)^-1 x_settled, and
-    the body direction at rest that skins to the settled cloth's own direction toward the body. Kinematic vertices
-    keep their cooked values. directions: per piece the settled body direction (unit, posed), or None to keep b."""
+def deltas(decoded, pose, skeleton, settled, directions):
+    """Per piece the rest-space corrective deltas of a drape (spec B.5), (position (V, 3), body direction (V, 3)):
+    rest + delta = (sum_j w_j S_j)^-1 x_settled, and the direction at rest that the vertex's blended linear part turns
+    into the settled cloth's own direction toward the body (directions: per piece, unit, posed), normalized as the
+    runtime normalizes after skinning. Kinematic vertices keep delta = 0."""
     matrices = skin_matrices(decoded, pose, skeleton)
     out = []
     for p, piece in enumerate(decoded["pieces"]):
         m = blended(piece, matrices)
-        rest = np.asarray(piece["mesh"]["rest"], float).copy()
-        direction = np.asarray(piece["direction"], float).copy()
-        free = np.asarray(piece["mesh"]["max_distance"]) > 0
+        rest = np.asarray(piece["mesh"]["rest"], float)
+        direction = np.asarray(piece["direction"], float)
+        free = (np.asarray(piece["mesh"]["max_distance"]) > 0)[:, None]
         linear = np.linalg.inv(m[:, :3, :3])
-        local = np.einsum("vij,vj->vi", linear, settled[p] - m[:, :3, 3])
-        rest[free] = local[free]
-        if directions is not None and directions[p] is not None:
-            turned = np.einsum("vij,vj->vi", linear, directions[p])
-            turned /= np.linalg.norm(turned, axis=1, keepdims=True)
-            direction[free] = turned[free]
-        out.append((rest, direction))
+        local = np.einsum("vij,vj->vi", linear, np.asarray(settled[p], float) - m[:, :3, 3])
+        turned = np.einsum("vij,vj->vi", linear, np.asarray(directions[p], float))
+        turned /= np.linalg.norm(turned, axis=1, keepdims=True)
+        out.append((np.where(free, local - rest, 0.0), np.where(free, turned - direction, 0.0)))
     return out

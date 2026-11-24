@@ -13,8 +13,22 @@ from garment.cook import cook_mesh
 IDENTITY = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0]
 
 
+def lift(direction, kinematic, turn):
+    """A corrective of a piece: position deltas on its free vertices and body directions turned by `turn` rad about +Y,
+    as rest-space deltas."""
+    direction = np.asarray(direction, float)
+    c, s = np.cos(turn), np.sin(turn)
+    turned = direction @ np.array([[c, 0, -s], [0, 1, 0], [s, 0, c]])
+    shape = np.zeros((len(direction), 6))
+    shape[:, :3] = [0.01, 0.02 + turn, -0.03]
+    shape[:, 3:] = turned - direction
+    shape[kinematic] = 0
+    return shape
+
+
 def synthetic():
-    """Two pieces: one with every optional section, one with none; the outfit has shapes."""
+    """Two pieces: one with every optional section, one with none; the outfit has shapes and two correctives, of which
+    only the first piece moves."""
     panel = cook_mesh("panel", [[-0.5, 0, 0], [0.5, 0, 0], [0, 1, 0.1], [0, 0.3, 1]], [[0, 1, 2], [1, 0, 3]], [0, 1],
                       wearable=True, tether_slack=1.05, max_distance=[0, 0, 0.05, 1 / 7],
                       backstop=[[0, 0], [0, 0], [0.004, 0.09], [0.01, 0.2]])
@@ -31,15 +45,18 @@ def synthetic():
                          angular_inertia=1 / 3,
                          skin=dict(bone=[[0, 1, 0, 0], [1, 0, 0, 0], [1, 1, 0, 0], [0, 0, 1, 1]],
                                    weight=[[1, 0, 0, 0], [0.75, 0.25, 0, 0], [1 / 3, 2 / 3, 0, 0], [0.5, 0, 0.5, 0]]),
-                         direction=[[0, 0, 1], [0, 0.6, 0.8], [1, 0, 0], [0, -1, 0]]),
+                         direction=[[0, 0, 1], [0, 0.6, 0.8], [1, 0, 0], [0, -1, 0]],
+                         correctives=np.stack([lift([[0, 0, 1], [0, 0.6, 0.8], [1, 0, 0], [0, -1, 0]], [0, 1], turn)
+                                               for turn in (0.3, -1.1)])),
                     dict(id="sash", mesh=sash, material=dict(density=0.3, iterations=1),
-                         skin=dict(bone=[[2, 2, 2, 2]] * 3, weight=[[1, 0, 0, 0]] * 3), direction=[[0, 0, 1]] * 3),
-                ])
+                         skin=dict(bone=[[2, 2, 2, 2]] * 3, weight=[[1, 0, 0, 0]] * 3), direction=[[0, 0, 1]] * 3,
+                         correctives=np.zeros((2, 3, 6))),
+                ], correctives=["sit", "sit_side_l"])
 
 
 def build(garment):
     return encode(garment["outfit_id"], garment["pieces"], bones=garment["bones"], spheres=garment["spheres"],
-                  cones=garment["cones"])
+                  cones=garment["cones"], correctives=garment["correctives"])
 
 
 class TestBlob(unittest.TestCase):
@@ -54,8 +71,12 @@ class TestBlob(unittest.TestCase):
                        skin=dict(bone=p["skin"]["bone"], weight=p["skin"]["weight"])) for p in back["pieces"]]
         again = encode(back["id"], pieces, bones=back["bones"],
                        spheres=[(s["bone"], s["center"], s["radius"]) for s in back["spheres"]],
-                       cones=[(c["a"], c["b"]) for c in back["cones"]])
+                       cones=[(c["a"], c["b"]) for c in back["cones"]], correctives=back["correctives"])
         self.assertEqual(again, data)
+        self.assertEqual(back["correctives"], ["sit", "sit_side_l"])
+        np.testing.assert_array_equal(back["pieces"][0]["correctives"], single(garment["pieces"][0]["correctives"]))
+        # A piece whose correctives are all zero carries no section: the runtime skips it.
+        self.assertIsNone(back["pieces"][1]["correctives"])
         panel, source = back["pieces"][0], garment["pieces"][0]
         np.testing.assert_array_equal(panel["mesh"]["rest"], single(source["mesh"]["rest"]))
         np.testing.assert_array_equal(panel["skin"]["weight"], single(source["skin"]["weight"]))
@@ -103,6 +124,12 @@ class TestBlob(unittest.TestCase):
             (lambda g, p: p["material"].__setitem__("strain_passes", 33), "panel: material.strain_passes"),
             (lambda g, p: p["material"].__setitem__("iterations", 0), "panel: material.iterations"),
             (lambda g, p: p.__setitem__("linear_inertia", 1.5), "panel: linear_inertia"),
+            (lambda g, p: p["correctives"].__setitem__((0, 1, 1), 0.01), "panel: correctives[0][1] must not move a kinematic"),
+            (lambda g, p: p["correctives"].__setitem__((1, 2, 3), 0.5), "panel: correctives[1].direction[2] must keep"),
+            (lambda g, p: p["correctives"].__setitem__((1, 3, slice(3, 6)), [0, 2, 0]),
+             "panel: correctives[1].direction[3] must not reverse"),
+            (lambda g, p: p.__setitem__("correctives", p["correctives"][:1]), "panel: correctives need shape"),
+            (lambda g, p: p["correctives"].__setitem__((0, 2, 0), np.nan), "panel: correctives[2] must be finite"),
         ]
         self.assert_rejected(cases)
 
@@ -114,6 +141,7 @@ class TestBlob(unittest.TestCase):
             (lambda g, p: g["cones"].__setitem__(0, (0, 0)), "cones[0] must join two different spheres"),
             (lambda g, p: g["cones"].__setitem__(0, (0, 3)), "cones[0]"),
             (lambda g, p: g["spheres"].extend([g["spheres"][0]] * 62), "shapes exceed"),
+            (lambda g, p: g.__setitem__("correctives", ["sit", "sit"]), "correctives need at most 16 unique"),
         ], prefix="synthetic: ")
 
     def test_integer_fields_reject_fractions_and_values_their_record_cannot_hold(self):
@@ -135,6 +163,7 @@ class TestBlob(unittest.TestCase):
                 panel["mesh"][key] = np.array(panel["mesh"][key])
             panel["skin"] = {k: np.array(v) for k, v in panel["skin"].items()}
             panel["direction"] = np.array(panel["direction"], float)
+            panel["correctives"] = np.array(panel["correctives"], float)
             edit(garment, panel)
             with self.subTest(message), self.assertRaisesRegex(ValueError, "^" + prefix + message.replace("[", r"\[")):
                 build(garment)
@@ -179,15 +208,24 @@ def emit_expected(out, garment, blob_path, empty_path):
         out.write(f"static const GarmentSkin {s}_skin[] = {{" + ",".join(
             "{{%s},%s}" % (",".join(map(str, v["bone"])), c_floats(v["weight"])) for v in piece["skin"]) + "};\n")
         out.write(f"static const float {s}_direction[][3] = {{" + ",".join(c_floats(d) for d in piece["direction"]) + "};\n")
+        shapes = "NULL"
+        if piece["correctives"] is not None:
+            shapes = f"{s}_corrective"
+            out.write(f"static const GarmentCorrective {shapes}[] = {{" + ",".join(
+                f"{{{c_floats(v[:3])},{c_floats(v[3:])}}}" for v in piece["correctives"].reshape(-1, 6)) + "};\n")
         material = ",".join(f".{k}={v}" if isinstance(v, int) else f".{k}={c_float(v)}" for k, v in piece["material"].items())
-        rows.append(f'{{"{piece["id"]}",&{s}_mesh,{s}_skin,{s}_direction,{{{material}}},{piece["render_vertices"]},'
+        rows.append(f'{{"{piece["id"]}",&{s}_mesh,{s}_skin,{s}_direction,{shapes},{{{material}}},{piece["render_vertices"]},'
                     f'{c_float(piece["linear_inertia"])},{c_float(piece["angular_inertia"])}}}')
     out.write("static const GarmentAsset expected_pieces[] = {" + ",".join(rows) + "};\n")
+    out.write("static const char *const expected_correctives[] = {" + ",".join(f'"{n}"' for n in back["correctives"])
+              + "};\n")
     out.write(f'static const GarmentSet expected_set = {{"{garment["outfit_id"]}",expected_bones,{len(back["bones"])},'
-              f'expected_spheres,{len(back["spheres"])},expected_cones,{len(back["cones"])},expected_pieces,{len(rows)}}};\n')
+              f'expected_spheres,{len(back["spheres"])},expected_cones,{len(back["cones"])},expected_pieces,{len(rows)},'
+              f'expected_correctives,{len(back["correctives"])}}};\n')
     limits = (("CLOTH_VERTICES", "VERTICES_MAX"), ("CLOTH_EDGES", "EDGES_MAX"),
               ("GARMENT_PIECES_MAX", "PIECES_MAX"), ("GARMENT_BONES_MAX", "BONES_MAX"), ("CLOTH_SHAPES", "SHAPES_MAX"),
-              ("GARMENT_BLOB_ALIGN", "ALIGN"), ("GARMENT_BLOB_VERSION", "VERSION"))
+              ("GARMENT_BLOB_ALIGN", "ALIGN"), ("GARMENT_BLOB_VERSION", "VERSION"),
+              ("GARMENT_CORRECTIVES_MAX", "CORRECTIVES_MAX"))
     for c_name, py_name in limits:
         out.write(f'_Static_assert({c_name} == {getattr(garment_blob, py_name)}, "garment_blob.py {py_name} differs from {c_name}");\n')
     out.write(f'#define GARMENT_FIXTURE_BLOB "{blob_path.as_posix()}"\n#define GARMENT_FIXTURE_EMPTY "{empty_path.as_posix()}"\n')

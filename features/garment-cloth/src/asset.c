@@ -20,9 +20,10 @@ _Static_assert(sizeof(GarmentSkin) == 24 && offsetof(GarmentSkin, weight) == 8, 
 _Static_assert(sizeof(GarmentSphere) == 20 && offsetof(GarmentSphere, center) == 4 && offsetof(GarmentSphere, radius) == 16,
                "sphere layout");
 _Static_assert(sizeof(GarmentCone) == 4, "cone layout");
+_Static_assert(sizeof(GarmentCorrective) == 24 && offsetof(GarmentCorrective, direction) == 12, "corrective layout");
 
-enum { STRINGS, BONES, SPHERES, CONES, PIECE, REST, INV_AREA, FACES, EDGES, TETHERS, SKIN, MAX_DISTANCE, BACKSTOP,
-       DIRECTION, KINDS };
+enum { STRINGS, BONES, SPHERES, CONES, CORRECTIVE_NAMES, PIECE, REST, INV_AREA, FACES, EDGES, TETHERS, SKIN,
+       MAX_DISTANCE, BACKSTOP, DIRECTION, CORRECTIVES, KINDS };
 static const struct {
     uint32_t tag;
     uint16_t stride, align;
@@ -32,6 +33,7 @@ static const struct {
     [BONES] = {GARMENT_SECTION_BONES, sizeof(GarmentBlobBone), _Alignof(GarmentBlobBone), true},
     [SPHERES] = {GARMENT_SECTION_SPHERES, sizeof(GarmentSphere), _Alignof(GarmentSphere), true},
     [CONES] = {GARMENT_SECTION_CONES, sizeof(GarmentCone), _Alignof(GarmentCone), true},
+    [CORRECTIVE_NAMES] = {GARMENT_SECTION_CORRECTIVE_NAMES, sizeof(uint32_t), _Alignof(uint32_t), true},
     [PIECE] = {GARMENT_SECTION_PIECE, sizeof(GarmentBlobPiece), _Alignof(GarmentBlobPiece), false},
     [REST] = {GARMENT_SECTION_REST, 3 * sizeof(float), _Alignof(float), false},
     [INV_AREA] = {GARMENT_SECTION_INV_AREA, sizeof(float), _Alignof(float), false},
@@ -42,6 +44,7 @@ static const struct {
     [MAX_DISTANCE] = {GARMENT_SECTION_MAX_DISTANCE, sizeof(float), _Alignof(float), false},
     [BACKSTOP] = {GARMENT_SECTION_BACKSTOP, sizeof(ClothBackstop), _Alignof(ClothBackstop), false},
     [DIRECTION] = {GARMENT_SECTION_DIRECTION, 3 * sizeof(float), _Alignof(float), false},
+    [CORRECTIVES] = {GARMENT_SECTION_CORRECTIVES, sizeof(GarmentCorrective), _Alignof(GarmentCorrective), false},
 };
 
 /* One allocation per loaded blob: the solver's pointer structs and the bone names they address. */
@@ -49,6 +52,7 @@ typedef struct {
     GarmentSet set;
     GarmentAsset pieces[GARMENT_PIECES_MAX];
     ClothMesh meshes[GARMENT_PIECES_MAX];
+    const char *corrective_names[GARMENT_CORRECTIVES_MAX];
     GarmentBone bones[];
 } AssetView;
 
@@ -118,6 +122,9 @@ const GarmentSet *garment_asset_view(const void *blob, uint32_t size) {
     for (uint32_t i = 0; i < spheres; ++i) NT_ASSERT(sphere[i].bone < bones);
     const GarmentCone *cone = records(&b, cone_section);
     for (uint32_t i = 0; i < cones; ++i) NT_ASSERT(cone[i].a < spheres && cone[i].b < spheres);
+    const GarmentBlobSection *name_section = section(&b, outfit, CORRECTIVE_NAMES, false);
+    const uint32_t correctives = count_of(name_section);
+    NT_ASSERT(correctives <= GARMENT_CORRECTIVES_MAX);
 
     AssetView *view = calloc(1, sizeof *view + bones * sizeof(GarmentBone));
     NT_ASSERT(view);
@@ -126,9 +133,15 @@ const GarmentSet *garment_asset_view(const void *blob, uint32_t size) {
         view->bones[i].name = string(&b, source_bones[i].name);
         memcpy(view->bones[i].inverse_bind, source_bones[i].inverse_bind, sizeof view->bones[i].inverse_bind);
     }
+    const uint32_t *name_offset = records(&b, name_section);
+    for (uint32_t i = 0; i < correctives; ++i) {
+        view->corrective_names[i] = string(&b, name_offset[i]);
+        for (uint32_t j = 0; j < i; ++j) NT_ASSERT(strcmp(view->corrective_names[i], view->corrective_names[j]) != 0);
+    }
     view->set = (GarmentSet){.id = string(&b, h->id), .bones = view->bones, .bone_count = (int)bones,
                              .spheres = sphere, .sphere_count = (int)spheres, .cones = cone, .cone_count = (int)cones,
-                             .pieces = view->pieces, .piece_count = h->piece_count};
+                             .pieces = view->pieces, .piece_count = h->piece_count,
+                             .corrective_names = view->corrective_names, .corrective_count = (int)correctives};
     for (int p = 0; p < h->piece_count; ++p) {
         const GarmentBlobSection *piece_section = section(&b, p, PIECE, true);
         NT_ASSERT(piece_section->count == 1);
@@ -136,11 +149,13 @@ const GarmentSet *garment_asset_view(const void *blob, uint32_t size) {
         const uint32_t n = section(&b, p, REST, true)->count;
         const GarmentBlobSection *face_section = section(&b, p, FACES, true), *edge_section = section(&b, p, EDGES, true);
         const GarmentBlobSection *tethers = section(&b, p, TETHERS, false);
+        const GarmentBlobSection *shapes = section(&b, p, CORRECTIVES, false);
         const uint32_t edges = edge_section->count, faces = face_section->count;
         NT_ASSERT(n >= 3 && n <= CLOTH_VERTICES && edges >= 3 && edges <= CLOTH_EDGES && faces >= 1 && faces <= 2 * edges / 3 &&
                   section(&b, p, INV_AREA, true)->count == n && section(&b, p, SKIN, true)->count == n &&
                   section(&b, p, MAX_DISTANCE, true)->count == n && section(&b, p, BACKSTOP, true)->count == n &&
-                  section(&b, p, DIRECTION, true)->count == n && (!tethers || tethers->count == n));
+                  section(&b, p, DIRECTION, true)->count == n && (!tethers || tethers->count == n) &&
+                  (!shapes || (correctives > 0 && shapes->count == correctives * n)));
         const ClothFace *face = records(&b, face_section);
         for (uint32_t i = 0; i < faces; ++i) NT_ASSERT(face[i].a < n && face[i].b < n && face[i].c < n);
         const ClothEdge *edge = records(&b, edge_section);
@@ -164,7 +179,8 @@ const GarmentSet *garment_asset_view(const void *blob, uint32_t size) {
         };
         view->pieces[p] = (GarmentAsset){
             .id = string(&b, piece->id), .mesh = &view->meshes[p], .skin = skin,
-            .direction = records(&b, section(&b, p, DIRECTION, true)), .material = piece->material,
+            .direction = records(&b, section(&b, p, DIRECTION, true)), .corrective = records(&b, shapes),
+            .material = piece->material,
             .render_vertices = piece->render_vertices, .linear_inertia = piece->linear_inertia,
             .angular_inertia = piece->angular_inertia,
         };

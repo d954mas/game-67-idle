@@ -5,8 +5,10 @@ skinned mesh `piece:<id>` (`extras`: label, fabric) whose primitive carries
 - POSITION (rest, model space), JOINTS_0 (u16) and WEIGHTS_0 on the model's skin joints;
 - _MAX_DISTANCE r, _BACKSTOP_DISTANCE d, _BACKSTOP_RADIUS R (0 off, +inf the plane form), _BODY_DIRECTION b;
 - one morph target per corrective (POSITION and _BODY_DIRECTION deltas), named by `extras.targetNames`.
-The root `extras` hold `build` (the hash of the script and its inputs, and the library version) and `layers`
-([outer, inner] piece ids). `write(read(data)) == data` for every file `write` produced."""
+The root `extras` hold `build` (the hash of the script and its inputs, and the library version), `layers`
+([outer, inner] piece ids) and `correctives`: per corrective, in the order every piece's morph targets follow, the
+record of its bake (name, source key pose, convexes, passes, residual drift per piece). `write(read(data)) == data`
+for every file `write` produced."""
 import json
 import struct
 from dataclasses import dataclass, field
@@ -46,6 +48,11 @@ class Sidecar:
     pieces: list
     build: dict
     layers: list = field(default_factory=list)
+    correctives: list = field(default_factory=list)
+
+    @property
+    def corrective_names(self):
+        return [c["name"] for c in self.correctives]
 
     @property
     def joint_names(self):
@@ -116,9 +123,12 @@ def write(sidecar):
     nodes = [dict(n) for n in sidecar.nodes]
     roots = [i for i in range(len(nodes)) if not any(i in n.get("children", []) for n in nodes)]
     meshes = []
+    names = sidecar.corrective_names
     for p in sidecar.pieces:
         n = len(p.points)
         _check(p)
+        if list(p.correctives) != names:
+            raise ValueError(f"piece {p.id}: correctives {list(p.correctives)} differ from the outfit's {names}")
         attributes = {"POSITION": buf.add(p.points, FLOAT, "VEC3", bounds=True),
                       "JOINTS_0": buf.add(p.joints, U16, "VEC4"), "WEIGHTS_0": buf.add(p.weights, FLOAT, "VEC4")}
         for name, semantic in MAPS:
@@ -136,7 +146,8 @@ def write(sidecar):
         nodes.append({"name": f"piece:{p.id}", "mesh": len(meshes) - 1, "skin": 0})
     skin = {"joints": list(sidecar.joints), "inverseBindMatrices": buf.add(sidecar.inverse_binds, FLOAT, "MAT4")}
     doc = {"asset": {"version": "2.0", "generator": "garment-cloth sidecar"},
-           "extras": {"build": sidecar.build, "layers": [list(pair) for pair in sidecar.layers]},
+           "extras": {"build": sidecar.build, "layers": [list(pair) for pair in sidecar.layers],
+                      **({"correctives": list(sidecar.correctives)} if sidecar.correctives else {})},
            "scene": 0, "scenes": [{"nodes": roots + list(range(len(sidecar.nodes), len(nodes)))}],
            "nodes": nodes, "meshes": meshes, "skins": [skin],
            "accessors": buf.accessors, "bufferViews": buf.views, "buffers": [{"byteLength": len(buf.data)}]}
@@ -208,4 +219,5 @@ def read(data):
     extras = doc.get("extras", {})
     return Sidecar(nodes=doc["nodes"][:first], joints=skins[0]["joints"],
                    inverse_binds=accessor(skins[0]["inverseBindMatrices"]), pieces=pieces,
-                   build=extras.get("build", {}), layers=[tuple(pair) for pair in extras.get("layers", [])])
+                   build=extras.get("build", {}), layers=[tuple(pair) for pair in extras.get("layers", [])],
+                   correctives=list(extras.get("correctives", [])))

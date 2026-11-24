@@ -48,6 +48,9 @@ static void same_piece(const GarmentAsset *e, const GarmentAsset *v) {
         TEST_ASSERT_EQUAL_MEMORY(e->skin[i].weight, v->skin[i].weight, sizeof e->skin[i].weight);
     }
     TEST_ASSERT_EQUAL_MEMORY(e->direction, v->direction, n * sizeof e->direction[0]);
+    TEST_ASSERT_EQUAL(e->corrective == NULL, v->corrective == NULL);
+    if (e->corrective)
+        TEST_ASSERT_EQUAL_MEMORY(e->corrective, v->corrective, (size_t)expected_set.corrective_count * n * sizeof *e->corrective);
     TEST_ASSERT_EQUAL_MEMORY(&e->material, &v->material, sizeof e->material);
     TEST_ASSERT_EQUAL_INT(e->render_vertices, v->render_vertices);
     TEST_ASSERT_EQUAL_MEMORY(&e->linear_inertia, &v->linear_inertia, sizeof(float));
@@ -67,6 +70,11 @@ static void same_outfit(const GarmentSet *e, const GarmentSet *v) {
     }
     TEST_ASSERT_EQUAL_INT(e->cone_count, v->cone_count);
     TEST_ASSERT_EQUAL_MEMORY(e->cones, v->cones, (size_t)e->cone_count * sizeof e->cones[0]);
+    TEST_ASSERT_EQUAL_INT(e->corrective_count, v->corrective_count);
+    for (int i = 0; i < e->corrective_count; ++i) {
+        TEST_ASSERT_EQUAL_STRING(e->corrective_names[i], v->corrective_names[i]);
+        TEST_ASSERT_EQUAL_INT(i, garment_set_corrective(v, e->corrective_names[i]));
+    }
 }
 
 /* shift 4 leaves the blob only 4-byte aligned, the least the format promises to work with. */
