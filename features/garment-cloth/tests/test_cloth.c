@@ -157,21 +157,23 @@ static void test_a_cone_sweeping_a_pinned_panel_at_15_mps_leaves_no_vertex_insid
     TEST_ASSERT_TRUE(contacts > 0);
 }
 
-/* A thin limb (r + thickness = 14 mm) crosses a pinned panel at 15 m/s, 83 mm per substep. Contact is discrete, so a
-   shape that moves more than its thickness in a substep may pass the cloth without pushing it; what the scheme
-   guarantees is that after every substep no vertex is inside a shape and every vertex is within its max distance. */
+/* A thin limb (r + thickness = 14 mm) crosses a pinned panel at 15 m/s, 83 mm per substep, and one substep ends with its
+   axis 4 mm in front of the panel. Contact is discrete: the vertices it lands on leave by the nearest exit, backward,
+   and the reference constraints keep every vertex within its max distance of where it belongs. */
 static void test_a_thin_cone_at_15_mps_leaves_the_panel_outside_and_within_max_distance(void) {
     const ClothMaterial fabric = {.density = 0.2F, .stretch = 1e-5F, .bend = 200.0F, .thickness = 0.004F, .iterations = 2,
                                   .max_edge_strain = 0.12F, .strain_passes = 4};
     const float b[3] = {0, 0, 1};
     reference(&panel, panel.rest, b);
     for (int i = 0; i < panel.vertices; ++i) r[i] = panel.max_distance[i] > 0.0F ? 0.1F : 0.0F;
-    ClothSphere limb[2] = {{.c = {-0.3F, 0.2F, -0.3F}, .r = 0.01F}, {.c = {0.3F, 0.2F, -0.3F}, .r = 0.01F}};
+    ClothSphere limb[2] = {{.c = {-0.3F, 0.2F, -0.246F}, .r = 0.01F}, {.c = {0.3F, 0.2F, -0.246F}, .r = 0.01F}};
     const ClothCone cone = {0, 1};
     for (int i = 0; i < 2; ++i) memcpy(limb[i].prev, limb[i].c, sizeof limb[i].prev);
     ClothShapes shapes = {.spheres = limb, .sphere_count = 2, .cones = &cone, .cone_count = 1};
     TEST_ASSERT_TRUE(cloth_reset(&cloth, &panel, &fabric, ref, r, &shapes));
-    for (int step = 0; step < 10; ++step) {
+    int contacts = 0;
+    float pushed = 0.0F;
+    for (int step = 0; step < 6; ++step) {
         for (int i = 0; i < 2; ++i) {
             memcpy(limb[i].prev, limb[i].c, sizeof limb[i].prev);
             limb[i].c[2] += 15.0F * dt;
@@ -181,9 +183,34 @@ static void test_a_thin_cone_at_15_mps_leaves_the_panel_outside_and_within_max_d
         for (int v = 0; v < panel.vertices; ++v) {
             float n[3], t;
             TEST_ASSERT_TRUE(cloth_point_cone_contact(cloth.x[v], &limb[0], &limb[1], 0.0F, n, &t) <= 1e-4F);
-            TEST_ASSERT_TRUE(distance(cloth.x[v], ref[v].x) <= r[v] + fabric.thickness + 1e-4F);
+            /* Left on the surface, then drawn a little off it by the fabric after the contact pass. */
+            contacts += cloth_point_cone_contact(cloth.x[v], &limb[0], &limb[1], 2.0F * fabric.thickness, n, &t) > 0.0F;
+            TEST_ASSERT_TRUE(distance(cloth.x[v], ref[v].x) <= r[v] + 1e-4F);
+            pushed = fmaxf(pushed, ref[v].x[2] - cloth.x[v][2]);
         }
     }
+    TEST_ASSERT_TRUE(contacts > 0);
+    /* Gravity and the fabric move the panel in its plane only, so a step back from the reference is the exit. */
+    TEST_ASSERT_TRUE(pushed >= 0.5F * (limb[0].r + fabric.thickness));
+}
+
+static void test_a_plane_backstop_puts_a_vertex_pushed_past_it_back_on_the_plane(void) {
+    const ClothBackstop off = {0, 0}, plane = {0.01F, INFINITY};
+    ClothBackstop backstop[4] = {off, off, off, plane};
+    ClothMesh mesh = fold;
+    mesh.backstop = backstop;
+    const float b[3] = {0.0F, -0.6F, -0.8F};
+    reference(&mesh, mesh.rest, b);
+    r[3] = 0.5F;
+    TEST_ASSERT_TRUE(cloth_reset(&cloth, &mesh, &inert, ref, r, NULL));
+    for (int k = 0; k < 3; ++k) cloth.x[3][k] = ref[3].x[k] + b[k] * 0.06F + (k == 0 ? 0.03F : 0.0F);
+    cloth_step(&cloth, &mesh, &inert, dt, NULL, ref, r, NULL);
+    float along = 0.0F;
+    for (int k = 0; k < 3; ++k) along += (cloth.x[3][k] - ref[3].x[k]) * b[k];
+    NEAR(1e-5F, plane.d, along);
+    /* The plane pushes along b only: the step across it stays. */
+    NEAR(1e-5F, ref[3].x[0] + 0.03F, cloth.x[3][0]);
+    TEST_ASSERT_TRUE(cloth_measure(&cloth, &mesh, &inert, ref, r, NULL).backstop_depth_m < 1e-5F);
 }
 
 static void test_reset_leaves_a_seat_through_its_nearest_face_not_along_b(void) {
@@ -367,6 +394,7 @@ int main(void) {
     RUN_TEST(test_tethers_hold);
     RUN_TEST(test_a_cone_sweeping_a_pinned_panel_at_15_mps_leaves_no_vertex_inside);
     RUN_TEST(test_a_thin_cone_at_15_mps_leaves_the_panel_outside_and_within_max_distance);
+    RUN_TEST(test_a_plane_backstop_puts_a_vertex_pushed_past_it_back_on_the_plane);
     RUN_TEST(test_reset_leaves_a_seat_through_its_nearest_face_not_along_b);
     RUN_TEST(test_reset_gives_the_reference_and_exits_along_minus_b);
     RUN_TEST(test_friction_holds_below_mu_and_slides_above);

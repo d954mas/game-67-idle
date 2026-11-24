@@ -23,6 +23,9 @@ from garment_proxy import (classify_edges, closest_surface_points, corner_owners
 
 LABEL, FREEDOM = "_CLOTH_PIECE", "_CLOTH"
 PALETTE_MAX = 2047  # 11-bit vertex ids of the render binding
+# Smallest singular value over the largest of a curvature fit's design on steps scaled to its disc: below it the
+# vertices barely span two tangent directions and the fitted curvature is noise.
+FIT_CONDITION = 1e-3
 
 
 def top_influences(weights, count=4):
@@ -180,51 +183,48 @@ class BodySurface:
         n = len(self.points)
         self.graph = csr_matrix((np.r_[length, length], (np.r_[edges[:, 0], edges[:, 1]], np.r_[edges[:, 1], edges[:, 0]])),
                                 shape=(n, n))
-        corners = self.points[self.welded]
-        self.area = 0.5 * np.linalg.norm(np.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0]), axis=1)
-        # Area samples: the centroids of each triangle's 3 x 3 subdivision, a ninth of its area each, so a disc that
-        # meets only a few large triangles still has the surface to fit.
-        bary = np.array([((i + 1 / 3) / 3, (j + 1 / 3) / 3) for i in range(3) for j in range(3 - i)] +
-                        [((i + 2 / 3) / 3, (j + 2 / 3) / 3) for i in range(2) for j in range(2 - i)])
-        weights = np.column_stack([1 - bary.sum(1), bary])
-        self.samples = np.einsum("sk,fkj->fsj", weights, corners)
-        self.share = 1 / len(bary)
+        normals = np.zeros_like(self.points)
+        np.add.at(normals, weld, self.normals)
+        self.point_normals = normals / np.maximum(np.linalg.norm(normals, axis=1, keepdims=True), 1e-12)
 
-    def radius(self, face, point, normal, radius):
-        """The body radius behind point: 1 / the largest principal curvature of the body over the geodesic disc of
-        the given radius around point (a quadric height field over the tangent plane, fitted to area samples).
-        Returns +inf where the disc is flat or concave and None where it holds too little surface to fit."""
+    def radius(self, face, point, normal):
+        """The body radius behind point: 1 / the largest principal curvature there, from the shape operator S that
+        carries a tangent step to the turn of the normal (dn = S dp), fitted to the body vertices nearest to point
+        along the surface whose normals face the side of normal, on the smallest geodesic disc that determines S.
+        The backstop is a local model of the body behind the vertex: a wider disc wraps past the side of a thin limb.
+        The normals carry the smooth surface, so the tessellation does not set the radius. Returns +inf where the
+        body is flat or concave there and None where no disc determines the fit."""
         seeds = self.welded[face]
         offset = np.linalg.norm(self.points[seeds] - point, axis=1)
-        reach = dijkstra(self.graph, indices=seeds, limit=radius + offset.max())
-        geodesic = (reach + offset[:, None]).min(0)
-        near = np.flatnonzero(np.isfinite(geodesic[self.welded]).any(1))
-        corners = self.points[self.welded[near]]
-        samples = self.samples[near]
-        # A sample's geodesic distance: through the nearer corner of its triangle, or straight across the seed face.
-        estimate = (geodesic[self.welded[near]][:, None, :] +
-                    np.linalg.norm(samples[:, :, None, :] - corners[:, None, :, :], axis=3)).min(2)
-        on_seed = near == face
-        estimate[on_seed] = np.minimum(estimate[on_seed], np.linalg.norm(samples[on_seed] - point, axis=2))
-        keep = estimate <= radius
-        points = samples[keep]
-        weight = np.repeat(self.area[near][:, None] * self.share, samples.shape[1], axis=1)[keep]
-        if len(points) < 6:
-            return None
         u = np.cross(normal, [1.0, 0.0, 0.0] if abs(normal[0]) < 0.9 else [0.0, 1.0, 0.0])
         u /= np.linalg.norm(u)
         v = np.cross(normal, u)
-        rel = points - point
-        x, y, h = rel @ u, rel @ v, rel @ normal
-        # h = a x^2/2 + b xy + c y^2/2 + d x + e y + f
-        design = np.column_stack([x * x / 2, x * y, y * y / 2, x, y, np.ones(len(x))]) * np.sqrt(weight)[:, None]
-        solution, _, rank, _ = np.linalg.lstsq(design, h * np.sqrt(weight), rcond=None)
-        if rank < 6:
-            return None
-        a, b, c = solution[:3]
-        # A limb curves away from its outward normal: curvature is minus the height field's Hessian.
-        curvature = -np.linalg.eigvalsh([[a, b], [b, c]]).min()
-        return 1.0 / curvature if curvature > 0 else math.inf
+        limit = 2 * offset.max() + 1e-3
+        while True:
+            reach = dijkstra(self.graph, indices=seeds, limit=limit)
+            geodesic = (reach + offset[:, None]).min(0)
+            near = np.flatnonzero(np.isfinite(geodesic) & (self.point_normals @ normal > 0))
+            near = near[np.argsort(geodesic[near], kind="stable")]
+            rel, turn = self.points[near] - point, self.point_normals[near]
+            x, y = rel @ u, rel @ v
+            zero = np.zeros(len(x))
+            # Unknowns (s11, s12, s22): rows of dn.u = s11 x + s12 y, then of dn.v = s12 x + s22 y.
+            design = np.stack([np.column_stack([x, y, zero]), np.column_stack([zero, x, y])], axis=1)
+            target = np.column_stack([turn @ u, turn @ v])
+            for n in range(2, len(x) + 1):
+                rows = design[:n].reshape(-1, 3)
+                # Judged on steps scaled to the disc, so the units do not decide.
+                span = max(float(np.abs(rows).max()), 1e-12)
+                singular = np.linalg.svd(rows / span, compute_uv=False)
+                if singular[-1] > FIT_CONDITION * singular[0]:
+                    s11, s12, s22 = np.linalg.lstsq(rows, target[:n].reshape(-1), rcond=None)[0]
+                    curvature = np.linalg.eigvalsh([[s11, s12], [s12, s22]]).max()
+                    # A turn of the normal across the disc below what the fit resolves is a flat body; it also keeps
+                    # R within the range a float sphere centre can carry.
+                    return 1.0 / curvature if curvature * span > FIT_CONDITION else math.inf
+            if limit > 1.0 or len(near) == len(self.points):
+                return None
+            limit *= 2
 
 
 def _smooth_directions(directions, faces, iterations=4):
@@ -247,10 +247,9 @@ def body_maps(p, f, r, body, thickness, enabled=True):
 
     body: a BodySurface of the declared body primitives, or None. b points from the cloth to the closest body point
     (along -n where the cloth lies inside the body), smoothed over the sim mesh; d is that distance less the
-    thickness. R is the body radius behind the vertex (BodySurface.radius over the geodesic disc of radius r around
-    the closest point): +inf, the plane form, where the body is flat or concave there or curves away by less than the
-    thickness over the disc; 0 where the disc holds too little surface to fit or where d >= r, since such a backstop
-    can never act."""
+    thickness. R is the body radius behind the vertex at the closest point (BodySurface.radius): +inf, the plane
+    form, where the body is flat or concave there; 0 where no disc determines the fit or where d >= r, since such a
+    backstop can never act."""
     if body is None:
         a, b_, c = p[f].transpose(1, 0, 2)
         normals = np.zeros_like(p)
@@ -271,12 +270,9 @@ def body_maps(p, f, r, body, thickness, enabled=True):
     if not enabled:
         return directions, backstop
     for i in np.flatnonzero((r > 0) & (backstop[:, 0] < r)):
-        radius = body.radius(face[i], closest[i], normal[i], float(r[i]))
-        if radius is None:
-            continue
-        # Over the disc the vertex can reach, a sphere departs from its tangent plane by r^2 / 2R; below the fabric
-        # thickness, the contact resolution, the two are the same constraint and the plane form is the exact one.
-        backstop[i, 1] = math.inf if r[i] ** 2 / (2 * radius) < thickness else radius
+        radius = body.radius(face[i], closest[i], normal[i])
+        if radius is not None:
+            backstop[i, 1] = radius
     return directions, backstop
 
 

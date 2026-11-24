@@ -461,15 +461,19 @@ static void project_convexes(ClothState *s, const ClothMesh *mesh, const float *
     }
 }
 
-static void project_max_distance(ClothState *s, const ClothMesh *mesh, const float *w, const ClothReference *ref,
+static bool project_max_distance(ClothState *s, const ClothMesh *mesh, const float *w, const ClothReference *ref,
                                  const float *r) {
+    bool moved = false;
     for (int i = 0; i < mesh->vertices; ++i) {
         if (w[i] == 0.0F) continue;
         vec3 offset;
         glm_vec3_sub(s->x[i], (float *)ref[i].x, offset);
         float distance2 = glm_vec3_norm2(offset);
-        if (distance2 > r[i] * r[i]) glm_vec3_muladds(offset, r[i] / sqrtf(distance2) - 1.0F, s->x[i]);
+        if (distance2 <= r[i] * r[i]) continue;
+        glm_vec3_muladds(offset, r[i] / sqrtf(distance2) - 1.0F, s->x[i]);
+        moved = true;
     }
+    return moved;
 }
 
 /* How deep x lies inside its backstop, and the push back to its surface. An infinite radius is the half-space
@@ -578,9 +582,11 @@ static void kinematic_weights(const ClothMesh *mesh, const float *r, float *w) {
     for (int i = 0; i < mesh->vertices; ++i) w[i] = r[i] > 0.0F ? mesh->inv_area[i] : 0.0F;
 }
 
-/* Integrate -> [max distance -> tethers -> bend, stretch -> backstop -> collision] x iterations -> strain passes ->
-   backstop -> collision -> velocity from positions: collision has the last word, since penetration is the visible
-   defect and the backstop pushes the same way. */
+/* Integrate -> [max distance -> tethers -> bend, stretch -> backstop -> collision] x iterations -> max distance ->
+   strain passes -> backstop -> collision -> velocity from positions. Collision has the last word, since penetration
+   is the visible defect and the backstop pushes the same way. The strain limit comes after max distance: where the
+   constraints cannot all hold, the fabric keeps its limit and the excess beyond max distance, which the measures
+   report, shows the defect instead of a torn triangle. */
 void cloth_step(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, float dt, const ClothFrame *frame,
                 const ClothReference *ref, const float *max_distance, const ClothShapes *shapes) {
     if (!s) return;
@@ -664,12 +670,11 @@ void cloth_step(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, fl
         project_convexes(s, mesh, w, (const float (*)[3])x_prev, wk, move, m->thickness, mu, wk->normal);
     }
 
-    bool moved = false;
+    bool moved = project_max_distance(s, mesh, w, ref, r);
     for (int pass = 0; pass < m->strain_passes; ++pass)
         if (limit_strain_pass(s, mesh, m, w, (const float (*)[3])wk->normal, pass % 2 != 0)) moved = true;
         else break;
     if (moved) {
-        project_max_distance(s, mesh, w, ref, r);
         project_backstop(s, mesh, w, ref);
         project_shapes(s, mesh, w, (const float (*)[3])x_prev, &wk->bp, m->thickness, mu, true, NULL);
         project_convexes(s, mesh, w, (const float (*)[3])x_prev, wk, move, m->thickness, mu, NULL);

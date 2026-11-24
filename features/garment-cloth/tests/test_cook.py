@@ -69,6 +69,10 @@ class TestCook(unittest.TestCase):
         # Inside a tube the body is concave: the backstop takes its plane form.
         inner = np.array([(0.18, y, z) for y in (-0.02, 0.0, 0.02) for z in (-0.02, 0.0, 0.02)])
         self.assertTrue(np.all(np.isinf(body_maps(inner, faces, r, cylinder(64, 41, 0.2, -1), 0.002)[1][:, 1])))
+        # A max distance of twice the limb radius reaches past the limb's side; the backstop stays the limb.
+        for shape in ((24, 13), (64, 41)):
+            np.testing.assert_allclose(body_maps(grid, faces, np.full(9, 0.2), cylinder(*shape), 0.002)[1][:, 1], 0.1,
+                                       rtol=0.05)
         # Where the cloth is farther from the body than r, the backstop can never act: off.
         self.assertTrue(np.all(body_maps(grid, faces, np.full(9, 0.01), cylinder(64, 41), 0.002)[1][:, 1] == 0))
 

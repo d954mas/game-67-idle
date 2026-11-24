@@ -57,10 +57,10 @@ The maps follow from meaning, not from tuning against old frames:
   the garment allows (a pencil skirt a few centimetres, a loose hem more).
 - the body direction `b` points from each proxy vertex to the closest point of the `body_primitives` surface at rest,
   smoothed over the proxy; `d` is that distance less the thickness; `R` is the body radius behind the vertex, 1 over
-  the largest principal curvature of the body over the geodesic disc of radius `r` around the closest point (fitted to
-  area samples, so the tessellation does not set it). A flat or concave body, or one that curves away by less than
-  the thickness over the disc, gives the plane form `R = +inf`; a disc with too little surface to fit, or `d >= r`,
-  turns the backstop off. `backstop=False` on a piece, or no body primitives, turns it off too.
+  the largest principal curvature at the closest point, fitted to the body vertices of the smallest geodesic disc
+  that determines a quadric, among those whose normals face the same side. A backstop is a local model of the body
+  behind the vertex, so the disc does not grow with `r`: one wider than a limb wraps past its side. A flat or concave
+  body gives the plane form `R = +inf`; no determining disc, or `d >= r`, turns the backstop off. `backstop=False` on a piece, or no body primitives, turns it off too.
 - tethers allow the path length to the nearest pin times `1 + max_edge_strain` of the fabric.
 
 Colliders are the outfit's one set of round cones in rest model space; the cook stores them as spheres on their
