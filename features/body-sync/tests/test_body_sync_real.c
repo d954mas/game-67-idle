@@ -1098,6 +1098,47 @@ static void test_a_host_move_pulls_the_soft_copy(void) {
     TEST_ASSERT_TRUE_MESSAGE(apart(host.bodies[5], guest.bodies[5]) < SYNC_SOFT_DEAD_M, "a soft copy did not follow its owner");
 }
 
+/* The pull's own lag of correction, apart from any difference of two simulations: one box slides at
+   0.5 m/s on a frictionless floor in every world (Box3D steps worlds bit-identically, so the
+   copy's simulation is its owner's and friction takes nothing from the pull), and the guest's soft
+   copy, knocked 2 cm across its path outside the seam, is steered back by the pull alone. Derived
+   from sync_soft.h: unclamped (2 cm / PULL_S is under PULL_SPEED), the copy's velocity relative to
+   its owner u and its error e obey u' = u + BLEND (e / PULL_S - u), e' = e - u' dt from e = 2 cm,
+   u = 0, pulled past DEAD_M: at BLEND 0.3, PULL_S 0.25 s and dt 1/60 s the error is under the dead
+   zone (1 cm) 12 steps after the knock. The pull aims at the decoded pose, within half a grid step
+   (1 mm) of the owner's across the path, which moves the start and the end by 1 mm each: 14. */
+static void test_a_knocked_soft_copy_is_pulled_back_within_the_pulls_lag(void) {
+    const uint32_t box = 5;
+    layer_on();
+    side_t *sides[] = {&host, &guest, &other};
+    for (int k = 0; k < 3; k++) {
+        b3ShapeId shape;
+        b3Body_GetShapes(sides[k]->bodies[box], &shape, 1);
+        b3Shape_SetFriction(shape, 0.0f);
+    }
+    for (int i = 0; i < 60; i++) {
+        tick_all();
+    }
+    b3Body_SetLinearVelocity(host.bodies[box], (b3Vec3){0.5f, 0.0f, 0.0f});
+    for (int i = 0; i < 60; i++) {
+        tick_all();
+    }
+    TEST_ASSERT_TRUE_MESSAGE(body_sync_is_predicted(guest.sync, body_sync_id_make(box, 1)) && !body_sync_is_pull_paused(guest.sync, body_sync_id_make(box, 1)),
+                             "the copy of the sliding box is not pulled: the case is not met");
+    const float owner_z = b3Body_GetPosition(host.bodies[box]).z, knock = 0.02f;
+    b3Vec3 p = b3Body_GetPosition(guest.bodies[box]);
+    b3Body_SetTransform(guest.bodies[box], (b3Vec3){p.x, p.y, p.z + knock}, b3Body_GetRotation(guest.bodies[box]));
+    int back = -1;
+    for (int i = 1; i <= 60 && back < 0; i++) {
+        tick_all();
+        TEST_ASSERT_TRUE_MESSAGE(fabsf(b3Body_GetPosition(host.bodies[box]).z - owner_z) < 1e-5f, "the owner left its line: the case is not met");
+        back = fabsf(b3Body_GetPosition(guest.bodies[box]).z - owner_z) < 0.01f ? i : -1; /* the dead zone */
+    }
+    char what[64];
+    snprintf(what, sizeof(what), "the knocked copy came back in %d ticks", back);
+    TEST_ASSERT_TRUE_MESSAGE(back > 0 && back <= 14, what);
+}
+
 /* A grab and a release of a soft copy keep its pose: it was dynamic and simulated here already. */
 static void test_a_soft_copy_taken_and_released_does_not_jump(void) {
     layer_on();
@@ -1917,6 +1958,133 @@ static void test_a_leaned_copy_rests_in_the_hold(void) {
     snprintf(what, sizeof(what), "the leaned copy was soft for %d ticks, its offset reached %.4f m %.4f rad", soft, (double)offset_m, (double)offset_rad);
     /* A placement shows as millimetres or a hundredth of a radian; under these is float noise. */
     TEST_ASSERT_TRUE_MESSAGE(soft == 0 && offset_m < 1e-4f && offset_rad < 1e-3f, what);
+}
+
+/* Her held box lies on a copy of the host's box, held in the rest hold; the host's box slips
+   0.03 rad under it, within twice a hold step (creep: it rests on), and the held copy follows in
+   one tick, a sweep of 1.8 rad/s that drags her box past a lean's speed. */
+static const uint32_t slip_copy = 0, slip_mine = 1;
+static void slip_under_her_box(void) {
+    layer_on();
+    place_everywhere(slip_copy, 4.0f, 0.2f, -1.5f);
+    place_everywhere(slip_mine, 4.0f, 0.6f, -1.5f);
+    for (int i = 0; i < 90; i++) {
+        tick_all();
+    }
+    grant(&guest, body_sync_id_make(slip_mine, 1), BODY_SYNC_HOLD_UNTIL_RELEASE);
+    for (int i = 0; i < 150; i++) {
+        tick_all();
+    }
+    TEST_ASSERT_FALSE_MESSAGE(body_sync_is_predicted(guest.sync, body_sync_id_make(slip_copy, 1)), "the copy is not in the rest hold: the case is not met");
+    const float half = 0.015f;
+    b3Quat slip = {{0.0f, sinf(half), 0.0f}, cosf(half)};
+    b3Body_SetTransform(host.bodies[slip_copy], b3Body_GetPosition(host.bodies[slip_copy]), b3MulQuat(slip, b3Body_GetRotation(host.bodies[slip_copy])));
+    b3Body_SetAwake(host.bodies[slip_copy], true);
+}
+
+static float spin_of(b3BodyId body) { return b3Length(b3Body_GetAngularVelocity(body)); }
+
+/* Carried by that step her box marks nothing: the copy never turns soft, so nothing places it
+   back. What its offset takes is the owner's settling after the slip, its exact rest pose set at
+   rest, within a step of the copy grid. */
+static void test_a_hold_step_under_her_box_is_no_mark(void) {
+    slip_under_her_box();
+    int soft = 0;
+    float offset_m = 0.0f, offset_rad = 0.0f, sweep = 0.0f;
+    for (int i = 0; i < 60; i++) {
+        tick_all();
+        soft += body_sync_is_predicted(guest.sync, body_sync_id_make(slip_copy, 1)) ? 1 : 0;
+        sweep = fmaxf(sweep, spin_of(guest.bodies[slip_copy]));
+        float offset[3], spin[4];
+        if (body_sync_render_offset(guest.sync, body_sync_id_make(slip_copy, 1), offset, spin)) {
+            offset_m = fmaxf(offset_m, sqrtf(offset[0] * offset[0] + offset[1] * offset[1] + offset[2] * offset[2]));
+            offset_rad = fmaxf(offset_rad, 2.0f * acosf(fminf(1.0f, fabsf(spin[3]))));
+        }
+    }
+    TEST_ASSERT_TRUE_MESSAGE(sweep > SYNC_SOFT_HOLD_RAD * 60.0f, "the held copy never swept a step after its owner: the case is not met");
+    char what[128];
+    snprintf(what, sizeof(what), "the held copy was soft for %d ticks, its offset reached %.4f m %.4f rad", soft, (double)offset_m, (double)offset_rad);
+    TEST_ASSERT_TRUE_MESSAGE(soft == 0 && offset_m <= 0.0034f && offset_rad <= 0.0195f, what); /* a step: SYNC_SOFT_HOLD_M, _RAD */
+}
+
+/* Her box set going at a walk as the held copy sweeps under it is her own motion, faster than the
+   drag: it marks the copy, which turns soft from kinematic at that apply. It starts from its
+   owner's motion (the owner turned by a set, not a spin), never from the sweep's 1.8 rad/s, which
+   would spin it and the box on it for the step. */
+static void test_a_held_copy_turned_soft_leaves_the_sweep_behind(void) {
+    slip_under_her_box();
+    const body_sync_id_t id = body_sync_id_make(slip_copy, 1);
+    bool swept = false, turned = false;
+    float spin_then = 0.0f;
+    for (int i = 0; i < 60 && !turned; i++) {
+        tick_no++;
+        step(&host);
+        body_sync_apply(guest.sync, tick_no);
+        if (swept && body_sync_is_predicted(guest.sync, id)) {
+            turned = true;
+            spin_then = spin_of(guest.bodies[slip_copy]);
+        }
+        if (!swept && b3Body_GetType(guest.bodies[slip_copy]) == b3_kinematicBody && spin_of(guest.bodies[slip_copy]) > SYNC_SOFT_HOLD_RAD * 60.0f) {
+            swept = true;
+            b3Body_SetLinearVelocity(guest.bodies[slip_mine], (b3Vec3){1.0f, 0.0f, 0.0f});
+        }
+        b3World_Step(guest.world, 1.0f / 60.0f, 4);
+        body_sync_collect(guest.sync, tick_no);
+        step(&other);
+        state(&host, &guest);
+        state(&host, &other);
+        state(&guest, &host);
+        state(&other, &host);
+        records(&host, &guest);
+        records(&host, &other);
+        records(&guest, &host);
+        records(&other, &host);
+    }
+    TEST_ASSERT_TRUE_MESSAGE(swept && turned, "her box's walk never turned the swept copy soft: the case is not met");
+    char what[80];
+    snprintf(what, sizeof(what), "the copy turned soft spinning at %.3f rad/s", (double)spin_then);
+    TEST_ASSERT_TRUE_MESSAGE(spin_then < 0.1f, what);
+}
+
+/* A body this guest returned at rest lies where she left it, and stays there when the host's
+   first states of it come: the host's copy of her body settled within a step of the copy grid of
+   her pose (a light copy of a still owner is left as the host's world settled it), and a first
+   placement there would move it by that step out of the rest it was handed back in. Watched for
+   the first 10 states, before the host's still body goes out as a rest record, whose exact pose a
+   copy at rest is set on by design. */
+static void test_a_body_returned_at_rest_stays_on_the_hosts_first_state(void) {
+    settle_interaction();
+    hand(&guest, 1, 2.0f, 0.6f);
+    drive(&guest, 1, (b3Vec3){0.0f, 0.0f, -1.0f});
+    TEST_ASSERT_TRUE(tick_until_local(&guest, 2, 60));
+    put_away(&guest, 1);
+    for (int k = 0; k < 240 && seat_on_host(2) != BODY_SYNC_SEAT_HOST; k++) {
+        tick_all();
+    }
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(BODY_SYNC_SEAT_HOST, seat_on_host(2), "the box never went back: the case is not met");
+    const b3Vec3 left = b3Body_GetPosition(guest.bodies[2]);
+    const b3Quat turned = b3Body_GetRotation(guest.bodies[2]);
+    float moved = 0.0f, offset_m = 0.0f, host_gap = 0.0f;
+    double played = 0.0;
+    int heard = 0;
+    for (int k = 0; k < 120 && heard < 10; k++) {
+        tick_all();
+        heard += body_sync_playback(guest.sync, id_of(2), &played) ? 1 : 0;
+        moved = fmaxf(moved, apart_from(guest.bodies[2], left));
+        b3Quat q = b3Body_GetRotation(guest.bodies[2]);
+        moved = fmaxf(moved, fabsf(q.v.x - turned.v.x) + fabsf(q.v.y - turned.v.y) + fabsf(q.v.z - turned.v.z) + fabsf(q.s - turned.s));
+        host_gap = fmaxf(host_gap, apart(host.bodies[2], guest.bodies[2]));
+        float offset[3], spin[4];
+        if (body_sync_render_offset(guest.sync, id_of(2), offset, spin)) {
+            offset_m = fmaxf(offset_m, sqrtf(offset[0] * offset[0] + offset[1] * offset[1] + offset[2] * offset[2]));
+        }
+    }
+    TEST_ASSERT_TRUE_MESSAGE(heard == 10, "no state of the host's came: the case is not met");
+    TEST_ASSERT_TRUE_MESSAGE(host_gap > 0.0f && host_gap <= SYNC_SOFT_HOLD_M, "the host's pose is not within a grid step of hers: the case is not met");
+    char what[96];
+    snprintf(what, sizeof(what), "the returned body moved %.5f, its offset reached %.5f m", (double)moved, (double)offset_m);
+    /* A placement of a step shows as millimetres; under a tenth of one is float noise. */
+    TEST_ASSERT_TRUE_MESSAGE(moved < 1e-4f && offset_m < 1e-4f, what);
 }
 
 /* A guest that never hears the host hold its rest pose keeps the body; it returns once it does. */
@@ -2870,6 +3038,10 @@ int main(void) {
     RUN_TEST(test_a_creeping_pile_stays_in_the_rest_hold);
     RUN_TEST(test_a_copy_resting_against_this_sides_body_stays_in_the_rest_hold);
     RUN_TEST(test_a_leaned_copy_rests_in_the_hold);
+    RUN_TEST(test_a_hold_step_under_her_box_is_no_mark);
+    RUN_TEST(test_a_held_copy_turned_soft_leaves_the_sweep_behind);
+    RUN_TEST(test_a_knocked_soft_copy_is_pulled_back_within_the_pulls_lag);
+    RUN_TEST(test_a_body_returned_at_rest_stays_on_the_hosts_first_state);
     RUN_TEST(test_a_return_waits_for_the_hosts_acknowledgement);
     RUN_TEST(test_the_hosts_character_is_stopped_by_a_guests_body);
     RUN_TEST(test_a_state_from_before_the_grant_is_dropped);

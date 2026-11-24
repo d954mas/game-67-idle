@@ -27,6 +27,10 @@ void stand_testing_plant_lead(body_sync_stand_t *st, float metres);
    moved `metres` along x outside the seam: a seam move of a local body, or a copy knocked off its
    rest. */
 void stand_testing_plant_jolt(body_sync_stand_t *st, uint32_t tick, float metres, bool local);
+/* From the end of tick `tick`, the render offset the local correction reads of the first light
+   body guest 1 simulates then carries `metres` more along x and a turn of `radians` about y: the
+   seam setting an offset on a body the guest simulates, with no physics move. */
+void stand_testing_plant_offset(body_sync_stand_t *st, uint32_t tick, float metres, float radians);
 /* From the next tick, `endpoint`'s copy of the scene body `body` is held kinematic and still, a
    wall a walker cannot push (the reference run of `expect pace` has no plant). Up to 8 bodies,
    one call each, on one endpoint. */

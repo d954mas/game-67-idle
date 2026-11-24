@@ -76,7 +76,7 @@ extern "C" {
      rest_wakes.count [body-ticks]   rest_breaks.count [breaks]   host_wakes.count [wakes]   rest_lag_ticks.max [ticks]   soft_places.max [placements]
      pause_window.max [ticks]: the most ticks one copy's pull was paused in any 120 it was drawn
        (twice the layer's chain cap; the cap bounds it by (120 + 60) / 2, sync_soft.h)
-     aligned_gap.max aligned_gap.p95 local_correction.max [m]
+     aligned_gap.max aligned_gap.p95 local_correction.max [m]   local_turn.max [deg]
      takes.count take_refusals.count reclaims.count returns.count [bodies]
    - lag-aligned gap: two pictures of one moment, while the body moves. A copy an endpoint plays
      (a guest the host's bodies, the host a guest's) against what its owner drew at the owner tick
@@ -93,7 +93,8 @@ extern "C" {
      third seat's body plays a relayed clock and is left out of all three.
    - local correction: what the seam moved a body a guest simulates (its character excepted)
      beyond its own step, its move at the apply plus the change of its render offset: the
-     thrower's own corrections.
+     thrower's own corrections; local_turn the same of its rotation, the offset's turn after the
+     seam's turn at the apply.
    - local response: a hit is a contact that begins, in a guest's step, between a body that guest
      simulates (its character, or a body under its authority) and a LIGHT copy on its world whose
      body on the host then moves 1 cm or more within 60 ticks to a pose 1 cm or more from where
@@ -180,6 +181,7 @@ typedef struct body_sync_guest_metrics {
        owner at the playback tick it is drawn ahead of. */
     double flight_pause_gap_max_m, flight_pause_gap_p95_m;
     double local_correction_max_m;
+    double local_turn_max_deg; /* its turn: the same correction of the body's rotation */
     /* Authority following interaction: the guest's takes the host granted and refused, its bodies
        the host's agents took back, and those it returned at rest. */
     uint32_t takes, take_refusals, reclaims, returns;

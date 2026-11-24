@@ -371,6 +371,39 @@ static void test_local_correction_fails_on_a_seam_move_of_a_local_body(void) {
     body_sync_stand_destroy(jolted);
 }
 
+/* A render offset the seam sets on a body the guest simulates, with no physics move, moves what the
+   guest draws as a placement would: local_correction counts it, and a turn of the offset alone
+   counts in local_turn (0.05 rad, 2.9 degrees, against the scene's 0.25). */
+static const char *owned_pile_turn_text = "scenario planted\nscene pile60\nseed 52\nguests 1\nend 6s\nlight_mass 20kg\nauthority interaction\n"
+                                          "net g1 rtt 100ms jitter 20ms loss 2%\np1 grab ball\np1 wait 300ms\np1 throw pile31 speed 12\n"
+                                          "expect local_turn.max <= 0.25deg\n";
+static body_sync_stand_t *run_offset(const char *text, uint32_t tick, float metres, float radians) {
+    body_sync_error_t error;
+    TEST_ASSERT_TRUE_MESSAGE(body_sync_scenario_parse(text, strlen(text), &scenario, &error), error.text);
+    scene_named(scenario.scene)->build(&scene);
+    body_sync_stand_config_t config = {.scene = &scene, .scenario = &scenario};
+    body_sync_stand_t *stand = body_sync_stand_create(&config, &error);
+    TEST_ASSERT_NOT_NULL_MESSAGE(stand, error.text);
+    stand_testing_plant_offset(stand, tick, metres, radians);
+    body_sync_stand_run(stand);
+    return stand;
+}
+
+static void test_local_correction_fails_on_an_offset_set_on_a_local_body(void) {
+    body_sync_stand_t *moved = run_offset(owned_pile_text, 60, 0.05f, 0.0f);
+    fails(moved, aligned_line(moved), "local_correction.max");
+    body_sync_stand_destroy(moved);
+}
+
+static void test_local_turn_fails_on_a_turn_of_a_local_body(void) {
+    body_sync_stand_t *clean = run_offset(owned_pile_turn_text, 0, 0.0f, 0.0f);
+    body_sync_stand_t *turned = run_offset(owned_pile_turn_text, 60, 0.0f, 0.05f);
+    TEST_ASSERT_TRUE(body_sync_stand_report(clean)->passed);
+    fails(turned, aligned_line(turned), "local_turn.max");
+    body_sync_stand_destroy(clean);
+    body_sync_stand_destroy(turned);
+}
+
 static void test_rest_breaks_fails_on_a_copy_knocked_after_rest(void) {
     body_sync_stand_t *clean = run_jolted(resting_pile_text, 0, 0.0f, false);
     body_sync_stand_t *jolted = run_jolted(resting_pile_text, 240, 0.05f, false);
@@ -470,6 +503,8 @@ int main(void) {
     RUN_TEST(test_pace_fails_on_a_copy_held_in_the_walkers_path);
     RUN_TEST(test_pace_holds_a_walk_to_the_others_played_late);
     RUN_TEST(test_local_correction_fails_on_a_seam_move_of_a_local_body);
+    RUN_TEST(test_local_correction_fails_on_an_offset_set_on_a_local_body);
+    RUN_TEST(test_local_turn_fails_on_a_turn_of_a_local_body);
     RUN_TEST(test_rest_breaks_fails_on_a_copy_knocked_after_rest);
     RUN_TEST(test_rest_breaks_fails_on_a_held_copy_churned_in_steps);
     RUN_TEST(test_aligned_gap_fails_on_states_shown_a_tick_early);

@@ -157,7 +157,10 @@ void stand_metrics_lost_take(stand_metrics_t *metrics, uint32_t guest, double ha
     }
 }
 
-void stand_metrics_local_correction(stand_metrics_t *metrics, uint32_t guest, double correction_m) {
+void stand_metrics_local_correction(stand_metrics_t *metrics, uint32_t guest, double correction_m, double correction_deg) {
+    if (guest < metrics->guests && isfinite(correction_deg) && correction_deg > metrics->local_turn_deg[guest]) {
+        metrics->local_turn_deg[guest] = correction_deg;
+    }
     if (guest < metrics->guests && isfinite(correction_m) && correction_m > metrics->local_correction[guest]) {
         metrics->local_correction[guest] = correction_m;
     }
@@ -342,6 +345,7 @@ void stand_metrics_summarize(const stand_metrics_t *metrics, body_sync_report_t 
         out->flight_pause_gap_max_m = metrics->flight_pause[g].max;
         out->flight_pause_gap_p95_m = stand_hist_quantile(&metrics->flight_pause[g], 0.95);
         out->local_correction_max_m = metrics->local_correction[g];
+        out->local_turn_max_deg = metrics->local_turn_deg[g];
         out->lost_takes = metrics->lost_takes[g];
         out->lost_take_max_m = metrics->lost_take_max[g];
         summarize_bytes(metrics, g, STAND_DIR_TO_GUEST, &out->to_guest);
@@ -368,6 +372,7 @@ static const struct {
     {"rest_jitter.max", STAND_UNIT_LENGTH},      {"rest_wakes.count", STAND_UNIT_COUNT},      {"rest_breaks.count", STAND_UNIT_COUNT},      {"host_wakes.count", STAND_UNIT_COUNT},      {"rest_lag_ticks.max", STAND_UNIT_TICKS},
     {"soft_places.max", STAND_UNIT_COUNT},       {"response_misses.count", STAND_UNIT_COUNT},  {"pause_window.max", STAND_UNIT_TICKS},
     {"aligned_gap.max", STAND_UNIT_LENGTH},      {"aligned_gap.p95", STAND_UNIT_LENGTH},      {"local_correction.max", STAND_UNIT_LENGTH},
+    {"local_turn.max", STAND_UNIT_ANGLE},
     {"takes.count", STAND_UNIT_COUNT},           {"take_refusals.count", STAND_UNIT_COUNT},   {"reclaims.count", STAND_UNIT_COUNT},
     {"returns.count", STAND_UNIT_COUNT},         {"lost_takes.count", STAND_UNIT_COUNT},      {"lost_takes.max", STAND_UNIT_LENGTH},
 };
@@ -515,6 +520,8 @@ bool stand_metric_value(const body_sync_report_t *report, const stand_metrics_t 
             v = m->aligned_gap_p95_m;
         } else if (strcmp(name, "local_correction.max") == 0) {
             v = m->local_correction_max_m;
+        } else if (strcmp(name, "local_turn.max") == 0) {
+            v = m->local_turn_max_deg;
         } else if (strcmp(name, "takes.count") == 0) {
             v = (double)m->takes;
         } else if (strcmp(name, "take_refusals.count") == 0) {
@@ -805,6 +812,9 @@ bool stand_json_write(const body_sync_report_t *r, const stand_metrics_t *m, boo
         put(&j, ",");
         key(&j, "local_correction_max");
         number(&j, gm->local_correction_max_m);
+        put(&j, ",");
+        key(&j, "local_turn_max");
+        number(&j, gm->local_turn_max_deg);
         put(&j, ",");
         key(&j, "takes");
         putf(&j, "%u", gm->takes);

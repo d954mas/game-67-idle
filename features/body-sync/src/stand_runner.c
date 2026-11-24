@@ -87,8 +87,9 @@ typedef struct copy_track {
     bool local_now;       /* simulated by this guest at the last sample */
     bool applied_copy;    /* a copy at this tick's apply: a claim refused there and taken again in the
                              collect simulated nothing in between, so its move is a copy's */
-    float acted[3];       /* its pose once the seam and the actions (a claim's take-over) are done */
+    float acted[3], acted_rot[4]; /* its pose once the seam and the actions (a claim's take-over) are done */
     float local_stepped[3], local_offset[3];
+    float local_stepped_rot[4], local_offset_rot[4];
     bool local_own_offset; /* the seam set its render offset while this side simulated it */
     uint8_t owner;
     bool offset; /* a render offset was set */
@@ -203,6 +204,11 @@ struct body_sync_stand {
     float plant_jolt_m;
     bool plant_jolt_local;
     uint32_t plant_jolt_every, plant_jolt_count; /* stand_testing_plant_jitter; 0 one jolt */
+    uint32_t plant_offset_tick; /* stand_testing_plant_offset; 0 none */
+    float plant_offset_by, plant_offset_turn_by;
+    uint32_t plant_offset_slot; /* the body it moved, from that tick on */
+    body_sync_id_t plant_offset_id;
+    float plant_offset_m, plant_offset_rad; /* along x, and about y */
     uint8_t authority; /* body_sync_authority_mode_t of every seam */
     uint64_t seed;
     uint32_t endpoints;
@@ -1255,9 +1261,8 @@ static void endpoint_tick(body_sync_stand_t *st, endpoint_t *ep) {
     act(st, ep, k);
     for (uint32_t slot = 0; slot < STAND_BODIES_MAX; slot++) {
         stand_slot_t *s = &ep->world->slots[slot];
-        float rot[4];
         if (s->live && !s->character && s->desc.motion != BODY_SYNC_MOTION_STATIC) {
-            pose_of(ep, slot, ep->tracks[slot].acted, rot);
+            pose_of(ep, slot, ep->tracks[slot].acted, ep->tracks[slot].acted_rot);
         }
     }
     if (is_host_ep(ep)) {
@@ -1969,25 +1974,45 @@ static void sample_local(body_sync_stand_t *st) {
                 continue;
             }
             bool local = body_sync_is_local(ep->sync, id);
-            float here[3], rot[4], offset[3] = {0.0f, 0.0f, 0.0f}, turn[4];
+            float here[3], rot[4], offset[3] = {0.0f, 0.0f, 0.0f}, turn[4] = {0.0f, 0.0f, 0.0f, 1.0f};
             pose_of(ep, slot, here, rot);
             if (!body_sync_render_offset(ep->sync, id, offset, turn)) {
                 offset[0] = offset[1] = offset[2] = 0.0f;
+                turn[0] = turn[1] = turn[2] = 0.0f;
+                turn[3] = 1.0f;
+            }
+            if (e == 1u && st->plant_offset_slot == slot && st->plant_offset_id == id) {
+                const float about_y[4] = {0.0f, sinf(0.5f * st->plant_offset_rad), 0.0f, cosf(0.5f * st->plant_offset_rad)};
+                offset[0] += st->plant_offset_m;
+                stand_quat_mul(about_y, turn, turn);
             }
             bool continues = t->local_valid && t->local_id == id && ep->ticks_run == t->local_ticks_at + 1u && !t->applied_copy;
             t->local_own_offset = continues && t->local_now && t->local_own_offset;
             if (local && continues) {
-                sync_offset_t law = {.position = {t->local_offset[0], t->local_offset[1], t->local_offset[2]}, .rotation = {0.0f, 0.0f, 0.0f, 1.0f}};
+                sync_offset_t law = {.position = {t->local_offset[0], t->local_offset[1], t->local_offset[2]},
+                                     .rotation = {t->local_offset_rot[0], t->local_offset_rot[1], t->local_offset_rot[2], t->local_offset_rot[3]}};
                 sync_offset_decay(&law);
                 float r[3], c[3];
                 for (int i = 0; i < 3; i++) {
                     r[i] = offset[i] - law.position[i];
                     t->local_own_offset = t->local_own_offset || fabsf(r[i]) > 1e-5f;
                 }
+                for (int i = 0; i < 4; i++) {
+                    t->local_own_offset = t->local_own_offset || fabsf(turn[i] - law.rotation[i]) > 1e-5f;
+                }
                 for (int i = 0; i < 3; i++) {
                     c[i] = t->acted[i] - t->local_stepped[i] + (t->local_own_offset ? offset[i] - t->local_offset[i] : r[i]);
                 }
-                stand_metrics_local_correction(&st->metrics, e - 1u, (double)sqrtf(c[0] * c[0] + c[1] * c[1] + c[2] * c[2]));
+                /* The turn likewise: the offset's turn beyond the law (or every change of one the seam
+                   set), after the seam's turn at the apply; drawn = offset turn * physics turn. */
+                const float *expected = t->local_own_offset ? t->local_offset_rot : law.rotation;
+                float back[4] = {-expected[0], -expected[1], -expected[2], expected[3]}, unturn[4] = {-t->local_stepped_rot[0], -t->local_stepped_rot[1], -t->local_stepped_rot[2], t->local_stepped_rot[3]};
+                float by_offset[4], by_seam[4], both[4];
+                const float none[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+                stand_quat_mul(turn, back, by_offset);
+                stand_quat_mul(t->acted_rot, unturn, by_seam);
+                stand_quat_mul(by_offset, by_seam, both);
+                stand_metrics_local_correction(&st->metrics, e - 1u, (double)sqrtf(c[0] * c[0] + c[1] * c[1] + c[2] * c[2]), (double)stand_quat_angle_deg(both, none));
             }
             t->local_valid = true;
             t->local_now = local;
@@ -1995,6 +2020,8 @@ static void sample_local(body_sync_stand_t *st) {
             t->local_ticks_at = ep->ticks_run;
             memcpy(t->local_stepped, here, sizeof(here));
             memcpy(t->local_offset, offset, sizeof(offset));
+            memcpy(t->local_stepped_rot, rot, sizeof(rot));
+            memcpy(t->local_offset_rot, turn, sizeof(turn));
         }
     }
 }
@@ -3213,7 +3240,33 @@ void stand_testing_plant_jitter(body_sync_stand_t *st, uint32_t tick, float metr
     st->plant_jolt_count = count;
 }
 
+void stand_testing_plant_offset(body_sync_stand_t *st, uint32_t tick, float metres, float radians) {
+    st->plant_offset_tick = tick;
+    st->plant_offset_by = metres;
+    st->plant_offset_turn_by = radians;
+}
+
+/* stand_testing_plant_offset: at its tick, the first light body guest 1 simulates takes the offset. */
+static void plant_offset(body_sync_stand_t *st) {
+    endpoint_t *ep = st->endpoints > 1 ? &st->ep[1] : NULL;
+    if (!ep || st->plant_offset_tick == 0 || st->now != st->plant_offset_tick || !ep->built) {
+        return;
+    }
+    for (uint32_t slot = 0; slot < STAND_BODIES_MAX; slot++) {
+        stand_slot_t *s = &ep->world->slots[slot];
+        body_sync_id_t id = stand_world_id(ep->world, slot);
+        if (s->live && !s->character && s->desc.motion != BODY_SYNC_MOTION_STATIC && !(s->desc.flags & BODY_SYNC_BODY_HEAVY) && body_sync_is_local(ep->sync, id)) {
+            st->plant_offset_slot = slot;
+            st->plant_offset_id = id;
+            st->plant_offset_m = st->plant_offset_by;
+            st->plant_offset_rad = st->plant_offset_turn_by;
+            return;
+        }
+    }
+}
+
 static void plant_jolt(body_sync_stand_t *st) {
+    plant_offset(st);
     endpoint_t *ep = st->endpoints > 1 ? &st->ep[1] : NULL;
     if (!ep || st->plant_jolt_tick == 0 || st->now < st->plant_jolt_tick || !ep->built) {
         return;

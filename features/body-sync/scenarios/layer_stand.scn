@@ -43,6 +43,11 @@ expect jump.max <= 0.3m
 # render offset takes that move under either policy (a take by interaction keeps its pose): float
 # noise, 1 cm.
 expect local_correction.max <= 1cm
+# Derived: the same correction of its turn. The stand reads an angle through acosf of a float
+# dot product, 2 sqrt(2 n 2^-24) rad for a dot n ulps off 1: 0.04 deg a ulp, 0.16 deg at 16,
+# which three float products of unit turns stay within; the least turn a placement shows is a
+# hundredth of a radian, 0.57 deg: 0.25 deg.
+expect local_turn.max <= 0.25deg
 # Derived: between two take-backs a prediction's pull is paused at most (120 + 60) / 2 of any
 # 120 ticks (sync_soft.h: the chain cap 60, drained a tick per tick without a touch): 90.
 expect pause_window.max <= 90t

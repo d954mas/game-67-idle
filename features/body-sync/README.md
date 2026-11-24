@@ -363,7 +363,7 @@ holds on a guest (`src/sync_soft.h`):
   creeping owner only by a pull her lean pins, which stalls into a placement
   while the world rests. A body this side
   returned at rest rests in the hold where it shows it until the host's first
-  state of it comes. On the host, a light copy of a guest's body whose owner
+  state of it comes, and a state within a step of that pose does not place it. On the host, a light copy of a guest's body whose owner
   rests within that step stays as the host's world settled it, uncorrected.
 - **Soft.** Every body of this side's moving faster than a lean (0.25 m/s at
   any point, spin times its extent counted: its own character and bodies, soft
@@ -385,7 +385,9 @@ holds on a guest (`src/sync_soft.h`):
   behind it (not its impulse: a lean pushed out of an overlap, or a weight
   borne, has a large one and no approach);
   pushed or pressed, a copy's pull waits. A resting copy is a wall for one step
-  at most.
+  at most. A body of this side's dragged by a held copy's step (moving no faster
+  than that copy does at it) marks nothing, and a copy that turns soft from
+  kinematic starts from its owner's motion, never from its drive's sweep.
 
 A soft copy is steered to the owner's playback pose:
 
@@ -410,7 +412,13 @@ A soft copy is steered to the owner's playback pose:
   under half of each.
 - **Pull.** `v += 0.3 * (v_owner + clamp(error / 0.25 s, 2 m/s) - v)`, spin
   likewise with 4 rad/s. A pull still running after 30 ticks (pinned, packed)
-  is a placement.
+  is a placement. Knocked 2 cm off its path on a frictionless floor, a copy is
+  back within the dead zone in 12 ticks (`test_body_sync_real`, where the two
+  worlds step alike: the pull's own lag). On a floor, friction takes up to
+  μ g dt of velocity a tick from a copy at rest, so an error under
+  0.25 s · μ g dt / 0.3 (10 cm at μ 0.6) never sets it sliding: such a pull
+  stalls into the placement, which is how most corrections in the stand's
+  piles end.
 - **Speed.** Its speed never passes the seam's `max_speed` and `max_spin`.
 - **Flight.** While the owner moves it at 4 m/s or more it is driven
   kinematic along the owner's path, soft again under 1 m/s; the change to
@@ -840,11 +848,13 @@ local, before its owner's first state since) is not measured. It is the policies
 following interaction sits on the host. `local_correction.max` is what the seam
 moved a body a guest simulates beyond its own step (its move at the apply plus
 its render offset's change): the thrower's own corrections, 0 by construction
-under interaction outside a contest. An offset left from the body's time as a
+under interaction outside a contest; `local_turn.max` is the same of its
+rotation, in degrees. An offset left from the body's time as a
 copy only decays by the seam's law, that copy's correction ending, and is not
 counted; once the seam sets the offset while the guest simulates the body,
 every change counts. Planted in `test_body_sync_checks`: a move of a local body
-outside its step fails `local_correction`, and a copy knocked after rest fails
+outside its step and a render offset set on one fail `local_correction`, a turn
+of that offset fails `local_turn`, and a copy knocked after rest fails
 `rest_breaks`.
 A guest's claim of a copy takes over within the claim, from the pose the
 claimant shows (as a take does): a placement at the newest state would leave its
@@ -916,7 +926,10 @@ calls are fuzzed through apply, a step and collect with Box3D's asserts
 counted, limits too wide refuse create, a take-over keeps the drawn pose while
 physics continues from the newest state, what the caller does to a body it
 just claimed (moved to the hand, made kinematic) stays done, a copy is never driven past
-`max_speed`, and a relayed state carries its age and stops past 63 ticks.
+`max_speed`, and a relayed state carries its age and stops past 63 ticks. Under the
+second layer it also runs the pull's lag on a knocked copy, a held copy's step under
+this side's box (no mark, no sweep kept) and a body returned at rest meeting the
+host's first states.
 Under authority following interaction it runs each rule on its own: a take
 keeps the copy's pose, a taken body never goes out kinematic, a return waits
 for the host's acknowledgement (the guest's packets arrive, their fates come
@@ -994,7 +1007,7 @@ words `rate` and `expect moved`, the playback metrics and schema
 `body_sync.metrics.v2`; 0.8.0 authority following interaction: `authority`
 and the hold until rest (two bits on the wire), the traffic's take counts, the
 scenario word `authority`, `>=` in metric checks, the CLI and viewer flag
-`--authority`, `body_sync_is_pull_paused`, `aligned_gap`, `local_correction` and the take counts in the
+`--authority`, `body_sync_is_pull_paused`, `aligned_gap`, `local_correction`, `local_turn` and the take counts in the
 metrics; 0.7.0 the second layer: `light_mass_max`,
 `body_sync_is_predicted`, `body_sync_is_layer_copy`, `body_sync_round_trip`,
 the scenario word `light_mass`, `expect moved ...

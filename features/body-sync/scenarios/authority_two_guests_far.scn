@@ -29,6 +29,11 @@ expect agree_at_rest 1cm 2deg
 expect no_stuck
 # Derived: as in authority_host_push, a take keeps the pose: 1 cm.
 expect local_correction.max <= 1cm
+# Derived: the same correction of its turn. The stand reads an angle through acosf of a float
+# dot product, 2 sqrt(2 n 2^-24) rad for a dot n ulps off 1: 0.04 deg a ulp, 0.16 deg at 16,
+# which three float products of unit turns stay within; the least turn a placement shows is a
+# hundredth of a radian, 0.57 deg: 0.25 deg.
+expect local_turn.max <= 0.25deg
 # Measured 55 and 63 takes, 11 and 30 refused, 40 and 38 taken back where the guests' bodies
 # met (seed 63).
 expect takes.count >= 10

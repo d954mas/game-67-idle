@@ -1005,6 +1005,9 @@ static void drive_copy(body_sync_t *s, uint32_t slot) {
         e->soft_hit = false;
     }
     bool from_local = !e->copy_mode;
+    /* A driven copy's velocity is its drive's sweep to the next pose (a whole step of the copy grid
+       in one tick, in the rest hold): turned soft, it starts from its owner's motion instead. */
+    bool soft_from_driven = soft && e->copy_mode && b3Body_GetType(e->body) == b3_kinematicBody;
     if (!e->copy_mode || (b3Body_GetType(e->body) == b3_dynamicBody) != dynamic) {
         /* A copy starts with a placement at its playback pose; a body that was local has a
            drawn pose, so that placement goes to the render offset instead of jumping. */
@@ -1017,6 +1020,12 @@ static void drive_copy(body_sync_t *s, uint32_t slot) {
         }
         e->copy_mode = true;
         b3Body_SetType(e->body, dynamic ? b3_dynamicBody : b3_kinematicBody);
+    }
+    if (soft_from_driven) {
+        b3Vec3 v = play.known ? (b3Vec3){play.velocity[0], play.velocity[1], play.velocity[2]} : b3Vec3_zero;
+        b3Vec3 w = play.known ? (b3Vec3){play.angular[0], play.angular[1], play.angular[2]} : b3Vec3_zero;
+        b3Body_SetLinearVelocity(e->body, v);
+        b3Body_SetAngularVelocity(e->body, w);
     }
     if (soft && from_local) {
         e->placed = true; /* it goes on from its own simulation: no placement */
@@ -1053,6 +1062,12 @@ static void drive_copy(body_sync_t *s, uint32_t slot) {
     float err[3] = {play.position[0] - p[0], play.position[1] - p[1], play.position[2] - p[2]};
     bool far = sqrtf(err[0] * err[0] + err[1] * err[1] + err[2] * err[2]) > SYNC_OFFSET_SNAP_M;
     bool reachable = !(dynamic && far) && sync_drive_reachable(p, q, &play, s->dt, s->config.max_speed, s->config.max_spin);
+    /* A copy in the rest hold within a step of the copy grid of its pose lies where its owner rests:
+       a body returned at rest meets the host's first state of it up to a step off, and a first
+       placement would move it by that step out of the rest it was handed back in. */
+    bool held_within_step = rest_hold && !dynamic && sqrtf(home_e[0] * home_e[0] + home_e[1] * home_e[1] + home_e[2] * home_e[2]) <= SYNC_SOFT_HOLD_M &&
+                            sqrtf(home_r[0] * home_r[0] + home_r[1] * home_r[1] + home_r[2] * home_r[2]) <= SYNC_SOFT_HOLD_RAD;
+    e->placed = e->placed || held_within_step;
     if (play.jumped || !e->placed || !reachable) {
         place(e, play.position, play.rotation);
         if (dynamic) {
@@ -1120,6 +1135,35 @@ static bool mark_near(b3ShapeId shape, void *context) {
     return true;
 }
 
+/* Whether a body of this side's moves only as a copy in the rest hold under it drags it: that copy
+   closes its owner's creep a step of the copy grid in one tick (0.2 m/s and 1.2 rad/s a step),
+   which drags what lies on it past a lean's speed, and taken for this side's motion the drag
+   would turn the held copy soft under it. A body dragged by a contact moves no faster than the
+   surface that drags it (it slips behind it), so one no faster than that copy's motion at it is
+   carried; this side's own motion past it still marks. */
+static bool carried_by_hold_step(const body_sync_t *s, b3BodyId body, b3Vec3 v, b3Vec3 w, float extent) {
+    b3ContactData contacts[16];
+    int n = b3Body_GetContactData(body, contacts, 16);
+    b3Pos centre = b3Body_GetWorldCenter(body);
+    for (int i = 0; i < n; i++) {
+        if (!b3Shape_IsValid(contacts[i].shapeIdA) || !b3Shape_IsValid(contacts[i].shapeIdB)) {
+            continue;
+        }
+        b3BodyId a = b3Shape_GetBody(contacts[i].shapeIdA), b = b3Shape_GetBody(contacts[i].shapeIdB);
+        b3BodyId under = B3_ID_EQUALS(a, body) ? b : a;
+        uint32_t slot = hash_get(s, under);
+        if (slot >= BODY_SYNC_BODIES_MAX || !s->entries[slot].rest_held || !s->entries[slot].copy_mode || b3Body_GetType(under) != b3_kinematicBody) {
+            continue;
+        }
+        b3Vec3 carried = b3Body_GetWorldPointVelocity(under, centre), spun = b3Body_GetAngularVelocity(under);
+        float drag = b3Length(carried) + b3Length(spun) * extent;
+        if (drag > 0.0f && b3Length(v) + b3Length(w) * extent <= drag) {
+            return true;
+        }
+    }
+    return false;
+}
+
 /* Every moving body (this side's own, soft copies set going, a copy in flight) marks the light
    copies within reach of its next steps, and through them every light copy they touch: those
    leave the rest hold before the contact, so a pile meets what comes at it as one simulated
@@ -1153,13 +1197,16 @@ static void mark_reached(body_sync_t *s) {
         b3Vec3 v = b3Body_GetLinearVelocity(e->body), w = b3Body_GetAngularVelocity(e->body);
         b3AABB box = b3Body_ComputeAABB(e->body);
         b3Vec3 half = {0.5f * (box.upperBound.x - box.lowerBound.x), 0.5f * (box.upperBound.y - box.lowerBound.y), 0.5f * (box.upperBound.z - box.lowerBound.z)};
-        float reach;
-        if (!sync_soft_mover((const float[3]){v.x, v.y, v.z}, (const float[3]){w.x, w.y, w.z}, sqrtf(half.x * half.x + half.y * half.y + half.z * half.z), s->dt,
-                             &reach)) {
+        float reach, extent = sqrtf(half.x * half.x + half.y * half.y + half.z * half.z);
+        if (!sync_soft_mover((const float[3]){v.x, v.y, v.z}, (const float[3]){w.x, w.y, w.z}, extent, s->dt, &reach)) {
+            continue;
+        }
+        bool own = sync_authority_local(&s->authority, &s->authority.bodies[slot]);
+        if (own && carried_by_hold_step(s, e->body, v, w, extent)) {
             continue;
         }
         m->whole = m->whole || !(e->soft && e->copy_mode);
-        m->own = sync_authority_local(&s->authority, &s->authority.bodies[slot]);
+        m->own = own;
         box.lowerBound = (b3Vec3){box.lowerBound.x - reach, box.lowerBound.y - reach, box.lowerBound.z - reach};
         box.upperBound = (b3Vec3){box.upperBound.x + reach, box.upperBound.y + reach, box.upperBound.z + reach};
         b3World_OverlapAABB(s->config.world, box, b3DefaultQueryFilter(), mark_near, m);
