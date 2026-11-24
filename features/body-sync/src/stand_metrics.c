@@ -375,6 +375,8 @@ static const struct {
     {"local_turn.max", STAND_UNIT_ANGLE},
     {"takes.count", STAND_UNIT_COUNT},           {"take_refusals.count", STAND_UNIT_COUNT},   {"reclaims.count", STAND_UNIT_COUNT},
     {"returns.count", STAND_UNIT_COUNT},         {"lost_takes.count", STAND_UNIT_COUNT},      {"lost_takes.max", STAND_UNIT_LENGTH},
+    {"claims.count", STAND_UNIT_COUNT},          {"claims_rejected.count", STAND_UNIT_COUNT}, {"claims_format.count", STAND_UNIT_COUNT},
+    {"claims_repeat.count", STAND_UNIT_COUNT},   {"claim_effects.count", STAND_UNIT_COUNT},
 };
 
 bool stand_metric_unit(const char *name, stand_metric_unit_t *unit) {
@@ -534,6 +536,16 @@ bool stand_metric_value(const body_sync_report_t *report, const stand_metrics_t 
             v = (double)m->lost_takes;
         } else if (strcmp(name, "lost_takes.max") == 0) {
             v = m->lost_take_max_m;
+        } else if (strcmp(name, "claims.count") == 0) {
+            v = (double)m->claims;
+        } else if (strcmp(name, "claims_rejected.count") == 0) {
+            v = (double)m->claims_rejected;
+        } else if (strcmp(name, "claims_format.count") == 0) {
+            v = (double)m->claims_format;
+        } else if (strcmp(name, "claims_repeat.count") == 0) {
+            v = (double)m->claims_repeat;
+        } else if (strcmp(name, "claim_effects.count") == 0) {
+            v = (double)m->claim_effects;
         } else if (strcmp(name, "step.count") == 0) {
             v = (double)m->step_count;
         } else if (strcmp(name, "snap.count") == 0) {
@@ -833,6 +845,21 @@ bool stand_json_write(const body_sync_report_t *r, const stand_metrics_t *m, boo
         put(&j, ",");
         key(&j, "lost_takes_max");
         number(&j, gm->lost_take_max_m);
+        put(&j, ",");
+        key(&j, "claims");
+        putf(&j, "%u", gm->claims);
+        put(&j, ",");
+        key(&j, "claims_rejected");
+        putf(&j, "%u", gm->claims_rejected);
+        put(&j, ",");
+        key(&j, "claims_format");
+        putf(&j, "%u", gm->claims_format);
+        put(&j, ",");
+        key(&j, "claims_repeat");
+        putf(&j, "%u", gm->claims_repeat);
+        put(&j, ",");
+        key(&j, "claim_effects");
+        putf(&j, "%u", gm->claim_effects);
         put(&j, ",");
         key(&j, "steps");
         putf(&j, "%u", gm->step_count);

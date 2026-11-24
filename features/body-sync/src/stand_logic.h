@@ -111,8 +111,35 @@ bool stand_rules_grab(const stand_target_t *target, const float claimant[3], flo
 /* A hit claim from a punch at `origin`: accepted when the target is live and within range plus
    slack; the effect says what the host does. A knocked mannequin or a static body is rejected. */
 bool stand_rules_hit(const stand_target_t *target, const float origin[3], float range, stand_effect_t *effect);
-/* An impact claim: a flying body hit a live breakable at `speed`. */
-bool stand_rules_impact(const stand_target_t *target, float speed);
+/* A flying body met `target` at `speed` (m/s, the contact's approach): a live breakable breaks
+   at its break_speed, a standing mannequin falls at its fall_speed, anything else is NONE. The
+   same rule judges on the owner (whether to claim) and on the host (what to apply). */
+stand_effect_t stand_rules_impact(const stand_target_t *target, float speed);
+
+/* The host's acceptance of a guest's impact claim beyond the seam's verdict: stand policy, not
+   the seam's contract (a game sets its own). The host measures on its late world, so the claimed
+   approach may exceed what it saw by a quarter plus 0.5 m/s, a hit event's approach against the
+   sampled speeds of the states; the gap must lie within the reach the seam derives. */
+#define STAND_IMPACT_SPEED_SCALE 1.25f
+#define STAND_IMPACT_SPEED_SLACK 0.5f
+bool stand_impact_accepts(float gap, float reach, float approach_max, float claimed_speed);
+
+/* Claim keys already sent or judged: (seat, agent, number, target). One flight of one owner
+   names one number, so a body bouncing on a target claims it once, and a new throw (a new
+   number) claims a target that survived again. A ring: the oldest key goes first, by then its
+   number is past the seam's grace. */
+enum { STAND_CLAIM_KEYS_MAX = 128 };
+typedef struct stand_claim_key {
+    uint32_t agent, target;
+    uint16_t number;
+    uint8_t seat;
+} stand_claim_key_t;
+typedef struct stand_claim_keys {
+    stand_claim_key_t keys[STAND_CLAIM_KEYS_MAX];
+    uint32_t next, count;
+} stand_claim_keys_t;
+/* False when `key` is in the table; otherwise adds it and returns true. */
+bool stand_claim_keys_add(stand_claim_keys_t *keys, stand_claim_key_t key);
 /* Pose and velocity of debris piece `index` of a breaking body, drawn from the host's rng. */
 void stand_rules_debris(stand_rng_t *rng, const body_sync_body_desc_t *breakable, const float position[3], const float rotation[4],
                         float out_position[3], float out_velocity[3]);
@@ -137,7 +164,8 @@ typedef enum stand_record_type {
 typedef struct stand_record {
     stand_record_type_t type;
     uint32_t target;   /* HIT, IMPACT, VERDICT, REMOVE, SPAWN: a body_sync_id_t */
-    uint32_t body;     /* IMPACT: the flying body */
+    uint32_t body;     /* IMPACT: the flying body, the claim's agent */
+    uint16_t number;   /* IMPACT: the agent's authority number at the contact (body_sync_contact_number) */
     uint16_t action;   /* HIT, VERDICT: the claimant's action index */
     uint8_t accepted;  /* VERDICT */
     uint8_t source;    /* SPAWN: template index */
@@ -152,7 +180,10 @@ typedef struct stand_record {
 /* Writes the family byte and the record; returns the size, 0 when `capacity` is short. */
 uint32_t stand_record_encode(const stand_record_t *record, uint8_t *buffer, uint32_t capacity);
 /* Parses untrusted bytes after the family byte. `from_host` says who sent them: each side
-   may send only its own types. False with `error` filled on anything out of range. */
+   may send only its own types. False with `error` filled on anything out of range: an unknown
+   type, a wrong size, a type of the other side, an id with a slot past the bodies or generation
+   0, and per type its fields (an impact's agent that is its target, a speed not finite, negative
+   or past the limits). Never asserts. */
 bool stand_record_decode(const uint8_t *data, uint32_t size, bool from_host, const stand_limits_t *limits, stand_record_t *out, char *error,
                          size_t error_size);
 body_sync_stand_kind_t stand_record_kind(stand_record_type_t type);

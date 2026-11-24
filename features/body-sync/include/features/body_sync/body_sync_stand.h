@@ -37,8 +37,12 @@ extern "C" {
      when the target lies within range plus 0.5 m of the claimed origin on its world; then a
      mannequin is knocked down (dynamic, rotation free, knock_speed away from the puncher), a
      breakable with PUNCH_BREAKS breaks, an item gets punch_push. A rejected hit is answered.
-   - Impact: the endpoint that simulates a flying body judges its contacts; a contact with a
-     breakable at break_speed or more sends an impact claim, and the host breaks it.
+   - Impact: the endpoint that simulates a flying body judges its contacts by the host's rule:
+     a breakable breaks at break_speed or more, a standing mannequin falls at fall_speed or
+     more. The host applies its own bodies' at once; a guest sends an impact claim under the
+     body's contact number, once per (agent, number, target), and the host applies it when the
+     seam's gate says OK, the gap is within the reach and the speed within the approach it saw
+     (README "Contact claims").
    - Break: the host removes the body and spawns its contents and debris with its random draws;
      guests get one remove and one spawn record per body, with ids, poses and velocities.
    - A knocked mannequin carries the knocked flag; a broken body never comes back. */

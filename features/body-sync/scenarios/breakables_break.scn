@@ -16,5 +16,8 @@ expect result crate hit
 expect result rock granted
 expect result throw done
 expect effects_once
+# The glass broke by the guest's claim, and an honest guest sends nothing the parser refuses.
+expect claim_effects.count >= 1
+expect claims_format.count <= 0
 expect agree_at_rest 5cm
 expect no_stuck

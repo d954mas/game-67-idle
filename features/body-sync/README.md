@@ -89,10 +89,11 @@ collision mask 0 and teleports it to the hold point each step; a throw makes it
 dynamic again with a ballistic velocity and a settled hold; a punch is a cone
 test in front, with no physics shape. Host rules stand in for a game's: first
 grab claim wins, the loser is refused; a hit claim knocks a mannequin down,
-breaks a breakable or pushes an item; an impact claim from the endpoint that
-simulates a flying body breaks what it hit; breaking removes the body and
-spawns its contents and debris from the host's random draws; what a player who
-left carried falls where it is.
+breaks a breakable or pushes an item; an impact of a flying body breaks a
+breakable at its `break_speed` and fells a standing mannequin at its
+`fall_speed` (5 m/s by default: past a punched item's push, under a throw);
+breaking removes the body and spawns its contents and debris from the host's
+random draws; what a player who left carried falls where it is.
 
 ## The real seam
 
@@ -644,6 +645,24 @@ ignores the mode.
 `body_sync_traffic` counts the takes, refusals, take-backs and returns
 (`takes`, `take_refusals`, `reclaims`, `returns`); the stand reports them per
 guest.
+
+The stand plays the game's side of contact claims. The owner of a flying body
+(a throw's settling hold, a take's hold until rest) judges each contact with
+the host's own rule (`stand_rules_impact`). The host applies its own bodies'
+effects at once. A guest sends an impact record (target, agent, the agent's
+`body_sync_contact_number`, the contact's approach speed) on its record lane
+after that tick's seam records. A body that names no number (a claim not yet
+granted) sends nothing: a missed effect, never a false one. The guest sends
+each key (agent, number, target) once, so a body bouncing on a target claims it
+once and a new throw, under a new number, claims a target that survived again.
+The host refuses a record its parser refuses (counted, dropped, the seat
+stays), a key it judged before, a verdict other than OK, a gap past the
+seam's reach, and a claimed speed past the approach it saw times
+`STAND_IMPACT_SPEED_SCALE` (1.25) plus `STAND_IMPACT_SPEED_SLACK` (0.5 m/s).
+These limits are the stand's policy, not the seam's contract. The target's
+state dedupes across seats: a broken body is gone, a felled one carries the
+knock flag. The guests' counts are `claims`, `claims_rejected`,
+`claims_format`, `claims_repeat` and `claim_effects`.
 
 ## Running the stand
 

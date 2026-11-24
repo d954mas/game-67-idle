@@ -248,8 +248,37 @@ bool stand_rules_hit(const stand_target_t *target, const float origin[3], float 
     return false;
 }
 
-bool stand_rules_impact(const stand_target_t *target, float speed) {
-    return target->live && target->desc && target->desc->role == BODY_SYNC_ROLE_BREAKABLE && isfinite(speed) && speed >= target->desc->break_speed;
+stand_effect_t stand_rules_impact(const stand_target_t *target, float speed) {
+    if (!target->live || !target->desc || target->character || !isfinite(speed)) {
+        return STAND_EFFECT_NONE;
+    }
+    switch (target->desc->role) {
+    case BODY_SYNC_ROLE_BREAKABLE:
+        return speed >= target->desc->break_speed ? STAND_EFFECT_BREAK : STAND_EFFECT_NONE;
+    case BODY_SYNC_ROLE_MANNEQUIN:
+        return !target->knocked && speed >= target->desc->fall_speed ? STAND_EFFECT_KNOCK : STAND_EFFECT_NONE;
+    case BODY_SYNC_ROLE_PROP:
+        break;
+    }
+    return STAND_EFFECT_NONE;
+}
+
+bool stand_impact_accepts(float gap, float reach, float approach_max, float claimed_speed) {
+    /* NaN fails every comparison, so a non-finite measure refuses. */
+    return gap <= reach && claimed_speed <= approach_max * STAND_IMPACT_SPEED_SCALE + STAND_IMPACT_SPEED_SLACK;
+}
+
+bool stand_claim_keys_add(stand_claim_keys_t *keys, stand_claim_key_t key) {
+    for (uint32_t i = 0; i < keys->count; i++) {
+        const stand_claim_key_t *k = &keys->keys[i];
+        if (k->agent == key.agent && k->target == key.target && k->number == key.number && k->seat == key.seat) {
+            return false;
+        }
+    }
+    keys->keys[keys->next] = key;
+    keys->next = (keys->next + 1u) % STAND_CLAIM_KEYS_MAX;
+    keys->count += keys->count < STAND_CLAIM_KEYS_MAX ? 1u : 0u;
+    return true;
 }
 
 void stand_rules_debris(stand_rng_t *rng, const body_sync_body_desc_t *breakable, const float position[3], const float rotation[4],
@@ -321,7 +350,7 @@ static uint32_t record_size(stand_record_type_t type) {
     case STAND_REC_HIT:
         return 2 + 4 + 2 + 12;
     case STAND_REC_IMPACT:
-        return 2 + 4 + 4 + 4;
+        return 2 + 4 + 4 + 2 + 4;
     case STAND_REC_VERDICT:
         return 2 + 4 + 2 + 1;
     case STAND_REC_SPAWN:
@@ -352,7 +381,8 @@ uint32_t stand_record_encode(const stand_record_t *r, uint8_t *buffer, uint32_t 
         break;
     case STAND_REC_IMPACT:
         put_u32(p, r->body);
-        put_f32(p + 4, r->speed);
+        put_u16(p + 4, r->number);
+        put_f32(p + 6, r->speed);
         break;
     case STAND_REC_VERDICT:
         put_u16(p, r->action);
@@ -444,9 +474,16 @@ bool stand_record_decode(const uint8_t *data, uint32_t size, bool from_host, con
         break;
     case STAND_REC_IMPACT:
         out->body = get_u32(p);
-        out->speed = get_f32(p + 4);
-        if (!id_ok(out->body) || !(isfinite(out->speed) && out->speed >= 0.0f && out->speed <= limits->max_speed)) {
-            return bad(error, error_size, "impact out of range");
+        out->number = get_u16(p + 4);
+        out->speed = get_f32(p + 6);
+        if (!id_ok(out->body)) {
+            return bad(error, error_size, "impact agent id out of range");
+        }
+        if (out->body == out->target) {
+            return bad(error, error_size, "impact agent is its target");
+        }
+        if (!(isfinite(out->speed) && out->speed >= 0.0f && out->speed <= limits->max_speed)) {
+            return bad(error, error_size, "impact speed out of range");
         }
         break;
     case STAND_REC_VERDICT:

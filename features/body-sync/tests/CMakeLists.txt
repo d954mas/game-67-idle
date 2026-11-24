@@ -45,6 +45,18 @@ body_sync_test(test_body_sync_stand LIBS body_sync_stand body_sync)
 body_sync_test(test_body_sync_free_step LIBS body_sync_stand body_sync)
 body_sync_test(test_body_sync_checks LIBS body_sync_stand body_sync)
 box3d_enable(test_body_sync_checks)
+body_sync_test(test_body_sync_claims LIBS body_sync_stand body_sync)
+box3d_enable(test_body_sync_claims)
+# The host's limits on impact claims must each fail the cases meant for them when planted: an
+# approach read as 0 refuses every honest throw's claim, an unbounded reach takes a forged one.
+add_test(NAME test_body_sync_claims_mf_approach_scale0
+    COMMAND "${CMAKE_COMMAND}" -DEXE=$<TARGET_FILE:test_body_sync_claims> -DARGS=--plant-claim-approach-scale0
+            "-DCASES=test_guest_throw_breaks_glass_host|test_guest_throw_breaks_glass_interaction|test_guest_throw_knocks_dummy_host|test_guest_throw_knocks_dummy_interaction|test_second_throw_claims_again|test_resent_claim_applies_once"
+            -P "${CMAKE_CURRENT_LIST_DIR}/expect_unity_fail.cmake")
+add_test(NAME test_body_sync_claims_mf_reach_unbounded
+    COMMAND "${CMAKE_COMMAND}" -DEXE=$<TARGET_FILE:test_body_sync_claims> -DARGS=--plant-claim-reach-unbounded
+            "-DCASES=test_forged_far_claim_is_rejected_host|test_forged_far_claim_is_rejected_interaction"
+            -P "${CMAKE_CURRENT_LIST_DIR}/expect_unity_fail.cmake")
 box3d_enable(test_body_sync_stand)
 box3d_enable(test_body_sync_free_step)
 
@@ -65,7 +77,8 @@ set(BODY_SYNC_TWICE_SCENARIOS two_walk bounce_wall cut_short cut_long hitch_gues
 set(BODY_SYNC_IMPLS "body_sync_stand_cli|" "body_sync_stand_cli_stub|stub_")
 
 set(core_tests test_body_sync_logic test_body_sync_playback test_body_sync_soft test_body_sync_policy test_body_sync_wire test_body_sync_stub test_body_sync_seam_real test_body_sync_codec test_body_sync_sender test_body_sync_authority test_body_sync_real
-    test_body_sync_stand test_body_sync_checks test_body_sync_authority_mf_revoked_as_arbitrated)
+    test_body_sync_stand test_body_sync_checks test_body_sync_authority_mf_revoked_as_arbitrated
+    test_body_sync_claims test_body_sync_claims_mf_approach_scale0 test_body_sync_claims_mf_reach_unbounded)
 set(slow_tests test_body_sync_free_step)
 foreach(impl IN LISTS BODY_SYNC_IMPLS)
     string(REPLACE "|" ";" parts "${impl}")

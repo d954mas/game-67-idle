@@ -232,9 +232,9 @@ static void test_rules_verdicts(void) {
     glass.break_speed = 3.0f;
     glass.debris_speed = 2.0f;
     stand_target_t g = {.live = true, .desc = &glass, .position = {0.0f, 0.6f, 0.0f}};
-    TEST_ASSERT_TRUE(stand_rules_impact(&g, 3.5f));
-    TEST_ASSERT_FALSE(stand_rules_impact(&g, 2.5f));
-    TEST_ASSERT_FALSE(stand_rules_impact(&g, NAN));
+    TEST_ASSERT_EQUAL(STAND_EFFECT_BREAK, stand_rules_impact(&g, 3.5f));
+    TEST_ASSERT_EQUAL(STAND_EFFECT_NONE, stand_rules_impact(&g, 2.5f));
+    TEST_ASSERT_EQUAL(STAND_EFFECT_NONE, stand_rules_impact(&g, NAN));
     stand_rng_t rng;
     stand_rng_seed(&rng, 5);
     const float rot[4] = {0.0f, 0.0f, 0.0f, 1.0f};
@@ -249,7 +249,7 @@ static void test_rules_verdicts(void) {
 static void test_records_round_trip_and_refuse(void) {
     const stand_record_t samples[] = {
         {.type = STAND_REC_HIT, .target = ID(3, 1), .action = 7, .origin = {1.0f, 2.0f, 3.0f}},
-        {.type = STAND_REC_IMPACT, .target = ID(4, 2), .body = ID(5, 1), .speed = 6.0f},
+        {.type = STAND_REC_IMPACT, .target = ID(4, 2), .body = ID(5, 1), .number = 513, .speed = 6.0f},
         {.type = STAND_REC_VERDICT, .target = ID(3, 1), .action = 7, .accepted = 1},
         {.type = STAND_REC_SPAWN, .target = ID(40, 3), .source = 2, .position = {1, 2, 3}, .rotation = {0, 0, 0, 1}, .velocity = {1, 0, 0}},
         {.type = STAND_REC_REMOVE, .target = ID(9, 1)},
@@ -282,6 +282,165 @@ static void test_records_round_trip_and_refuse(void) {
             TEST_ASSERT_TRUE((out.target & 0xFFFFu) < STAND_BODIES_MAX && (out.target >> 16) != 0);
         }
     }
+}
+
+/* The impact rule by role: a breakable breaks and a standing mannequin falls at or past its
+   threshold, nothing else; past a threshold every faster contact has the same effect. */
+static void test_impact_rules_by_role(void) {
+    body_sync_body_desc_t glass = body_sync_body_default(BODY_SYNC_SHAPE_BOX, (const float[3]){0.03f, 0.6f, 0.4f}, 2.0f, NULL);
+    glass.role = BODY_SYNC_ROLE_BREAKABLE;
+    glass.break_speed = 3.0f;
+    body_sync_body_desc_t dummy = body_sync_body_default(BODY_SYNC_SHAPE_CAPSULE, (const float[3]){0.3f, 0.55f, 0.0f}, 60.0f, NULL);
+    dummy.role = BODY_SYNC_ROLE_MANNEQUIN;
+    body_sync_body_desc_t box = body_sync_body_default(BODY_SYNC_SHAPE_BOX, (const float[3]){0.2f, 0.2f, 0.2f}, 2.0f, NULL);
+    TEST_ASSERT_TRUE(dummy.fall_speed > 0.0f); /* the default fells a mannequin at some speed */
+    stand_target_t g = {.live = true, .desc = &glass}, m = {.live = true, .desc = &dummy}, b = {.live = true, .desc = &box};
+    const struct {
+        stand_target_t *target;
+        stand_effect_t effect;
+        float threshold;
+    } rows[] = {{&g, STAND_EFFECT_BREAK, glass.break_speed}, {&m, STAND_EFFECT_KNOCK, dummy.fall_speed}, {&b, STAND_EFFECT_NONE, 0.0f}};
+    for (size_t r = 0; r < sizeof(rows) / sizeof(rows[0]); r++) {
+        bool seen = false;
+        for (float v = 0.0f; v <= 60.0f; v += 0.25f) {
+            stand_effect_t e = stand_rules_impact(rows[r].target, v);
+            TEST_ASSERT_TRUE(e == STAND_EFFECT_NONE || e == rows[r].effect);
+            TEST_ASSERT_TRUE_MESSAGE(!seen || e == rows[r].effect, "an effect stopped at a faster contact");
+            TEST_ASSERT_TRUE(rows[r].effect == STAND_EFFECT_NONE || (e != STAND_EFFECT_NONE) == (v >= rows[r].threshold));
+            seen = seen || e != STAND_EFFECT_NONE;
+        }
+        TEST_ASSERT_EQUAL(rows[r].effect, stand_rules_impact(rows[r].target, 60.0f));
+        TEST_ASSERT_EQUAL(STAND_EFFECT_NONE, stand_rules_impact(rows[r].target, NAN));
+        TEST_ASSERT_EQUAL(STAND_EFFECT_NONE, stand_rules_impact(rows[r].target, INFINITY));
+    }
+    /* A felled mannequin, a body gone and a character take no effect. */
+    m.knocked = true;
+    TEST_ASSERT_EQUAL(STAND_EFFECT_NONE, stand_rules_impact(&m, 60.0f));
+    g.live = false;
+    TEST_ASSERT_EQUAL(STAND_EFFECT_NONE, stand_rules_impact(&g, 60.0f));
+    stand_target_t c = {.live = true, .character = true};
+    TEST_ASSERT_EQUAL(STAND_EFFECT_NONE, stand_rules_impact(&c, 60.0f));
+}
+
+/* The host's limits: the gap within the reach, the claimed speed within a quarter plus slack of
+   the approach it saw; a measure that is not a number refuses. */
+static void test_impact_limits(void) {
+    TEST_ASSERT_TRUE(stand_impact_accepts(0.0f, 1.0f, 7.0f, 7.0f));
+    TEST_ASSERT_TRUE(stand_impact_accepts(1.0f, 1.0f, 7.0f, 7.0f * STAND_IMPACT_SPEED_SCALE + STAND_IMPACT_SPEED_SLACK));
+    TEST_ASSERT_FALSE(stand_impact_accepts(1.01f, 1.0f, 7.0f, 7.0f));
+    TEST_ASSERT_FALSE(stand_impact_accepts(0.0f, 1.0f, 7.0f, 7.0f * STAND_IMPACT_SPEED_SCALE + STAND_IMPACT_SPEED_SLACK + 0.01f));
+    TEST_ASSERT_TRUE(stand_impact_accepts(0.0f, 1.0f, 0.0f, STAND_IMPACT_SPEED_SLACK));
+    TEST_ASSERT_FALSE(stand_impact_accepts(INFINITY, 1.0f, 7.0f, 1.0f)); /* a STALE verdict's gap */
+    TEST_ASSERT_FALSE(stand_impact_accepts(NAN, 1.0f, 7.0f, 1.0f));
+    TEST_ASSERT_FALSE(stand_impact_accepts(0.0f, NAN, 7.0f, 1.0f));
+    TEST_ASSERT_FALSE(stand_impact_accepts(0.0f, 1.0f, NAN, 1.0f));
+    /* Monotone: a wider reach or a faster approach never refuses what a tighter one took. */
+    for (float gap = 0.0f; gap < 3.0f; gap += 0.5f) {
+        for (float speed = 0.0f; speed < 12.0f; speed += 1.0f) {
+            bool a = stand_impact_accepts(gap, 1.5f, 6.0f, speed), b = stand_impact_accepts(gap, 2.5f, 8.0f, speed);
+            TEST_ASSERT_TRUE(!a || b);
+        }
+    }
+}
+
+/* A key is sent once; a new number (a new throw), another target, agent or seat is a new key; the
+   ring forgets the oldest past its size. */
+static void test_claim_keys(void) {
+    stand_claim_keys_t *keys = calloc(1, sizeof(*keys));
+    const stand_claim_key_t k = {.agent = ID(5, 1), .target = ID(4, 2), .number = 7, .seat = 1};
+    TEST_ASSERT_TRUE(stand_claim_keys_add(keys, k));
+    TEST_ASSERT_FALSE(stand_claim_keys_add(keys, k));
+    stand_claim_key_t other = k;
+    other.number = 8;
+    TEST_ASSERT_TRUE(stand_claim_keys_add(keys, other));
+    other = k;
+    other.target = ID(6, 1);
+    TEST_ASSERT_TRUE(stand_claim_keys_add(keys, other));
+    other = k;
+    other.agent = ID(5, 2);
+    TEST_ASSERT_TRUE(stand_claim_keys_add(keys, other));
+    other = k;
+    other.seat = 2;
+    TEST_ASSERT_TRUE(stand_claim_keys_add(keys, other));
+    TEST_ASSERT_FALSE(stand_claim_keys_add(keys, k));
+    for (uint16_t n = 100; n < 100 + STAND_CLAIM_KEYS_MAX; n++) {
+        stand_claim_key_t fill = k;
+        fill.number = n;
+        TEST_ASSERT_TRUE(stand_claim_keys_add(keys, fill));
+    }
+    TEST_ASSERT_EQUAL_UINT32(STAND_CLAIM_KEYS_MAX, keys->count);
+    TEST_ASSERT_TRUE(stand_claim_keys_add(keys, k));
+    free(keys);
+}
+
+/* An impact claim's every field out of range is refused by name; a valid one mutated byte by
+   byte, and random bytes, never crash, and whatever parses holds every field in range. */
+static void test_impact_record_refusals(void) {
+    const stand_record_t valid = {.type = STAND_REC_IMPACT, .target = ID(4, 2), .body = ID(5, 1), .number = 9, .speed = 6.0f};
+    uint8_t buffer[STAND_RECORD_MAX];
+    stand_record_t out;
+    char why[96];
+    const struct {
+        stand_record_t record;
+        const char *why;
+    } cases[] = {
+        {{.type = STAND_REC_IMPACT, .target = ID(STAND_BODIES_MAX, 1), .body = ID(5, 1), .speed = 6.0f}, "body id out of range"},
+        {{.type = STAND_REC_IMPACT, .target = ID(4, 0), .body = ID(5, 1), .speed = 6.0f}, "body id out of range"},
+        {{.type = STAND_REC_IMPACT, .target = ID(4, 2), .body = ID(0xFFFF, 1), .speed = 6.0f}, "impact agent id out of range"},
+        {{.type = STAND_REC_IMPACT, .target = ID(4, 2), .body = ID(5, 0), .speed = 6.0f}, "impact agent id out of range"},
+        {{.type = STAND_REC_IMPACT, .target = ID(4, 2), .body = ID(4, 2), .speed = 6.0f}, "impact agent is its target"},
+        {{.type = STAND_REC_IMPACT, .target = ID(4, 2), .body = ID(5, 1), .speed = NAN}, "impact speed out of range"},
+        {{.type = STAND_REC_IMPACT, .target = ID(4, 2), .body = ID(5, 1), .speed = INFINITY}, "impact speed out of range"},
+        {{.type = STAND_REC_IMPACT, .target = ID(4, 2), .body = ID(5, 1), .speed = -1.0f}, "impact speed out of range"},
+        {{.type = STAND_REC_IMPACT, .target = ID(4, 2), .body = ID(5, 1), .speed = 100.5f}, "impact speed out of range"},
+    };
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        uint32_t size = stand_record_encode(&cases[i].record, buffer, sizeof(buffer));
+        TEST_ASSERT_TRUE(size > 1);
+        TEST_ASSERT_FALSE(stand_record_decode(buffer + 1, size - 1, false, &limits, &out, why, sizeof(why)));
+        TEST_ASSERT_NOT_NULL_MESSAGE(strstr(why, cases[i].why), why);
+    }
+    uint32_t size = stand_record_encode(&valid, buffer, sizeof(buffer));
+    TEST_ASSERT_TRUE(stand_record_decode(buffer + 1, size - 1, false, &limits, &out, why, sizeof(why)));
+    TEST_ASSERT_EQUAL_UINT32(valid.body, out.body);
+    TEST_ASSERT_EQUAL_UINT16(valid.number, out.number);
+    TEST_ASSERT_TRUE(out.speed == valid.speed);
+    /* wrong length both ways, an unknown type, and a host's type from a guest */
+    TEST_ASSERT_FALSE(stand_record_decode(buffer + 1, size, false, &limits, &out, why, sizeof(why)));
+    TEST_ASSERT_NOT_NULL(strstr(why, "wrong size"));
+    buffer[1] = 0;
+    TEST_ASSERT_FALSE(stand_record_decode(buffer + 1, size - 1, false, &limits, &out, why, sizeof(why)));
+    TEST_ASSERT_NOT_NULL(strstr(why, "unknown type"));
+    buffer[1] = STAND_REC_REMOVE + 1;
+    TEST_ASSERT_FALSE(stand_record_decode(buffer + 1, size - 1, false, &limits, &out, why, sizeof(why)));
+    TEST_ASSERT_NOT_NULL(strstr(why, "unknown type"));
+
+    stand_rng_t rng;
+    stand_rng_seed(&rng, 41);
+    uint32_t refused = 0, taken = 0;
+    for (int i = 0; i < 50000; i++) {
+        size = stand_record_encode(&valid, buffer, sizeof(buffer));
+        uint32_t flips = 1u + (uint32_t)(stand_rng_next(&rng) % 4);
+        for (uint32_t f = 0; f < flips; f++) {
+            buffer[1 + stand_rng_next(&rng) % (size - 1)] = (uint8_t)stand_rng_next(&rng);
+        }
+        uint32_t cut = (stand_rng_next(&rng) % 8 == 0) ? (uint32_t)(stand_rng_next(&rng) % size) : size - 1;
+        why[0] = 0;
+        if (stand_record_decode(buffer + 1, cut, false, &limits, &out, why, sizeof(why))) {
+            taken++;
+            TEST_ASSERT_TRUE(out.type == STAND_REC_IMPACT || out.type == STAND_REC_HIT);
+            TEST_ASSERT_TRUE((out.target & 0xFFFFu) < STAND_BODIES_MAX && (out.target >> 16) != 0);
+            if (out.type == STAND_REC_IMPACT) {
+                TEST_ASSERT_TRUE((out.body & 0xFFFFu) < STAND_BODIES_MAX && (out.body >> 16) != 0 && out.body != out.target);
+                TEST_ASSERT_TRUE(isfinite(out.speed) && out.speed >= 0.0f && out.speed <= limits.max_speed);
+            }
+        } else {
+            refused++;
+            TEST_ASSERT_TRUE_MESSAGE(why[0] != 0, "a refusal says why");
+        }
+    }
+    TEST_ASSERT_EQUAL_UINT32(50000, refused + taken);
+    TEST_ASSERT_TRUE(refused > 0 && taken > 0);
 }
 
 static void test_new_forms_are_read(void) {
@@ -566,6 +725,10 @@ int main(void) {
     RUN_TEST(test_schedule_orders_actions);
     RUN_TEST(test_rules_verdicts);
     RUN_TEST(test_records_round_trip_and_refuse);
+    RUN_TEST(test_impact_rules_by_role);
+    RUN_TEST(test_impact_limits);
+    RUN_TEST(test_claim_keys);
+    RUN_TEST(test_impact_record_refusals);
     RUN_TEST(test_new_forms_are_read);
     RUN_TEST(test_unseen_delays_are_unbounded);
     RUN_TEST(test_a_driven_body_rests_by_its_window);
