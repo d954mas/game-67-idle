@@ -118,7 +118,7 @@ endforeach()
 set(BODY_SYNC_AUTHORITY_SCENARIOS authority_host_push authority_two_guests authority_two_guests_far authority_leave
     authority_three_host authority_three_guest authority_three_cross)
 set(BODY_SYNC_INTERACTION_SCENARIOS layer_bounce layer_pile layer_push layer_rest layer_stand layer_nudge layer_leave pile_throw throw_catch
-    load_four char_push edge_throw_cut pile_settle_loss10)
+    load_four char_push edge_throw_cut pile_settle_loss10 breakables_break mannequin_hits cabinet_carry grab_dispute)
 foreach(scn IN LISTS BODY_SYNC_AUTHORITY_SCENARIOS)
     add_test(NAME test_body_sync_scn_${scn}
         COMMAND body_sync_stand_cli "${BODY_SYNC_SCENARIOS}/${scn}.scn" --out "${CMAKE_CURRENT_BINARY_DIR}/${scn}.json" --quiet)
