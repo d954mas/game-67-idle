@@ -541,7 +541,7 @@ static void test_the_owned_count_matches_the_slots_after_any_sequence(void) {
         case 2:
             send_claim(&h, seat, id, (uint8_t)(pick % 3u), sequence++);
             if (sync_authority_poll(&h, &c)) {
-                sync_authority_answer(&h, &c, (pick & 1u) != 0);
+                sync_authority_answer(&h, &c, (pick & 1u) != 0, SYNC_AUTHORITY_AS_CLAIMED);
             }
             break;
         case 3:

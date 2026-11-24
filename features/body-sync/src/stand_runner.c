@@ -312,6 +312,14 @@ static bool is_host_ep(const endpoint_t *ep) { return ep->index == BODY_SYNC_END
 
 static uint32_t character_slot(const body_sync_stand_t *st, uint32_t player) { return st->scene.body_count + player; }
 
+/* An unbound body's slot holds no grab: a body bound there later was never in that hand. */
+static void forget_hand(body_sync_stand_t *st, body_sync_id_t id) {
+    uint32_t slot = body_sync_id_slot(id);
+    if (slot < STAND_BODIES_MAX) {
+        st->hands[slot] = (stand_hand_t){0};
+    }
+}
+
 /* The character `player` drives on `ep`: its own, or on the reference run's host any player's. */
 static stand_character_t *player_character(body_sync_stand_t *st, endpoint_t *ep, uint8_t player) {
     if (player == ep->index) {
@@ -463,6 +471,7 @@ static void break_on_host(body_sync_stand_t *st, body_sync_id_t id) {
     effect_t *effect = new_effect(st, STAND_EFFECT_BREAK, id);
     drop_if_held(host, id);
     body_sync_unbind(host->sync, id);
+    forget_hand(st, id);
     stand_world_remove(host->world, id);
     stand_record_t removal = {.type = STAND_REC_REMOVE, .target = id};
     broadcast(st, &removal);
@@ -658,6 +667,9 @@ static void host_rule(body_sync_stand_t *st, endpoint_t *ep, int32_t index) {
     if (a->verb == BODY_SYNC_VERB_REMOVE) {
         drop_if_held(ep, id);
         body_sync_unbind(ep->sync, id);
+        if (is_host_ep(ep)) {
+            forget_hand(st, id);
+        }
         stand_world_remove(ep->world, id);
         stand_record_t removal = {.type = STAND_REC_REMOVE, .target = id};
         broadcast(st, &removal);
@@ -1001,9 +1013,10 @@ static void answer_claims(body_sync_stand_t *st) {
            settled hold with no holder would leave it a flight another guest could catch from her. */
         bool as_grab = claim.hold == BODY_SYNC_HOLD_UNTIL_RELEASE;
         if (granted && caught) {
-            claim.hold = BODY_SYNC_HOLD_UNTIL_RELEASE;
+            body_sync_answer_as(host->sync, &claim, BODY_SYNC_HOLD_UNTIL_RELEASE);
+        } else {
+            body_sync_answer(host->sync, &claim, granted);
         }
-        body_sync_answer(host->sync, &claim, granted);
         body_sync_authority(host->sync, claim.id, &now);
         uint32_t body = body_sync_id_slot(claim.id);
         if (granted && body < STAND_BODIES_MAX) {

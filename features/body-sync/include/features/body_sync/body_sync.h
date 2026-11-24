@@ -216,14 +216,17 @@ body_sync_result_t body_sync_release(body_sync_t *sync, body_sync_id_t id);
 bool body_sync_poll_claim(body_sync_t *sync, body_sync_claim_event_t *out);
 
 /* Host only: the answer to a polled claim. Granted: the claimant simulates the body from now
-   on with no holder and a new number; the host reads the event's hold for it until her states
-   come (a caller may set another than the one polled: a catch puts the body in her hand), while
-   she keeps the hold she claimed. Refused: nothing changes and the
+   on with the claim's hold, no holder and a new number (body_sync_answer_as grants another). Refused: nothing changes and the
    claimant is told, so its optimistic copy turns back into a copy. UNKNOWN when that claim is
    no longer pending (released, claimed again, its seat left, the body unbound, or already
    answered): the caller drops the event, nothing is owed for it, and a newer claim, if any,
    comes from poll. */
 body_sync_result_t body_sync_answer(body_sync_t *sync, const body_sync_claim_event_t *claim, bool granted);
+/* Host only: grants a polled claim as body_sync_answer does, under `hold` instead of the claimed
+   one: the host reads it for the claimant until her states come (a catch puts the body in her
+   hand), while she keeps simulating under the hold she claimed. INVALID, answering nothing, for a
+   hold a claim cannot name (only until release and until settled). */
+body_sync_result_t body_sync_answer_as(body_sync_t *sync, const body_sync_claim_event_t *claim, body_sync_hold_t hold);
 
 /* Host only: a forced move that answers no claim (taking a prize back, a removal, a game
    rule). The body continues on `seat` from its newest state, velocities included, with `hold`,
@@ -401,6 +404,10 @@ bool body_sync_traffic(const body_sync_t *sync, uint8_t seat, body_sync_traffic_
    The real seam's wire names a generation modulo 16, so a slot's bytes count for the generation
    bound there last. */
 uint32_t body_sync_old_owner_drops(const body_sync_t *sync, body_sync_id_t id, uint8_t seat);
+/* Host: characters bound while the host already kept the older states of 16 (README "Contact
+   claims"), since its creation. Each is judged on its last 12 taken states alone, so a claim of
+   its contact the record lane resent is a missed effect. 0 on a guest. */
+uint32_t body_sync_agent_overflow(const body_sync_t *sync);
 
 #ifdef __cplusplus
 }

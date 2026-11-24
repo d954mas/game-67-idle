@@ -35,6 +35,8 @@ static bool plant_catch_off;
    the old owner */
 static bool plant_keeps_received;
 static bool plant_ring_off; /* --plant-agent-ring-off: an agent's evidence is its ring of 12 states alone */
+/* --plant-handover-keeps-flight: the shell's handover between guests keeps the old owner's state */
+static bool plant_keeps_flight;
 static body_sync_scene_t scene;
 static body_sync_scenario_t scenario;
 static bool third_player; /* the next make() gives the breakables a third player and a rock for it */
@@ -113,6 +115,9 @@ static body_sync_stand_t *make(const char *text, int mode) {
     }
     if (plant_ring_off) {
         body_sync_plant_agent_ring_off(stand_testing_sync(stand, 0));
+    }
+    if (plant_keeps_flight) {
+        body_sync_plant_handover_keeps_flight(stand_testing_sync(stand, 0));
     }
 #endif
     return stand;
@@ -904,6 +909,8 @@ int main(int argc, char **argv) {
             plant_keeps_received = true;
         } else if (strcmp(argv[i], "--plant-agent-ring-off") == 0) {
             plant_ring_off = true;
+        } else if (strcmp(argv[i], "--plant-handover-keeps-flight") == 0) {
+            plant_keeps_flight = true;
         } else if (strcmp(argv[i], "--sweep") == 0) {
             sweep = true;
         }

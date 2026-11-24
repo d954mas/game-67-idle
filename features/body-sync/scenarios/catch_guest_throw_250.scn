@@ -40,7 +40,8 @@ expect late_drops.count <= 30
 expect local_correction.max <= 1cm
 # Derived: the host's copy stops where the thrower's states end at the grant, then a round trip of
 # hers on hands over to her hand at her first state through the render offset, which takes up to a
-# lost take's 5 m here and gives it back at most 0.15 of 2 m a tick: 0.3 m (measured 0.28-0.30 over
+# lost take's 5 m here, gives back 0.15 m a tick beyond 2 m and 15 % of it from 1 m to 2 m: at most
+# 0.3 m a tick, as it passes 2 m (measured 0.28-0.30 over
 # 20 seeds at 1 and 2 % loss, the jump counted from the tick the owner changes). The stub draws a
 # copy at its newest state with no offset, so the handover shows whole: a jump below 2 m, a snap past
 # it (measured in 5 of 20 seeds, once each).

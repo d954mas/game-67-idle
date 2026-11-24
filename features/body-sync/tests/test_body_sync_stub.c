@@ -1051,6 +1051,94 @@ static void test_a_handover_carries_flags_type_and_locks(void) {
     TEST_ASSERT_TRUE(l.angularX && l.angularZ && !l.angularY);
 }
 
+/* A grant of the host's own body to a guest carries the flags and data the host set, not those of
+   a guest that owned it before: what the host received of that guest is an older ownership's,
+   on the host itself and on the new owner, at the grant and after. */
+static void test_a_grant_of_the_hosts_body_carries_the_hosts_flags(void) {
+    tick_all();
+    grant(&guest, ID0, BODY_SYNC_HOLD_UNTIL_RELEASE);
+    tick_all();
+    const uint8_t mine = 1, hosts = 2;
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_set_flags(guest.sync, ID0, 0x05));
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_set_data(guest.sync, ID0, &mine, 1));
+    for (int i = 0; i < 6; i++) {
+        tick_all();
+    }
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(0x05, body_sync_flags(host.sync, ID0), "the guest's flags never reached the host: the case proves nothing");
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_release(guest.sync, ID0));
+    for (int i = 0; i < 6; i++) {
+        tick_all();
+    }
+    TEST_ASSERT_TRUE(body_sync_is_local(host.sync, ID0));
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_set_flags(host.sync, ID0, 0x0A));
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_set_data(host.sync, ID0, &hosts, 1));
+    tick_all();
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_claim(other.sync, ID0, BODY_SYNC_HOLD_UNTIL_RELEASE));
+    records(&other, &host);
+    body_sync_claim_event_t c;
+    while (body_sync_poll_claim(host.sync, &c)) {
+        TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_answer(host.sync, &c, true));
+    }
+    records(&host, &other);
+    for (int k = 0; k < 4; k++) {
+        uint8_t data = 0;
+        TEST_ASSERT_EQUAL_UINT8_MESSAGE(0x0A, body_sync_flags(host.sync, ID0), "the host reads an older owner's flags");
+        TEST_ASSERT_EQUAL_UINT32(1, body_sync_data(host.sync, ID0, &data, 1));
+        TEST_ASSERT_EQUAL_UINT8_MESSAGE(hosts, data, "the host reads an older owner's data");
+        TEST_ASSERT_EQUAL_UINT8_MESSAGE(0x0A, body_sync_flags(other.sync, ID0), "the new owner goes on from an older owner's flags");
+        TEST_ASSERT_EQUAL_UINT32(1, body_sync_data(other.sync, ID0, &data, 1));
+        TEST_ASSERT_EQUAL_UINT8_MESSAGE(hosts, data, "the new owner goes on from an older owner's data");
+        tick_all();
+    }
+}
+
+/* A grant may name the hold the host reads for the claimant; a hold no claim can name is refused
+   and answers nothing, so the claim stays pending. */
+static void test_a_grant_as_an_unclaimable_hold_is_refused(void) {
+    tick_all();
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_claim(guest.sync, ID0, BODY_SYNC_HOLD_UNTIL_SETTLED));
+    records(&guest, &host);
+    body_sync_claim_event_t c;
+    TEST_ASSERT_TRUE(body_sync_poll_claim(host.sync, &c));
+    TEST_ASSERT_EQUAL(BODY_SYNC_INVALID, body_sync_answer_as(host.sync, &c, BODY_SYNC_HOLD_UNTIL_REST));
+    TEST_ASSERT_EQUAL(BODY_SYNC_INVALID, body_sync_answer_as(host.sync, &c, (body_sync_hold_t)7));
+    body_sync_authority_t a;
+    TEST_ASSERT_TRUE(body_sync_authority(host.sync, ID0, &a));
+    TEST_ASSERT_EQUAL_UINT8(BODY_SYNC_SEAT_HOST, a.seat);
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_answer_as(host.sync, &c, BODY_SYNC_HOLD_UNTIL_RELEASE));
+    TEST_ASSERT_TRUE(body_sync_authority(host.sync, ID0, &a));
+    TEST_ASSERT_EQUAL_UINT8(GUEST, a.seat);
+    TEST_ASSERT_EQUAL(BODY_SYNC_HOLD_UNTIL_RELEASE, a.hold);
+}
+
+/* The host keeps older states for 16 characters; one more binds as any body and is counted, and
+   an unbind frees its place for the next. */
+static void test_characters_past_the_agent_rings_are_counted(void) {
+    b3ShapeDef shape = b3DefaultShapeDef();
+    b3BoxHull cube = b3MakeBoxHull(0.3f, 0.9f, 0.3f);
+    body_sync_id_t ids[17];
+    for (uint32_t i = 0; i < 17; i++) {
+        b3BodyDef d = b3DefaultBodyDef();
+        d.type = b3_dynamicBody;
+        d.position = (b3Vec3){(float)i * 2.0f, 0.9f, 40.0f};
+        b3BodyId body = b3CreateBody(host.world, &d);
+        b3CreateHullShape(body, &shape, &cube.base);
+        ids[i] = body_sync_id_make(BODIES + i, 1);
+        body_sync_bind_t bind = {.body = body, .body_class = BODY_SYNC_CLASS_CHARACTER, .authority = BODY_SYNC_SEAT_HOST};
+        TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_bind(host.sync, ids[i], &bind));
+        TEST_ASSERT_EQUAL_UINT32(i < 16 ? 0u : 1u, body_sync_agent_overflow(host.sync));
+    }
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_unbind(host.sync, ids[0]));
+    b3BodyDef d = b3DefaultBodyDef();
+    d.type = b3_dynamicBody;
+    b3BodyId body = b3CreateBody(host.world, &d);
+    b3CreateHullShape(body, &shape, &cube.base);
+    body_sync_bind_t bind = {.body = body, .body_class = BODY_SYNC_CLASS_CHARACTER, .authority = BODY_SYNC_SEAT_HOST};
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_bind(host.sync, body_sync_id_make(BODIES + 17, 1), &bind));
+    TEST_ASSERT_EQUAL_UINT32(1, body_sync_agent_overflow(host.sync));
+    TEST_ASSERT_EQUAL_UINT32(0, body_sync_agent_overflow(guest.sync));
+}
+
 /* A late state packet arriving after a newer one changes nothing: it neither counts as a pose
    nor moves back the authority number its sender declared. */
 static void test_a_late_packet_changes_nothing(void) {
@@ -1786,6 +1874,9 @@ int main(void) {
     RUN_TEST(test_locks_follow_the_last_owner_when_its_seat_leaves);
     RUN_TEST(test_locks_follow_the_last_owner_on_a_forced_move);
     RUN_TEST(test_a_handover_carries_flags_type_and_locks);
+    RUN_TEST(test_a_grant_of_the_hosts_body_carries_the_hosts_flags);
+    RUN_TEST(test_a_grant_as_an_unclaimable_hold_is_refused);
+    RUN_TEST(test_characters_past_the_agent_rings_are_counted);
     RUN_TEST(test_a_late_packet_changes_nothing);
     RUN_TEST(test_a_copy_stops_without_news_and_after_a_jump);
     RUN_TEST(test_a_settled_hold_ignores_its_last_holder);

@@ -307,19 +307,29 @@ static void host_handover(body_sync_t *s, uint32_t slot, uint8_t from) {
     }
 }
 
-body_sync_result_t body_sync_answer(body_sync_t *s, const body_sync_claim_event_t *claim, bool granted) {
+static body_sync_result_t answer(body_sync_t *s, const body_sync_claim_event_t *claim, bool granted, uint8_t grant_as) {
     if (!claim) {
-        return sync_authority_answer(&s->authority, claim, granted);
+        return sync_authority_answer(&s->authority, claim, granted, grant_as);
     }
     note_live(s, claim->id);
     const sync_authority_body_t *a = sync_authority_body_const(&s->authority, claim->id);
     uint8_t from = a ? a->seat : BODY_SYNC_SEAT_HOST;
-    body_sync_result_t r = sync_authority_answer(&s->authority, claim, granted);
+    body_sync_result_t r = sync_authority_answer(&s->authority, claim, granted, grant_as);
     if (r == BODY_SYNC_OK && a) {
         host_handover(s, body_sync_id_slot(claim->id), from);
     }
     return r;
 }
+
+body_sync_result_t body_sync_answer(body_sync_t *s, const body_sync_claim_event_t *claim, bool granted) {
+    return answer(s, claim, granted, SYNC_AUTHORITY_AS_CLAIMED);
+}
+
+body_sync_result_t body_sync_answer_as(body_sync_t *s, const body_sync_claim_event_t *claim, body_sync_hold_t hold) {
+    return answer(s, claim, true, (uint8_t)hold);
+}
+
+uint32_t body_sync_agent_overflow(const body_sync_t *s) { return s ? s->authority.agents_unringed : 0u; }
 static void take_over(body_sync_t *s, uint32_t slot);
 body_sync_result_t body_sync_assign(body_sync_t *s, body_sync_id_t id, uint8_t seat, body_sync_hold_t hold) {
     note_live(s, id);

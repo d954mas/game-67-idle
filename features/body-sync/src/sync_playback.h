@@ -47,7 +47,8 @@
    is SYNC_FREEZE_TICKS past it, and is driven on when the
    next snapshot comes. A rest snapshot at or before t gives its pose exactly and stops it.
    Rare groups (flags, motion, authority, holder, data) are those of the newest snapshot at or
-   before t that carried them. */
+   before t that carried them, of its current timeline only: a new owner's first snapshot
+   forgets the groups played of the old one. */
 
 #include <stdbool.h>
 #include <stdint.h>

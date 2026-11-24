@@ -119,7 +119,7 @@ static void test_records_carry_the_body_and_owners_keep_their_own(void) {
     sync_authority_note_motion(&host, sync_authority_body(&host, A), false, 0x3F);
     body_sync_claim_event_t c;
     TEST_ASSERT_TRUE(sync_authority_poll(&host, &c));
-    TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_answer(&host, &c, true));
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_answer(&host, &c, true, SYNC_AUTHORITY_AS_CLAIMED));
     TEST_ASSERT_TRUE(sync_authority_peek(&host, 1, record, sizeof(record), &size));
     gb->take_motion = false;
     TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_receive(&guest, BODY_SYNC_SEAT_HOST, 2, record, size, &stale, error, sizeof(error)));
@@ -647,7 +647,7 @@ static void test_contact_after_a_flight_returns(void) {
     deliver(&guest, 1, &host, BODY_SYNC_SEAT_HOST);
     body_sync_claim_event_t c;
     TEST_ASSERT_TRUE(sync_authority_poll(&host, &c));
-    TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_answer(&host, &c, true));
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_answer(&host, &c, true, SYNC_AUTHORITY_AS_CLAIMED));
     deliver(&host, BODY_SYNC_SEAT_HOST, &guest, 1);
     TEST_ASSERT_TRUE(sync_authority_contact_number(&guest, sync_authority_body(&guest, A), &n));
     TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_OK, check(1, n));
@@ -773,7 +773,7 @@ static void test_contact_of_a_retake_after_a_grant_overtaken_by_a_forced_move(vo
             deliver(&other, 2, &host, BODY_SYNC_SEAT_HOST);
             body_sync_claim_event_t c;
             TEST_ASSERT_TRUE(sync_authority_poll(&host, &c));
-            TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_answer(&host, &c, true));
+            TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_answer(&host, &c, true, SYNC_AUTHORITY_AS_CLAIMED));
         }
         deliver(&host, BODY_SYNC_SEAT_HOST, &guest, 1); /* the answer, naming another seat */
         TEST_ASSERT_FALSE_MESSAGE(sync_authority_local(&guest, sync_authority_body(&guest, A)), kinds[kind]);
@@ -864,7 +864,7 @@ static void test_contact_after_a_grant_to_another_seat_counts_within_the_grace(v
     deliver(&other, 2, &host, BODY_SYNC_SEAT_HOST);
     body_sync_claim_event_t c;
     TEST_ASSERT_TRUE(sync_authority_poll(&host, &c));
-    TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_answer(&host, &c, true));
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_answer(&host, &c, true, SYNC_AUTHORITY_AS_CLAIMED));
     TEST_ASSERT_EQUAL_UINT8(2, sync_authority_body(&host, A)->seat);
     expect_grace(1, n, "a grant to another seat");
 }

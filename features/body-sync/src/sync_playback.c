@@ -381,8 +381,13 @@ sync_file_t sync_playback_file(sync_playback_t *p, uint8_t timeline, uint32_t sa
         return SYNC_FILE_LATE;
     }
     sync_buffered_t *b = &p->bodies[r->slot];
+    /* A new owner: its timeline is another clock, and the groups played so far are another
+       ownership's, which the reader takes from authority until this owner's play. */
     if (b->has && b->timeline != timeline) {
-        b->count = 0; /* a new owner: its timeline is another clock */
+        b->count = 0;
+        b->known = 0;
+        memset(&b->rare, 0, sizeof(b->rare));
+        memset(b->rare_tick, 0, sizeof(b->rare_tick));
     }
     b->has = true;
     b->timeline = timeline;

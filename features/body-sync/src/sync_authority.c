@@ -139,14 +139,17 @@ static void host_move_to(sync_authority_t *a, sync_authority_body_t *b, uint8_t 
     if (seat != BODY_SYNC_SEAT_HOST) {
         b->holder = BODY_SYNC_ID_NONE;
     }
-    /* What the host received of the body was its last owner's: a new guest owner is read from the
+    /* What the host received of the body was a guest owner's: a new guest owner is read from the
        host's own move (this hold, no holder) until her states come, or another guest's claim of a
-       body just granted would read the old flight's hold. Its flags and data stay the body's, as
-       the new owner goes on from them. */
+       body just granted would read the old flight's hold. From a guest its flags and data stay the
+       body's, as the new owner goes on from them; from the host they are the host's own, and what
+       it received is an older owner's. */
     if (seat != BODY_SYNC_SEAT_HOST && seat != from && b->has_in && !a->plant_move_keeps_received) {
-        b->flags = b->in_flags;
-        b->data_size = b->in_data_size;
-        memcpy(b->data, b->in_data, sizeof(b->data));
+        if (from != BODY_SYNC_SEAT_HOST) {
+            b->flags = b->in_flags;
+            b->data_size = b->in_data_size;
+            memcpy(b->data, b->in_data, sizeof(b->data));
+        }
         b->has_in = false;
     }
     b->hold = hold;
@@ -303,6 +306,7 @@ bool sync_authority_set_agent(sync_authority_t *a, body_sync_id_t id, bool agent
             return true;
         }
     }
+    a->agents_unringed++;
     return false;
 }
 
@@ -439,9 +443,12 @@ bool sync_authority_poll(sync_authority_t *a, body_sync_claim_event_t *out) {
     return true;
 }
 
-body_sync_result_t sync_authority_answer(sync_authority_t *a, const body_sync_claim_event_t *claim, bool granted) {
+body_sync_result_t sync_authority_answer(sync_authority_t *a, const body_sync_claim_event_t *claim, bool granted, uint8_t grant_as) {
     if (!sync_authority_is_host(a) || !claim) {
         return invalid(a, "answer: host only");
+    }
+    if (granted && grant_as != SYNC_AUTHORITY_AS_CLAIMED && grant_as != BODY_SYNC_HOLD_UNTIL_RELEASE && grant_as != BODY_SYNC_HOLD_UNTIL_SETTLED) {
+        return invalid(a, "answer: a grant under a hold a claim cannot name");
     }
     sync_authority_body_t *b = sync_authority_body(a, claim->id);
     if (!b || claim->seat == BODY_SYNC_SEAT_HOST || claim->seat >= a->seats) {
@@ -456,10 +463,9 @@ body_sync_result_t sync_authority_answer(sync_authority_t *a, const body_sync_cl
     a->pending_count--;
     a->answer[claim->seat][slot] = claim->sequence;
     if (granted) {
-        /* The caller may grant under another hold than the one claimed (a catch puts the body in
-           a hand); the claimant keeps simulating under her own. Granting the owner's own newer
-           claim ends nothing it did not ask for. */
-        uint8_t hold = claim->hold <= BODY_SYNC_HOLD_UNTIL_SETTLED ? (uint8_t)claim->hold : p->hold;
+        /* The claimant keeps simulating under the hold she claimed whatever the host grants it as.
+           Granting the owner's own newer claim ends nothing it did not ask for. */
+        uint8_t hold = grant_as == SYNC_AUTHORITY_AS_CLAIMED ? p->hold : grant_as;
         host_move(a, b, claim->seat, hold, claim->sequence, false, b->seat == claim->seat ? SYNC_END_VOLUNTARY : SYNC_END_ARBITRATED);
         b->holder = BODY_SYNC_ID_NONE;
     } else {

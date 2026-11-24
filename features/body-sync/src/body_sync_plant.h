@@ -34,5 +34,9 @@ void body_sync_plant_move_keeps_received(body_sync_t *sync);
 /* This host judges an agent's contacts on its ring of 12 states alone: a claim the record lane
    resent, which lands past them, has no evidence. */
 void body_sync_plant_agent_ring_off(body_sync_t *sync);
+/* This host's handover of a copy between guests keeps the old owner's received state and plays
+   on its snapshots; only the authority forgets the old owner. A host claim before the new owner's
+   first state then goes on with the old owner's flight. */
+void body_sync_plant_handover_keeps_flight(body_sync_t *sync);
 
 #endif

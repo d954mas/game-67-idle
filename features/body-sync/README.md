@@ -226,11 +226,12 @@ record of it went out since. A body's priority and age reset when its packet
 is handed to the session, not when it is written. Without fates (no
 `body_sync_resolve`) nothing is acknowledged: 200 sleeping bodies then cost
 about 1 KB a tick for ever, against nothing once acknowledged.
-A record whose authority number changed (a claim granted, a take, a move)
-carries every rare group again: the host takes a guest's state only under the
-number it holds for her, so a group acknowledged under the claim's old number
-(a holder set at the grab, before the grant) may never have been read there. A
-change of hold alone (a throw) keeps the number and resends nothing more.
+A record whose authority number or seat changed (a claim granted, a take, a
+move) carries every rare group again: the host takes a guest's state only under
+the ownership it holds for her, so a group acknowledged under another (a holder
+set at the grab, before the grant; a take's states, which declare the grant's
+number while the body is still the host's) may never have been read there. A
+change of hold alone (a throw) keeps the ownership and resends nothing more.
 
 The budget is 1000 bytes (`state_budget`, 0 takes it), clamped by each
 write's capacity. `body_sync_create` refuses a budget without room for one
@@ -598,11 +599,13 @@ ignores the mode.
 - **A catch.** The policy moves no body between guests by interaction, but a
   caller's claim is the caller's to answer: `body_sync_answer` may grant a body
   another guest flies, an arbitrated end of hers (her late states are dropped
-  by their number, her contact claims count within the grace), and under
-  another hold than the one claimed (the event's, which the caller may set; the
+  by their number, her contact claims count within the grace), and
+  `body_sync_answer_as` grants under another hold than the one claimed (the
   claimant keeps simulating under her own). The host's move to another guest
-  forgets what it received of the old owner (its hold, holder and pose; the
-  flags and data stay the body's), so `body_sync_authority` there reads the
+  forgets what it received (its hold, holder and pose; from a guest the flags
+  and data stay the body's, from the host they are the host's own, and what it
+  received is an older owner's), and a copy shows its played flags and data only
+  while they are its current owner's, so `body_sync_authority` there reads the
   grant's hold and no holder until the new owner's states come, and a host
   claim before them goes on from the copy as the host shows it, not from the
   old owner's flight. The stand catches only a throw in flight: a hold until
@@ -706,7 +709,7 @@ ignores the mode.
   claim's whole lag, up to `SYNC_POLICY_EVIDENCE_AGE_MAX_S`, not 200 ms of it;
   they start over with the ring (a new ownership, a teleport) and are judged by
   every rule below, a chord only between a state and the one that followed it.
-  Past 16 characters on a host, or above 252 Hz, an older contact has gaps: a
+  Past 16 characters on a host (`body_sync_agent_overflow` counts them), or above 252 Hz, an older contact has gaps: a
   missed effect, never a false one. A gap in them is no evidence, never a wider bound: it
   may cost an effect, never forge one. All of it stands only while the seat is
   heard within the claim's grace (a seat gone silent leaves no evidence). The
@@ -1282,7 +1285,11 @@ and the hold until rest (two bits on the wire), the traffic's take counts, the
 scenario word `authority`, `>=` in metric checks, the CLI and viewer flag
 `--authority`, `body_sync_is_pull_paused`, `aligned_gap`, `local_correction`, `local_turn` and the take counts in the
 metrics, `body_sync_old_owner_drops`, `body_sync_teleported`, the host's rebind quarantine, the scenario
-verbs `recall` and `remove`, the `on` trigger and `late_drops`; 0.7.0 the second layer: `light_mass_max`,
+verbs `recall` and `remove`, the `on` trigger and `late_drops`, and the catch:
+`body_sync_answer_as` (a grant under another hold than the claimed one),
+`body_sync_agent_overflow`, `body_sync_contact_t.slop` (a field inserted after
+`reach`: a layout change), the scenario check `expect held`, the `stub <value>`
+bound on drawing metrics and the scene `four_chars_item`; 0.7.0 the second layer: `light_mass_max`,
 `body_sync_is_predicted`, `body_sync_is_layer_copy`, `body_sync_round_trip`,
 the scenario word `light_mass`, `expect moved ...
 layer <length>`, the CLI and viewer flag `--light-mass`, and the layer

@@ -203,6 +203,7 @@ typedef struct sync_authority {
        only its ring: an older contact of it is a missed one. */
     sync_authority_agent_ring_t agent_rings[SYNC_AUTHORITY_AGENTS];
     uint32_t agent_stride;
+    uint32_t agents_unringed; /* agents bound while every older ring was in use (body_sync_agent_overflow) */
     /* A planted defect for tests that require a check to catch it: a revocation is recorded as
        an arbitrated end. Never set outside tests. */
     bool plant_revoked_as_arbitrated;
@@ -231,6 +232,9 @@ typedef struct sync_authority {
     /* A planted defect: an agent's evidence is its ring alone, none of its older states. Never set
        outside tests. */
     bool plant_agent_ring_off;
+    /* A planted defect: the shell's handover between guests keeps the old owner's received state
+       and playback (the authority still forgets the old owner). Never set outside tests. */
+    bool plant_handover_keeps_flight;
     /* Host: the shell's measure of a take's evidence (sync_policy_grant_in_t agent_gap, *reach).
        None: every take counts as touching, for the parts tested without a world. */
     float (*take_gap)(void *context, uint8_t seat, uint32_t slot, uint32_t tick, float *reach);
@@ -269,7 +273,10 @@ void sync_authority_describe(const sync_authority_t *a, const sync_authority_bod
 body_sync_result_t sync_authority_claim(sync_authority_t *a, body_sync_id_t id, body_sync_hold_t hold);
 body_sync_result_t sync_authority_release(sync_authority_t *a, body_sync_id_t id);
 bool sync_authority_poll(sync_authority_t *a, body_sync_claim_event_t *out);
-body_sync_result_t sync_authority_answer(sync_authority_t *a, const body_sync_claim_event_t *claim, bool granted);
+/* `grant_as`: the hold the host grants under, SYNC_AUTHORITY_AS_CLAIMED for the claim's own;
+   any other than a claimable hold (until release, until settled) is INVALID and answers nothing. */
+enum { SYNC_AUTHORITY_AS_CLAIMED = 0xFF };
+body_sync_result_t sync_authority_answer(sync_authority_t *a, const body_sync_claim_event_t *claim, bool granted, uint8_t grant_as);
 body_sync_result_t sync_authority_assign(sync_authority_t *a, body_sync_id_t id, uint8_t seat, body_sync_hold_t hold);
 body_sync_result_t sync_authority_set_holder(sync_authority_t *a, body_sync_id_t id, body_sync_id_t holder);
 body_sync_result_t sync_authority_set_flags(sync_authority_t *a, body_sync_id_t id, uint8_t flags);

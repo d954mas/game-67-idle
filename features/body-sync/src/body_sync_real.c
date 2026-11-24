@@ -220,6 +220,7 @@ void body_sync_plant_end_grace_zero(body_sync_t *s) { s->plant_end_grace_zero = 
 void body_sync_plant_recall_keeps_number(body_sync_t *s) { s->authority.plant_recall_keeps_number = true; }
 void body_sync_plant_move_keeps_received(body_sync_t *s) { s->authority.plant_move_keeps_received = true; }
 void body_sync_plant_agent_ring_off(body_sync_t *s) { s->authority.plant_agent_ring_off = true; }
+void body_sync_plant_handover_keeps_flight(body_sync_t *s) { s->authority.plant_handover_keeps_flight = true; }
 
 body_sync_t *body_sync_create(const body_sync_config_t *config) {
     if (!config || !b3World_IsValid(config->world) || config->seats < 1 || config->seats > BODY_SYNC_SEATS_MAX ||
@@ -487,7 +488,8 @@ bool body_sync_poll_claim(body_sync_t *s, body_sync_claim_event_t *out) { return
    host shows the flight a round trip of hers past where she took it. */
 static void host_handover(body_sync_t *s, uint32_t slot, uint8_t from) {
     const sync_authority_body_t *a = &s->authority.bodies[slot];
-    if (!is_host(s) || from == BODY_SYNC_SEAT_HOST || a->seat == BODY_SYNC_SEAT_HOST || a->seat == from || s->authority.plant_move_keeps_received) {
+    if (!is_host(s) || from == BODY_SYNC_SEAT_HOST || a->seat == BODY_SYNC_SEAT_HOST || a->seat == from || s->authority.plant_move_keeps_received ||
+        s->authority.plant_handover_keeps_flight) {
         return;
     }
     s->receiver.bodies[slot].has = false;
@@ -496,19 +498,29 @@ static void host_handover(body_sync_t *s, uint32_t slot, uint8_t from) {
     s->entries[slot].handover = true;
 }
 
-body_sync_result_t body_sync_answer(body_sync_t *s, const body_sync_claim_event_t *claim, bool granted) {
+static body_sync_result_t answer(body_sync_t *s, const body_sync_claim_event_t *claim, bool granted, uint8_t grant_as) {
     if (!claim) {
-        return sync_authority_answer(&s->authority, claim, granted);
+        return sync_authority_answer(&s->authority, claim, granted, grant_as);
     }
     note_live(s, claim->id);
     const sync_authority_body_t *a = sync_authority_body_const(&s->authority, claim->id);
     uint8_t from = a ? a->seat : BODY_SYNC_SEAT_HOST;
-    body_sync_result_t r = sync_authority_answer(&s->authority, claim, granted);
+    body_sync_result_t r = sync_authority_answer(&s->authority, claim, granted, grant_as);
     if (r == BODY_SYNC_OK && a) {
         host_handover(s, body_sync_id_slot(claim->id), from);
     }
     return r;
 }
+
+body_sync_result_t body_sync_answer(body_sync_t *s, const body_sync_claim_event_t *claim, bool granted) {
+    return answer(s, claim, granted, SYNC_AUTHORITY_AS_CLAIMED);
+}
+
+body_sync_result_t body_sync_answer_as(body_sync_t *s, const body_sync_claim_event_t *claim, body_sync_hold_t hold) {
+    return answer(s, claim, true, (uint8_t)hold);
+}
+
+uint32_t body_sync_agent_overflow(const body_sync_t *s) { return s ? s->authority.agents_unringed : 0u; }
 body_sync_result_t body_sync_assign(body_sync_t *s, body_sync_id_t id, uint8_t seat, body_sync_hold_t hold) {
     note_live(s, id);
     const sync_authority_body_t *was = sync_authority_body_const(&s->authority, id);
@@ -554,12 +566,19 @@ body_sync_result_t body_sync_set_holder(body_sync_t *s, body_sync_id_t id, body_
     return sync_authority_set_holder(&s->authority, id, holder);
 }
 body_sync_result_t body_sync_set_flags(body_sync_t *s, body_sync_id_t id, uint8_t flags) { return sync_authority_set_flags(&s->authority, id, flags); }
+/* A copy's rare groups as of its playback time, only while they are its owner's: groups played of
+   an earlier owner (kept since a guest owned the host's body, or the old owner's before the new
+   one's first state) are another ownership's, and authority's own values answer instead. */
+static bool played_is_owners(const body_sync_t *s, uint32_t slot, const sync_authority_body_t *a) {
+    return s->playback.bodies[slot].has && s->playback.bodies[slot].timeline == a->seat;
+}
+
 uint8_t body_sync_flags(const body_sync_t *s, body_sync_id_t id) {
     const sync_authority_body_t *a = sync_authority_body_const(&s->authority, id);
     if (a && !sync_authority_local(&s->authority, a)) {
         uint8_t known = 0;
         const sync_rare_t *rare = sync_playback_rare(&s->playback, (uint16_t)body_sync_id_slot(id), &known);
-        if (known & SYNC_RARE_FLAGS) {
+        if ((known & SYNC_RARE_FLAGS) && played_is_owners(s, body_sync_id_slot(id), a)) {
             return rare->flags; /* as of the copy's playback time */
         }
     }
@@ -575,12 +594,12 @@ uint32_t body_sync_data(const body_sync_t *s, body_sync_id_t id, void *out, uint
     if (!a || !out) {
         return 0;
     }
-    if (sync_authority_local(&s->authority, a)) {
-        return sync_authority_data(&s->authority, id, out, capacity);
-    }
     uint8_t known = 0;
     const sync_rare_t *rare = sync_playback_rare(&s->playback, (uint16_t)body_sync_id_slot(id), &known);
-    uint32_t size = (known & SYNC_RARE_DATA) ? rare->data_size : 0u; /* as of playback time */
+    if (sync_authority_local(&s->authority, a) || !(known & SYNC_RARE_DATA) || !played_is_owners(s, body_sync_id_slot(id), a)) {
+        return sync_authority_data(&s->authority, id, out, capacity);
+    }
+    uint32_t size = rare->data_size; /* as of playback time */
     size = size < capacity ? size : capacity;
     memcpy(out, rare->data, size);
     return size;
