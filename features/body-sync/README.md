@@ -385,8 +385,10 @@ holds on a guest (`src/sync_soft.h`):
   behind it (not its impulse: a lean pushed out of an overlap, or a weight
   borne, has a large one and no approach);
   pushed or pressed, a copy's pull waits. A resting copy is a wall for one step
-  at most. A body of this side's dragged by a held copy's step (moving no faster
-  than that copy does at it) marks nothing, and a copy that turns soft from
+  at most. A body of this side's dragged or shoved by a held copy's step marks
+  nothing: one touching that copy and moving no faster than the copy's fastest
+  point, its speed plus its spin times its own half-diagonal, however large the
+  body. A copy that turns soft from
   kinematic starts from its owner's motion, never from its drive's sweep.
 
 A soft copy is steered to the owner's playback pose:
@@ -518,8 +520,14 @@ ignores the mode.
   top (`src/sync_policy.h` derives the slop). A take whose agent the host refused, or a forged claim of
   a body no agent is near, is refused. While its take waits, a body's state declares the number the
   grant will give, so the host takes its states from the grant on, not a round
-  trip later. A refusal of a body the host holds moves its number on, so a late
-  state of the refused take never matches a later grant. Only the claimant hears the grant; the other guests read the new
+  trip later. A refusal moves no number, so another guest's take granted next
+  gets the number its states declared, and refusals, which spend no take
+  budget, move nothing at all. The host keeps one bit per seat and body
+  instead: its next move of that body to the refused seat adds two, and the
+  guest, told of the refusal, declares two ahead for its next take. A state of
+  the refused take declared the claimant's number then plus one; that number
+  never passes the host's, N at the later move, so the state carries at most
+  N + 1 and never matches the move's N + 2. Only the claimant hears the grant; the other guests read the new
   owner from the state the host relays.
 - **A flight.** A thrown or dropped body that first touches a body its thrower
   may take stays the thrower's, owned by interaction; one that touches a body
@@ -822,12 +830,18 @@ a clock the stand cannot map back and is left out of them.
 **The lag-aligned gap** (`aligned_gap.max`, `.p95`) compares two pictures of one
 moment while a body moves: a copy, and a predicted copy once its pull runs (the
 pull steers it to the playback pose), against what its owner drew at the owner
-tick the copy shows. Its bound is derived: the snap keeps a copy's physics within
-1 m of its owner's physics at that tick, its render offset adds at most 2 m, and
-the owner's drawn picture carries the owner's own offset, at most 2 m more (a
-placement on the owner, as the host's take-over of a guest's grab, glides there
-as well): 5 m. A host-mode grab in the 100-throw sweep reached 4.79 m that way, a
-copy's 1.26 m glide against the host's own. Against the host at the
+tick the copy shows. Its bound is derived. At the apply the copy's physics lies
+within 2 m of its owner's physics at that tick: a guest's soft copy is placed
+past 1 m, a driven copy reaches its pose in the step or is placed, and the host's
+dynamic copy of a guest's body is placed only past the render offset's 2 m. The
+step then moves a dynamic copy with its owner's velocity plus a correction that
+closes, never passes, the error, so it ends at most a tick of its owner's travel
+further: the owner's speed on the wire is within max_speed, 100 m/s on the
+stand, 1.67 m a tick. The copy's render offset adds at most 2 m, and the owner's
+drawn picture carries the owner's own offset, at most 2 m more (a placement on
+the owner, as the host's take-over of a guest's grab, glides there as well):
+6 m and a tick of travel, 7.7 m. A host-mode grab in the 100-throw sweep reached
+4.79 m, a copy's 1.26 m glide against the host's own. Against the host at the
 guest's moment a copy would be off by its speed times the round trip and two
 delays however true it plays. A predicted copy in its pause
 (`body_sync_is_pull_paused`) is the guest's own answer to its touch, drawn ahead
@@ -970,8 +984,10 @@ interaction` (`test_body_sync_interaction_scn_*`, slow) run it on the stand.
 `test_body_sync_checks` (core) plants a defect after a clean run (a body only
 a guest has, one a guest lacks, a moved copy, a kinematic body nobody holds, a
 body under a seat that left, a knock applied twice, a broken body back, a
-spawn missing, a break that lost its spawns) and requires the check to fail,
-and checks that the world hash sees what it names.
+spawn missing, a break that lost its spawns, a pause held past the cap, a
+still copy crept off its host body) and requires the check to fail, holds a
+creeping awake host body's end of a rest to a host wake, and checks that the
+world hash sees what it names.
 `test_body_sync_two_processes` (core) runs `two_walk` in two processes and
 compares the files; `test_body_sync_two_processes_<name>` (slow) does the same
 for the playback's edge scenarios, on both implementations. `test_body_sync_mf_*` (core) are scenarios that must end

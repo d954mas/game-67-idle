@@ -41,5 +41,14 @@ void stand_testing_plant_pace_on_time(body_sync_stand_t *st);
 /* The copy's jolt `count` times from `tick`, every `every` ticks, back and forth: a held copy
    churned in steps too small for one tick's snap (the driven body's rest window, stand_logic.h). */
 void stand_testing_plant_jitter(body_sync_stand_t *st, uint32_t tick, float metres, uint32_t every, uint32_t count);
+/* For `ticks` ticks from `tick`, guest 1 records the first light copy of a host body it holds as
+   a prediction with its pull paused, whatever the seam does: a pause held past the layer's chain
+   cap. */
+void stand_testing_plant_pause(body_sync_stand_t *st, uint32_t tick, uint32_t ticks);
+/* For `ticks` ticks from `tick`, the host's awake body of the first light copy guest 1 holds is
+   moved `metres` along x after every tick, outside physics: a creep its velocity, the run's rest
+   speed, never shows. With `copy`, that copy creeps instead, held kinematic and still between the
+   moves as stand_testing_plant_wall holds one: a copy crept off its host body at rest. */
+void stand_testing_plant_creep(body_sync_stand_t *st, uint32_t tick, float metres, uint32_t ticks, bool copy);
 
 #endif

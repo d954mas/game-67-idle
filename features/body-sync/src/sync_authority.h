@@ -66,6 +66,8 @@ typedef struct sync_authority_body {
     bool kinematic_mine; /* the owner changed the motion type since the last resume */
     bool locks_mine;     /* the owner changed the locks since the last resume */
     bool takable;        /* light for the interaction policy: class LIGHT within light_mass_max */
+    bool claim_take;     /* guest: the pending claim is a take (sync_authority_take) */
+    bool take_refused;   /* guest: a take of it was refused and no move to this seat came since */
 } sync_authority_body_t;
 
 typedef struct sync_authority_pending {
@@ -106,6 +108,9 @@ typedef struct sync_authority {
     uint32_t owned_by[BODY_SYNC_SEATS_MAX];
     float take_budget[BODY_SYNC_SEATS_MAX];
     uint32_t take_budget_tick[BODY_SYNC_SEATS_MAX];
+    /* Host: a bit per seat and slot, set by a refused take and cleared by the next move of the
+       body to that seat, which skips a number (sync_authority_declared_number). */
+    uint64_t refused[BODY_SYNC_SEATS_MAX][SYNC_AUTHORITY_OWED_WORDS];
     uint32_t now;
     /* Host: the shell's measure of a take's evidence (sync_policy_grant_in_t agent_gap, *reach).
        None: every take counts as touching, for the parts tested without a world. */
@@ -202,10 +207,14 @@ bool sync_authority_settle(sync_authority_t *a, body_sync_id_t id, bool asleep, 
 body_sync_result_t sync_authority_take(sync_authority_t *a, body_sync_id_t id);
 /* The authority number a local body's state declares: while a take waits, the number its grant
    will give (the host's move adds one), so the host takes its states from the grant on instead
-   of a round trip later. A refusal of a body the host holds moves the number on as well, so the
-   states a refused take declared never match a later grant to the same seat; a refusal of a
-   body another guest owns leaves that owner's number, and the states stay rejected as long as
-   the body is not the claimant's. */
+   of a round trip later. A refusal moves no number: another seat's take granted next gets the
+   number its states declared, and refusals, which spend no take budget, cannot drive a number
+   on. The host instead remembers the refused seat (one bit per seat and slot), and its next
+   move of the body to that seat adds two; the guest, told of the refusal, declares two ahead
+   for its next take as well. A state of the refused take declared at most the claimant's
+   number then plus one, and the claimant's number never passes the host's, which is N when
+   that later move comes: N + 2 is one no such state carries, however the number moved while
+   the refusal was on its way. */
 uint16_t sync_authority_declared_number(const sync_authority_t *a, const sync_authority_body_t *b);
 /* Bodies `seat` owns by interaction now (a hold until rest); this guest's own count includes its
    takes waiting for the grant. */

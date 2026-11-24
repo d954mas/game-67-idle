@@ -2007,6 +2007,42 @@ static void test_a_hold_step_under_her_box_is_no_mark(void) {
     TEST_ASSERT_TRUE_MESSAGE(soft == 0 && offset_m <= 0.0034f && offset_rad <= 0.0195f, what); /* a step: SYNC_SOFT_HOLD_M, _RAD */
 }
 
+/* Her box beside the held copy, in contact 1 cm off its side (inside Box3D's speculative
+   distance; the step's 6 mm corner swing stays out of her), as the copy sweeps a hold step after
+   its owner's slip: her box set going along that side at a walk, 1 m/s, outruns anything the
+   step moves, the copy's fastest point (1.8 rad/s over its 0.35 m half-diagonal: 0.62 m/s), so
+   it is her own mover and marks the copy at the apply that reads the sweep. The drag read at her
+   centre (0.72 m/s, 0.4 m off the axis) plus the spin over her own half-diagonal (0.62 m/s)
+   passes her 1 m/s, and she would mark nothing there. */
+static void test_a_walk_along_a_held_copys_side_marks_it(void) {
+    layer_on();
+    place_everywhere(slip_copy, 4.0f, 0.2f, -1.5f);
+    place_everywhere(slip_mine, 4.41f, 0.2f, -1.5f);
+    for (int i = 0; i < 90; i++) {
+        tick_all();
+    }
+    grant(&guest, body_sync_id_make(slip_mine, 1), BODY_SYNC_HOLD_UNTIL_RELEASE);
+    for (int i = 0; i < 150; i++) {
+        tick_all();
+    }
+    const body_sync_id_t id = body_sync_id_make(slip_copy, 1);
+    TEST_ASSERT_FALSE_MESSAGE(body_sync_is_predicted(guest.sync, id), "the copy beside her box is not in the rest hold: the case is not met");
+    const float half = 0.015f;
+    b3Quat slip = {{0.0f, sinf(half), 0.0f}, cosf(half)};
+    b3Body_SetTransform(host.bodies[slip_copy], b3Body_GetPosition(host.bodies[slip_copy]), b3MulQuat(slip, b3Body_GetRotation(host.bodies[slip_copy])));
+    b3Body_SetAwake(host.bodies[slip_copy], true);
+    bool swept = false;
+    for (int i = 0; i < 30 && !swept; i++) {
+        tick_all();
+        swept = spin_of(guest.bodies[slip_copy]) > SYNC_SOFT_HOLD_RAD * 60.0f;
+        TEST_ASSERT_FALSE_MESSAGE(body_sync_is_predicted(guest.sync, id), "the copy left the hold before the walk: the case is not met");
+    }
+    TEST_ASSERT_TRUE_MESSAGE(swept, "the held copy never swept a step after its owner: the case is not met");
+    b3Body_SetLinearVelocity(guest.bodies[slip_mine], (b3Vec3){0.0f, 0.0f, 1.0f});
+    tick_all();
+    TEST_ASSERT_TRUE_MESSAGE(body_sync_is_predicted(guest.sync, id), "a walk along the side of a sweeping held copy marked nothing");
+}
+
 /* Her box set going at a walk as the held copy sweeps under it is her own motion, faster than the
    drag: it marks the copy, which turns soft from kinematic at that apply. It starts from its
    owner's motion (the owner turned by a set, not a spin), never from the sweep's 1.8 rad/s, which
@@ -2270,6 +2306,43 @@ static void test_an_owned_body_never_takes_a_moving_one(void) {
     }
     TEST_ASSERT_TRUE_MESSAGE(met, "the owned box never met the moving one");
     TEST_ASSERT_EQUAL_UINT8(GUEST, seat_on_host(2));
+}
+
+/* A guest's throw that hits a body it may not take (the heavy box, a character, the other guest's
+   box) is judged by the host, as under the host policy: it comes back to the host at the hit, long
+   before it rests, and the body it hit keeps its owner. */
+static void test_a_throw_into_an_untakable_body_returns_to_the_host(void) {
+    const uint32_t box = 5, targets[3] = {BODIES - 2, BODIES - 1, 7};
+    const uint8_t owners[3] = {BODY_SYNC_SEAT_HOST, BODY_SYNC_SEAT_HOST, OTHER};
+    const char *names[3] = {"the heavy box", "a character", "the other guest's box"};
+    for (int k = 0; k < 3; k++) {
+        settle_interaction();
+        const uint32_t hit = targets[k];
+        place_everywhere(hit, 3.0f, 0.2f, -2.0f);
+        place_everywhere(box, 1.5f, 0.2f, -2.0f);
+        for (int i = 0; i < 30; i++) {
+            tick_all();
+        }
+        if (owners[k] == OTHER) {
+            grant(&other, id_of(hit), BODY_SYNC_HOLD_UNTIL_RELEASE);
+        }
+        grant(&guest, id_of(box), BODY_SYNC_HOLD_UNTIL_SETTLED);
+        b3Body_SetLinearVelocity(guest.bodies[box], (b3Vec3){6.0f, 0.0f, 0.0f});
+        int met = -1, back = -1;
+        char what[128];
+        for (int i = 0; i < 90 && back < 0; i++) {
+            tick_all();
+            met = met < 0 && apart(guest.bodies[box], guest.bodies[hit]) < 0.45f ? i : met;
+            back = met >= 0 && seat_on_host(box) == BODY_SYNC_SEAT_HOST ? i : back;
+            snprintf(what, sizeof(what), "the throw took %s", names[k]);
+            TEST_ASSERT_EQUAL_UINT8_MESSAGE(owners[k], seat_on_host(hit), what);
+        }
+        snprintf(what, sizeof(what), "the throw never met %s", names[k]);
+        TEST_ASSERT_TRUE_MESSAGE(met >= 0, what);
+        /* The hit's step, its collect's return and the record's arrival share one tick here. */
+        snprintf(what, sizeof(what), "the throw stayed the thrower's %d ticks after it hit %s", back < 0 ? 90 - met : back - met, names[k]);
+        TEST_ASSERT_TRUE_MESSAGE(back >= 0 && back - met <= 2, what);
+    }
 }
 
 /* A take names a body: the host grants it only where its own world shows one of the claimant's
@@ -3039,6 +3112,8 @@ int main(void) {
     RUN_TEST(test_a_copy_resting_against_this_sides_body_stays_in_the_rest_hold);
     RUN_TEST(test_a_leaned_copy_rests_in_the_hold);
     RUN_TEST(test_a_hold_step_under_her_box_is_no_mark);
+    RUN_TEST(test_a_walk_along_a_held_copys_side_marks_it);
+    RUN_TEST(test_a_throw_into_an_untakable_body_returns_to_the_host);
     RUN_TEST(test_a_held_copy_turned_soft_leaves_the_sweep_behind);
     RUN_TEST(test_a_knocked_soft_copy_is_pulled_back_within_the_pulls_lag);
     RUN_TEST(test_a_body_returned_at_rest_stays_on_the_hosts_first_state);

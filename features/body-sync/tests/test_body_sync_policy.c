@@ -677,28 +677,90 @@ static void test_the_evidence_is_asked_last(void) {
     TEST_ASSERT_EQUAL_UINT32(1, gap_calls);
 }
 
-/* A refused take's states declare the number a grant would have given. The refusal of a body the
-   host holds moves the number on, so no later grant to that seat ever gives that number; a
-   refusal of another guest's body leaves the number its owner's states carry. */
-static void test_a_refused_take_moves_the_number_on(void) {
+/* The host's intake takes a guest's state of a body only under the body's owner and number
+   (sync_receiver_host_intake). */
+static bool host_takes(uint8_t seat, uint16_t declared) {
+    const sync_authority_body_t *b = sync_authority_body(&host, BOX);
+    return b->seat == seat && b->number == declared;
+}
+
+/* A refusal moves no number: the other guest's take, granted next, gets the number its states
+   declared, and the host takes them from the grant on. */
+static void test_a_take_granted_after_another_seats_refusal_gets_its_declared_number(void) {
     setup_three();
     sync_authority_host_active(&host, BOX, true);
     TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_take(&guest, BOX));
-    uint16_t declared = sync_authority_declared_number(&guest, sync_authority_body(&guest, BOX));
     deliver(&guest, GUEST, &host, BODY_SYNC_SEAT_HOST);
-    deliver(&host, BODY_SYNC_SEAT_HOST, &guest, GUEST);
-    TEST_ASSERT_FALSE(sync_authority_local(&guest, sync_authority_body(&guest, BOX)));
+    TEST_ASSERT_EQUAL_UINT32(1, host.refused_takes[GUEST]);
     sync_authority_host_active(&host, BOX, false);
-    TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_take(&guest, BOX));
-    deliver(&guest, GUEST, &host, BODY_SYNC_SEAT_HOST);
-    TEST_ASSERT_EQUAL_UINT8(GUEST, sync_authority_body(&host, BOX)->seat);
-    TEST_ASSERT_TRUE_MESSAGE(sync_authority_body(&host, BOX)->number != declared, "a later grant gives the number the refused take declared");
-    /* The other guest's refused take of the guest's body leaves the guest's number. */
-    uint16_t owners = sync_authority_body(&host, BOX)->number;
     TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_take(&other, BOX));
+    uint16_t declared = sync_authority_declared_number(&other, sync_authority_body(&other, BOX));
     deliver(&other, OTHER, &host, BODY_SYNC_SEAT_HOST);
-    TEST_ASSERT_EQUAL_UINT8(GUEST, sync_authority_body(&host, BOX)->seat);
-    TEST_ASSERT_EQUAL_UINT16(owners, sync_authority_body(&host, BOX)->number);
+    TEST_ASSERT_EQUAL_UINT8(OTHER, sync_authority_body(&host, BOX)->seat);
+    TEST_ASSERT_TRUE_MESSAGE(host_takes(OTHER, declared), "the take granted after another seat's refusal has a number its states never declared");
+}
+
+/* A refused take's states, still in flight, never pass once the body is later granted to the
+   same seat; nor do they when the host moved the number on before the refusal arrived and the
+   guest heard the new number from a state first, its waiting take then declaring one more. The
+   guest's next take is taken from its grant on. */
+static void test_a_refused_takes_late_states_never_pass_a_later_grant(void) {
+    for (int moved = 0; moved < 2; moved++) {
+        setup_three();
+        sync_authority_host_active(&host, BOX, true);
+        sync_authority_body_t *g = sync_authority_body(&guest, BOX);
+        TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_take(&guest, BOX));
+        uint16_t late[2];
+        late[0] = late[1] = sync_authority_declared_number(&guest, g);
+        deliver(&guest, GUEST, &host, BODY_SYNC_SEAT_HOST);
+        if (moved) {
+            TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_assign(&host, BOX, BODY_SYNC_SEAT_HOST, BODY_SYNC_HOLD_UNTIL_RELEASE));
+            sync_authority_from_state(&guest, g, BODY_SYNC_SEAT_HOST, sync_authority_body(&host, BOX)->number, BODY_SYNC_HOLD_UNTIL_RELEASE);
+            TEST_ASSERT_TRUE_MESSAGE(sync_authority_local(&guest, g), "the take stopped waiting on a state: the case is not met");
+            late[1] = sync_authority_declared_number(&guest, g);
+        }
+        deliver(&host, BODY_SYNC_SEAT_HOST, &guest, GUEST);
+        TEST_ASSERT_FALSE(sync_authority_local(&guest, g));
+        sync_authority_host_active(&host, BOX, false);
+        TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_take(&guest, BOX));
+        uint16_t declared = sync_authority_declared_number(&guest, g);
+        deliver(&guest, GUEST, &host, BODY_SYNC_SEAT_HOST);
+        TEST_ASSERT_EQUAL_UINT8(GUEST, sync_authority_body(&host, BOX)->seat);
+        for (int k = 0; k < 2; k++) {
+            TEST_ASSERT_FALSE_MESSAGE(host_takes(GUEST, late[k]), moved ? "a late state of the refused take passed (number moved meanwhile)" : "a late state of the refused take passed");
+        }
+        TEST_ASSERT_TRUE_MESSAGE(host_takes(GUEST, declared), "the take after the refusal is rejected until its grant arrives");
+    }
+}
+
+/* Refusals spend no take budget, so they must move nothing: 5000 refused takes of a body the host
+   holds and of one another guest owns leave both numbers, and only the claimant is owed an
+   answer, no authority group to anyone else. */
+static void test_refused_takes_move_no_number(void) {
+    for (int owned = 0; owned < 2; owned++) {
+        setup_three();
+        if (owned) {
+            TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_assign(&host, BOX, OTHER, BODY_SYNC_HOLD_UNTIL_RELEASE));
+            uint8_t drop[SYNC_AUTHORITY_RECORD_BYTES];
+            uint32_t size;
+            while (sync_authority_peek(&host, GUEST, drop, sizeof(drop), &size) || sync_authority_peek(&host, OTHER, drop, sizeof(drop), &size)) {
+                sync_authority_pop(&host, GUEST);
+                sync_authority_pop(&host, OTHER);
+            }
+        } else {
+            sync_authority_host_active(&host, BOX, true);
+        }
+        uint16_t before = sync_authority_body(&host, BOX)->number;
+        for (uint32_t i = 0; i < 5000; i++) {
+            send_claim(&host, GUEST, BOX, BODY_SYNC_HOLD_UNTIL_REST, (uint16_t)(i + 1));
+        }
+        TEST_ASSERT_EQUAL_UINT32(5000, host.refused_takes[GUEST]);
+        TEST_ASSERT_EQUAL_UINT16_MESSAGE(before, sync_authority_body(&host, BOX)->number, "refused takes moved the number");
+        uint8_t buffer[SYNC_AUTHORITY_RECORD_BYTES];
+        uint32_t size;
+        TEST_ASSERT_FALSE_MESSAGE(sync_authority_peek(&host, OTHER, buffer, sizeof(buffer), &size), "a refusal sent the authority group to another guest");
+        TEST_ASSERT_TRUE(sync_authority_peek(&host, GUEST, buffer, sizeof(buffer), &size));
+    }
 }
 
 /* An unbound owned body leaves the count: a full guest unbinds one and may take another. */
@@ -758,7 +820,9 @@ int main(void) {
     RUN_TEST(test_the_owned_count_matches_the_slots_after_any_sequence);
     RUN_TEST(test_a_duplicate_take_moves_nothing);
     RUN_TEST(test_the_evidence_is_asked_last);
-    RUN_TEST(test_a_refused_take_moves_the_number_on);
+    RUN_TEST(test_a_take_granted_after_another_seats_refusal_gets_its_declared_number);
+    RUN_TEST(test_a_refused_takes_late_states_never_pass_a_later_grant);
+    RUN_TEST(test_refused_takes_move_no_number);
     RUN_TEST(test_an_unbound_owned_body_frees_its_place);
     RUN_TEST(test_a_take_withdraws_the_seats_pending_claim);
     return UNITY_END();

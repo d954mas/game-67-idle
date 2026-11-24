@@ -45,11 +45,13 @@ expect local_turn.max <= 0.25deg
 # Derived: a render offset's release, 0.15 of at most 2 m.
 expect jump.max <= 0.3m
 # Derived for every copy, predicted or not, against its owner's drawn picture at the copy's
-# playback tick: the snap keeps its physics within 1 m of the owner's physics there, its render
-# offset adds at most 2 m, and the owner's picture carries its own offset of at most 2 m (a
-# placement of the owner's own, as a grab's take-over, glides there too): 5 m. A prediction in
-# its pause leaves the gap (prediction_gap and flight_pause_gap, reported only).
-expect aligned_gap.max <= 5m
+# playback tick: at the apply its physics lies within 2 m of the owner's physics there (the
+# host's dynamic copy of a guest's body is placed only past the render offset's 2 m), and the
+# step moves it at most a tick of the owner's travel further (max_speed 100 m/s: 1.67 m); its
+# render offset adds at most 2 m, and the owner's picture carries its own offset of at most 2 m
+# (a placement of the owner's own, as a grab's take-over, glides there too): 7.7 m. A
+# prediction in its pause leaves the gap (prediction_gap and flight_pause_gap, reported only).
+expect aligned_gap.max <= 7.7m
 # A cap, not a derivation: the glide's reach (SYNC_OFFSET_LOST_M, 5 m), past which the offset
 # clears and the loser's picture jumps. The check is that no lost take is seen to jump; how far
 # two pictures of one contested body part is chaos no bound derives.

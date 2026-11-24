@@ -103,8 +103,11 @@ static void host_move_to(sync_authority_t *a, sync_authority_body_t *b, uint8_t 
     bool was_local = sync_authority_local(a, b);
     uint32_t slot = slot_of(a, b);
     a->owned_by[b->seat] -= b->seat != BODY_SYNC_SEAT_HOST && b->hold == BODY_SYNC_HOLD_UNTIL_REST ? 1u : 0u;
+    uint64_t bit = 1ull << (slot % 64);
+    bool skip = seat != BODY_SYNC_SEAT_HOST && (a->refused[seat][slot / 64] & bit);
+    a->refused[seat][slot / 64] &= ~bit;
     b->seat = seat;
-    b->number++;
+    b->number += skip ? 2u : 1u;
     b->granted_seq = granted;
     if (seat == BODY_SYNC_SEAT_HOST && !was_local) {
         take_local(b, keep_holder);
@@ -139,10 +142,16 @@ static void guest_authority(sync_authority_t *a, sync_authority_body_t *b, const
     if (answers_mine) {
         b->claim_pending = false;
     }
+    /* The host marks every take it refuses of a body this seat does not own, one released while
+       it waited too. */
+    bool answers_take = from_record && r->sequence != 0 && b->claim_take && r->sequence == b->claim_seq;
+    b->take_refused = b->take_refused || (answers_take && r->seat != me);
     if (newer16(r->number, b->number)) {
         b->number = r->number;
         bool stale_grant = r->seat == me && !answers_mine && r->sequence != 0 && !r->forced;
         b->seat = stale_grant ? BODY_SYNC_SEAT_HOST : r->seat;
+        /* Any move to this seat, stale grant or not, is the one the host skipped a number on. */
+        b->take_refused = b->take_refused && r->seat != me;
     }
     bool now_local = sync_authority_local(a, b);
     if (!was_local && now_local) {
@@ -164,10 +173,14 @@ static void forget_seat(sync_authority_t *a, uint8_t seat) {
     memset(a->owed[seat], 0, sizeof(a->owed[seat]));
     memset(a->answer[seat], 0, sizeof(a->answer[seat]));
     memset(a->forced[seat], 0, sizeof(a->forced[seat]));
+    memset(a->refused[seat], 0, sizeof(a->refused[seat]));
     for (uint32_t slot = 0; slot < BODY_SYNC_BODIES_MAX; slot++) {
         if (a->pending[seat][slot].active) {
             a->pending[seat][slot].active = false;
             a->pending_count--;
+        }
+        if (seat == BODY_SYNC_SEAT_HOST) {
+            a->bodies[slot].take_refused = false; /* the host forgot this seat's refusals too */
         }
     }
     if (seat == BODY_SYNC_SEAT_HOST) {
@@ -222,6 +235,7 @@ body_sync_result_t sync_authority_unbind(sync_authority_t *a, body_sync_id_t id)
     b->bound = false;
     for (uint8_t seat = 0; seat < BODY_SYNC_SEATS_MAX; seat++) {
         a->owed[seat][slot / 64] &= ~(1ull << (slot % 64));
+        a->refused[seat][slot / 64] &= ~(1ull << (slot % 64));
         a->answer[seat][slot] = 0;
         if (a->pending[seat][slot].active) {
             a->pending[seat][slot].active = false;
@@ -268,6 +282,7 @@ body_sync_result_t sync_authority_claim(sync_authority_t *a, body_sync_id_t id, 
         }
         a->claim_counter = sequence;
         b->claim_pending = true;
+        b->claim_take = false;
         b->claim_seq = sequence;
         take_local(b, false);
     }
@@ -504,9 +519,9 @@ static void touch_claim(sync_authority_t *a, uint8_t seat, sync_authority_body_t
         b->holder = BODY_SYNC_ID_NONE;
     } else {
         a->refused_takes[seat]++;
-        /* The refused take's states declared this number plus one: moved on, it can never be a
-           later grant's. Another guest's body keeps its number, which that owner's states carry. */
-        b->number += b->seat == BODY_SYNC_SEAT_HOST ? 1u : 0u;
+        /* The number stays (sync_authority_declared_number): the next move to this seat skips the
+           one the refused take's states may carry. A seat that owns the body declares no take. */
+        a->refused[seat][slot / 64] |= b->seat != seat ? 1ull << (slot % 64) : 0ull;
         a->owed[seat][slot / 64] |= 1ull << (slot % 64);
     }
 }
@@ -705,6 +720,7 @@ body_sync_result_t sync_authority_take(sync_authority_t *a, body_sync_id_t id) {
     a->claim_counter = sequence;
     a->takes_sent++;
     b->claim_pending = true;
+    b->claim_take = true;
     b->claim_seq = sequence;
     take_local(b, false);
     b->hold = BODY_SYNC_HOLD_UNTIL_REST;
@@ -713,7 +729,7 @@ body_sync_result_t sync_authority_take(sync_authority_t *a, body_sync_id_t id) {
 
 uint16_t sync_authority_declared_number(const sync_authority_t *a, const sync_authority_body_t *b) {
     bool taking = !sync_authority_is_host(a) && b->claim_pending && b->hold == BODY_SYNC_HOLD_UNTIL_REST && b->seat != a->self;
-    return taking ? (uint16_t)(b->number + 1u) : b->number;
+    return taking ? (uint16_t)(b->number + (b->take_refused ? 2u : 1u)) : b->number;
 }
 
 void sync_authority_host_active(sync_authority_t *a, body_sync_id_t id, bool active) {

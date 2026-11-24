@@ -317,9 +317,10 @@ static void test_aligned_gap_fails_on_a_guest_drawing_its_bodies_off_what_it_sen
 /* A predicted copy in its pause is the guest's own answer to its touch, drawn ahead of the tick it
    plays: the lead leaves aligned_gap as it was and shows in prediction_gap. The pile is the host's,
    so the guest predicts it, and the ball's hit pauses copies at rest. The plant moves no body, so
-   the gap equals the clean run's to the bit. A 12.5 m lead puts a sample past 7 m: the unplanted
-   copy lies within 5 m of the host's picture (the snap's 1 m, its offset's 2 m and the host's own
-   offset's 2 m), and the clean run stays under 7 m. */
+   the gap equals the clean run's to the bit. A 14 m lead puts a sample past 7 m: the unplanted
+   copy lies within 6.7 m of the host's picture (the soft snap's 1 m and a tick of travel at the
+   seam's 100 m/s, its offset's 2 m and the host's own offset's 2 m), and the clean run stays
+   under 7 m. */
 static const char *host_pile_text = "scenario planted\nscene pile60\nseed 52\nguests 1\nend 6s\nlight_mass 20kg\nauthority host\n"
                                     "net g1 rtt 100ms jitter 20ms loss 2%\np1 grab ball\np1 wait 300ms\np1 throw pile31 speed 12\n";
 
@@ -331,7 +332,7 @@ static void test_a_paused_predictions_lead_stays_out_of_aligned_gap(void) {
     body_sync_stand_config_t config = {.scene = &scene, .scenario = &scenario};
     body_sync_stand_t *led = body_sync_stand_create(&config, &error);
     TEST_ASSERT_NOT_NULL_MESSAGE(led, error.text);
-    stand_testing_plant_lead(led, 12.5f);
+    stand_testing_plant_lead(led, 14.0f);
     body_sync_stand_run(led);
     const body_sync_guest_metrics_t *c = &body_sync_stand_report(clean)->guests[0], *l = &body_sync_stand_report(led)->guests[0];
     TEST_ASSERT_TRUE_MESSAGE(c->aligned_samples > 0, "no aligned sample: the case is not met");
@@ -444,6 +445,9 @@ static void test_rest_breaks_fails_on_a_held_copy_churned_in_steps(void) {
 static const char *awake_pile_text = "scenario planted\nscene pile60\nseed 53\nguests 1\nend 14s\nlight_mass 20kg\n"
                                      "net g1 rtt 100ms jitter 20ms loss 2%\np1 walk 0.5 0\np1 walk 3.6 0 speed 2.5\n"
                                      "expect agree_at_rest 1cm 2deg\nexpect rest_wakes.count <= 0\nexpect rest_jitter.max <= 0m\n";
+static const char *creep_pile_text = "scenario planted\nscene pile60\nseed 53\nguests 1\nend 14s\nlight_mass 20kg\n"
+                                     "net g1 rtt 100ms jitter 20ms loss 2%\np1 walk 0.5 0\np1 walk 3.6 0 speed 2.5\nexpect rest_breaks.count <= 0\n";
+#define CREEP_M 0.00075f /* a tick: 45 mm/s */
 static void test_rest_jitter_fails_on_a_copy_of_an_awake_still_host_body(void) {
     body_sync_error_t error;
     body_sync_stand_t *runs[2];
@@ -467,6 +471,65 @@ static void test_rest_jitter_fails_on_a_copy_of_an_awake_still_host_body(void) {
     TEST_ASSERT_FALSE_MESSAGE(jitter->passed, "a held move of an awake owner's copy went unseen");
     /* The planted 1 mm, measured: above half of it, below the half step that bounds a held move. */
     TEST_ASSERT_TRUE_MESSAGE(isfinite(jitter->value) && jitter->value > 0.0005 && jitter->value < 0.0017, jitter->detail);
+    body_sync_stand_destroy(runs[0]);
+    body_sync_stand_destroy(runs[1]);
+}
+
+/* The heroine stands in the pile, so the host's boxes against her never sleep. 45 mm/s is the
+   creep band: past the seam's creep bound (a step in 8 ticks, 27 mm/s), under the run's rest
+   speed (50 mm/s), and the moves are outside physics, so the crept body's speed reads as rest. */
+static body_sync_stand_t *run_creep(uint32_t ticks, bool copy) {
+    body_sync_error_t error;
+    TEST_ASSERT_TRUE_MESSAGE(body_sync_scenario_parse(creep_pile_text, strlen(creep_pile_text), &scenario, &error), error.text);
+    scene_named(scenario.scene)->build(&scene);
+    body_sync_stand_config_t config = {.scene = &scene, .scenario = &scenario};
+    body_sync_stand_t *stand = body_sync_stand_create(&config, &error);
+    TEST_ASSERT_NOT_NULL_MESSAGE(stand, error.text);
+    stand_testing_plant_creep(stand, 700, CREEP_M, ticks, copy);
+    body_sync_stand_run(stand);
+    return stand;
+}
+
+/* One of the awake host boxes creeps: the seam takes its copy out of the rest hold and pulls it
+   after, and the rest that ends is the host's physics, whose own path at the copy's playback
+   moved: a host wake, never her break. */
+static void test_a_creeping_host_body_ends_the_rest_as_a_host_wake(void) {
+    body_sync_stand_t *clean = run_creep(0, false), *crept = run_creep(120, false);
+    const body_sync_guest_metrics_t *c = &body_sync_stand_report(clean)->guests[0], *p = &body_sync_stand_report(crept)->guests[0];
+    TEST_ASSERT_TRUE_MESSAGE(body_sync_stand_report(clean)->passed, "the clean run broke its rest");
+    TEST_ASSERT_EQUAL_UINT32_MESSAGE(c->rest_breaks, p->rest_breaks, "a creeping host body's copy counted as her break");
+    TEST_ASSERT_TRUE_MESSAGE(p->host_wakes > c->host_wakes, "the creeping host body never ended a rest");
+    body_sync_stand_destroy(clean);
+    body_sync_stand_destroy(crept);
+}
+
+/* Her copy of an awake, still host box creeps instead, slow and drawn where it is: only its
+   distance to the host body tells it from a rest. Past the 1 cm a resting copy keeps to its host
+   body (RESPONSE_M, 13 ticks of the creep) the rest ends, her doing: rest_breaks sees it. */
+static void test_rest_breaks_fails_on_a_still_copy_crept_off_its_host_body(void) {
+    body_sync_stand_t *crept = run_creep(120, true);
+    fails(crept, aligned_line(crept), "rest_breaks.count");
+    body_sync_stand_destroy(crept);
+}
+
+/* The layer pauses a prediction's pull at most (W + 60) / 2 of any W ticks (README, pause_window):
+   a copy recorded paused for a whole window of 120 ticks passes the 90-tick bound. */
+static const char *paused_pile_text = "scenario planted\nscene pile60\nseed 52\nguests 1\nend 6s\nlight_mass 20kg\n"
+                                      "net g1 rtt 100ms jitter 20ms loss 2%\np1 wait 100ms\nexpect pause_window.max <= 90t\n";
+static void test_pause_window_fails_on_a_pause_held_past_the_cap(void) {
+    body_sync_error_t error;
+    body_sync_stand_t *runs[2];
+    for (int k = 0; k < 2; k++) {
+        TEST_ASSERT_TRUE_MESSAGE(body_sync_scenario_parse(paused_pile_text, strlen(paused_pile_text), &scenario, &error), error.text);
+        scene_named(scenario.scene)->build(&scene);
+        body_sync_stand_config_t config = {.scene = &scene, .scenario = &scenario};
+        runs[k] = body_sync_stand_create(&config, &error);
+        TEST_ASSERT_NOT_NULL_MESSAGE(runs[k], error.text);
+        stand_testing_plant_pause(runs[k], 120, k == 0 ? 0u : 120u);
+        body_sync_stand_run(runs[k]);
+    }
+    TEST_ASSERT_TRUE_MESSAGE(body_sync_stand_report(runs[0])->passed, body_sync_stand_report(runs[0])->checks[0].detail);
+    fails(runs[1], aligned_line(runs[1]), "pause_window.max");
     body_sync_stand_destroy(runs[0]);
     body_sync_stand_destroy(runs[1]);
 }
@@ -542,6 +605,9 @@ int main(void) {
     RUN_TEST(test_rest_breaks_fails_on_a_copy_knocked_after_rest);
     RUN_TEST(test_rest_breaks_fails_on_a_held_copy_churned_in_steps);
     RUN_TEST(test_rest_jitter_fails_on_a_copy_of_an_awake_still_host_body);
+    RUN_TEST(test_a_creeping_host_body_ends_the_rest_as_a_host_wake);
+    RUN_TEST(test_rest_breaks_fails_on_a_still_copy_crept_off_its_host_body);
+    RUN_TEST(test_pause_window_fails_on_a_pause_held_past_the_cap);
     RUN_TEST(test_aligned_gap_fails_on_states_shown_a_tick_early);
     RUN_TEST(test_aligned_gap_fails_on_a_guest_drawing_its_bodies_off_what_it_sends);
     RUN_TEST(test_a_paused_predictions_lead_stays_out_of_aligned_gap);

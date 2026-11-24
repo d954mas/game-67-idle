@@ -1138,13 +1138,15 @@ static bool mark_near(b3ShapeId shape, void *context) {
 /* Whether a body of this side's moves only as a copy in the rest hold under it drags it: that copy
    closes its owner's creep a step of the copy grid in one tick (0.2 m/s and 1.2 rad/s a step),
    which drags what lies on it past a lean's speed, and taken for this side's motion the drag
-   would turn the held copy soft under it. A body dragged by a contact moves no faster than the
-   surface that drags it (it slips behind it), so one no faster than that copy's motion at it is
-   carried; this side's own motion past it still marks. */
+   would turn the held copy soft under it. A body dragged or shoved by a contact moves no faster
+   than the surface that moves it (it slips behind it), so one no faster than that copy's fastest
+   point is carried: the copy's centre speed plus its spin times its own half-diagonal, whatever
+   the size of the body it moves. This side's own motion past it still marks. A side contact is
+   counted too: a step that shoves a neighbour also spins it, and read along the normal alone
+   that shove would turn a held heap soft around a body that only leans on it. */
 static bool carried_by_hold_step(const body_sync_t *s, b3BodyId body, b3Vec3 v, b3Vec3 w, float extent) {
     b3ContactData contacts[16];
     int n = b3Body_GetContactData(body, contacts, 16);
-    b3Pos centre = b3Body_GetWorldCenter(body);
     for (int i = 0; i < n; i++) {
         if (!b3Shape_IsValid(contacts[i].shapeIdA) || !b3Shape_IsValid(contacts[i].shapeIdB)) {
             continue;
@@ -1155,8 +1157,9 @@ static bool carried_by_hold_step(const body_sync_t *s, b3BodyId body, b3Vec3 v, 
         if (slot >= BODY_SYNC_BODIES_MAX || !s->entries[slot].rest_held || !s->entries[slot].copy_mode || b3Body_GetType(under) != b3_kinematicBody) {
             continue;
         }
-        b3Vec3 carried = b3Body_GetWorldPointVelocity(under, centre), spun = b3Body_GetAngularVelocity(under);
-        float drag = b3Length(carried) + b3Length(spun) * extent;
+        b3AABB box = b3Body_ComputeAABB(under);
+        b3Vec3 half = {0.5f * (box.upperBound.x - box.lowerBound.x), 0.5f * (box.upperBound.y - box.lowerBound.y), 0.5f * (box.upperBound.z - box.lowerBound.z)};
+        float drag = b3Length(b3Body_GetLinearVelocity(under)) + b3Length(b3Body_GetAngularVelocity(under)) * sqrtf(half.x * half.x + half.y * half.y + half.z * half.z);
         if (drag > 0.0f && b3Length(v) + b3Length(w) * extent <= drag) {
             return true;
         }

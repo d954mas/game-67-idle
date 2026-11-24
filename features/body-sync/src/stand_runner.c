@@ -210,6 +210,10 @@ struct body_sync_stand {
     uint32_t plant_offset_slot; /* the body it moved, from that tick on */
     body_sync_id_t plant_offset_id;
     float plant_offset_m, plant_offset_rad; /* along x, and about y */
+    uint32_t plant_pause_tick, plant_pause_ticks, plant_pause_slot; /* stand_testing_plant_pause; slot + 1, 0 none */
+    uint32_t plant_creep_tick, plant_creep_ticks, plant_creep_slot; /* stand_testing_plant_creep; slot + 1, 0 none */
+    float plant_creep_m;
+    bool plant_creep_copy; /* the creep moves guest 1's copy, held as stand_testing_plant_wall holds one, not the host body */
     uint8_t authority; /* body_sync_authority_mode_t of every seam */
     uint64_t seed;
     uint32_t endpoints;
@@ -1109,9 +1113,10 @@ static void record_drawn(const body_sync_stand_t *st, endpoint_t *ep, uint32_t k
             r->id = id;
             ep->pause_reset[slot] = true;
         }
+        bool planted = ep->index == 1u && st->plant_pause_slot == slot + 1u && st->now - st->plant_pause_tick < st->plant_pause_ticks;
         /* The window counts one prediction's pauses since it was last taken back: its start (a copy
            held or driven before), a snap or a stalled pull's placement; each starts a new chain. */
-        if (ep->pause_reset[slot] || !body_sync_is_predicted(ep->sync, id)) {
+        if (ep->pause_reset[slot] || (!body_sync_is_predicted(ep->sync, id) && !planted)) {
             ep->pause_window[slot] = 0;
             ep->pause_since[slot] = k;
             ep->pause_reset[slot] = false;
@@ -1133,7 +1138,7 @@ static void record_drawn(const body_sync_stand_t *st, endpoint_t *ep, uint32_t k
         r->tag[k % RING_TICKS] = k + 1u;
         uint8_t *paused = &ep->drawn_paused[(size_t)slot * RING_TICKS];
         uint8_t mark = 0;
-        if (body_sync_is_pull_paused(ep->sync, id)) {
+        if (body_sync_is_pull_paused(ep->sync, id) || planted) {
             mark = went_on ? paused[(k - 1u) % RING_TICKS] : 0u;
             mark = mark ? mark : pause_mark(st, ep, slot, id);
         }
@@ -1897,8 +1902,9 @@ static void note_lost_takes(body_sync_stand_t *st) {
 }
 
 /* The lag-aligned gap: a copy E plays (on a guest the host's bodies, on the host a guest's),
-   predicted or not, against what its owner O drew at the owner tick E shows; the snap keeps its
-   physics within 1 m of that pose and its render offset adds at most 2 m. Bodies relayed between
+   predicted or not, against what its owner O drew at the owner tick E shows; its physics stays
+   within 2 m of that pose and a tick of the owner's travel (README, the lag-aligned gap) and its
+   render offset adds at most 2 m. Bodies relayed between
    guests play on a clock the stand cannot map back and are left out. A predicted copy in its pause
    is this guest's own answer to its touch, drawn ahead of the tick it plays, so it leaves the gap
    and is reported only. The prediction gap: a pause that began with its owner at rest, against
@@ -3270,6 +3276,58 @@ void stand_testing_plant_offset(body_sync_stand_t *st, uint32_t tick, float metr
     st->plant_offset_turn_by = radians;
 }
 
+void stand_testing_plant_pause(body_sync_stand_t *st, uint32_t tick, uint32_t ticks) {
+    st->plant_pause_tick = tick;
+    st->plant_pause_ticks = ticks;
+}
+
+void stand_testing_plant_creep(body_sync_stand_t *st, uint32_t tick, float metres, uint32_t ticks, bool copy) {
+    st->plant_creep_tick = tick;
+    st->plant_creep_m = metres;
+    st->plant_creep_ticks = ticks;
+    st->plant_creep_copy = copy;
+}
+
+/* The first light copy of a host body guest 1 holds (`awake`: one whose host body is awake), as
+   slot + 1; 0 none. */
+static uint32_t plant_copy(const body_sync_stand_t *st, bool awake) {
+    const endpoint_t *ep = &st->ep[1];
+    for (uint32_t slot = 0; slot < STAND_BODIES_MAX; slot++) {
+        const stand_slot_t *s = &ep->world->slots[slot];
+        body_sync_id_t id = stand_world_id(ep->world, slot);
+        const stand_slot_t *hs = s->live ? stand_world_slot(st->ep[0].world, id) : NULL;
+        if (hs && !s->character && s->desc.motion != BODY_SYNC_MOTION_STATIC && !(s->desc.flags & BODY_SYNC_BODY_HEAVY) && !body_sync_is_local(ep->sync, id) &&
+            (!awake || b3Body_IsAwake(hs->body))) {
+            return slot + 1u;
+        }
+    }
+    return 0;
+}
+
+/* stand_testing_plant_pause and stand_testing_plant_creep: each picks its copy at its tick; the
+   creep moves the host body or the held copy from then on, after every endpoint's tick. */
+static void plant_pause_creep(body_sync_stand_t *st) {
+    if (st->endpoints < 2 || !st->ep[1].built) {
+        return;
+    }
+    if (st->plant_pause_ticks && st->now == st->plant_pause_tick) {
+        st->plant_pause_slot = plant_copy(st, false);
+    }
+    if (st->plant_creep_ticks && st->now == st->plant_creep_tick) {
+        st->plant_creep_slot = plant_copy(st, true);
+        if (st->plant_creep_slot && st->plant_creep_copy && st->plant_wall_count < 8) {
+            st->plant_wall_endpoint = 1;
+            st->plant_wall_slots[st->plant_wall_count++] = st->plant_creep_slot - 1u;
+        }
+    }
+    if (st->plant_creep_slot && st->now - st->plant_creep_tick < st->plant_creep_ticks) {
+        stand_slot_t *c = &st->ep[st->plant_creep_copy ? 1 : 0].world->slots[st->plant_creep_slot - 1u];
+        b3Vec3 p = b3Body_GetPosition(c->body);
+        b3Body_SetTransform(c->body, (b3Vec3){p.x + st->plant_creep_m, p.y, p.z}, b3Body_GetRotation(c->body));
+        b3Body_SetAwake(c->body, true);
+    }
+}
+
 /* stand_testing_plant_offset: at its tick, the first light body guest 1 simulates takes the offset. */
 static void plant_offset(body_sync_stand_t *st) {
     endpoint_t *ep = st->endpoints > 1 ? &st->ep[1] : NULL;
@@ -3291,6 +3349,7 @@ static void plant_offset(body_sync_stand_t *st) {
 
 static void plant_jolt(body_sync_stand_t *st) {
     plant_offset(st);
+    plant_pause_creep(st);
     endpoint_t *ep = st->endpoints > 1 ? &st->ep[1] : NULL;
     if (!ep || st->plant_jolt_tick == 0 || st->now < st->plant_jolt_tick || !ep->built) {
         return;
