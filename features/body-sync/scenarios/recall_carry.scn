@@ -25,6 +25,9 @@ expect result other granted
 expect result put done
 # She carried it moving when the host took it: her states of it reached the host late, dropped.
 expect late_drops.count >= 1
+# What she sent of the rock under her old number until she heard: about a state a tick over the
+# move's trip to her, a lost record's resend and her release.
+expect late_drops.count <= 30
 expect moved rock_a <= 1cm
 expect agree_at_rest 5cm 5deg
 expect no_stuck

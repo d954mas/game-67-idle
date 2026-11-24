@@ -120,6 +120,7 @@ body_sync_t *body_sync_create(const body_sync_config_t *config) {
     s->limits.max_spin = config->max_spin;
     s->dt = 1.0f / (float)config->tick_hz;
     sync_authority_init(&s->authority, config->seat, (uint8_t)config->seats, s->error, sizeof(s->error));
+    s->authority.rebind_ticks = sync_policy_rebind_ticks(config->tick_hz);
     return s;
 }
 
@@ -303,10 +304,30 @@ body_sync_result_t body_sync_assign(body_sync_t *s, body_sync_id_t id, uint8_t s
     /* A move to this side takes over now, so what the caller does next (a recall puts the body
        home) is not undone by the next apply's take-over. */
     uint32_t slot = body_sync_id_slot(id);
-    if (r == BODY_SYNC_OK && s->entries[slot].copy_mode && body_sync_is_local(s, id) && b3Body_IsValid(s->entries[slot].body)) {
+    entry_t *e = &s->entries[slot];
+    if (r != BODY_SYNC_OK || !body_sync_is_local(s, id) || !b3Body_IsValid(e->body)) {
+        return r;
+    }
+    if (e->copy_mode) {
         take_over(s, slot);
+    } else {
+        /* Never a copy here (a grant this tick, before the apply that would make it one): it goes
+           on as this side simulates it, not in the motion and velocities of an older owner's
+           states. */
+        sync_authority_body_t *a = auth_of(s, slot);
+        a->resume = false;
+        a->take_motion = false;
+        sync_authority_applied(a, b3Body_GetType(e->body) == b3_kinematicBody, locks_bits(b3Body_GetMotionLocks(e->body)));
     }
     return r;
+}
+body_sync_result_t body_sync_teleported(body_sync_t *s, body_sync_id_t id) {
+    const sync_authority_body_t *a = sync_authority_body_const(&s->authority, id);
+    if (!a) {
+        return BODY_SYNC_UNKNOWN;
+    }
+    /* No render offset here: a teleport is drawn where physics has it already. */
+    return sync_authority_local(&s->authority, a) ? BODY_SYNC_OK : invalid(s, "teleported: a copy's pose is its owner's");
 }
 body_sync_result_t body_sync_set_holder(body_sync_t *s, body_sync_id_t id, body_sync_id_t holder) {
     return sync_authority_set_holder(&s->authority, id, holder);
@@ -375,11 +396,13 @@ body_sync_result_t body_sync_receive_state(body_sync_t *s, uint8_t seat, uint32_
         sync_authority_body_t *a = sync_authority_body(&s->authority, b->id);
         if (!a) {
             t->stale++;
+            sync_authority_old_owner_drop(&s->authority, seat, body_sync_id_slot(b->id), body_sync_id_generation(b->id), 16u);
             continue;
         }
         if (is_host(s)) {
             if (a->seat != seat || b->number != a->number) {
                 t->rejected++;
+                sync_authority_old_owner_drop(&s->authority, seat, body_sync_id_slot(b->id), a->generation, 16u);
                 continue;
             }
         } else {
@@ -757,6 +780,10 @@ bool body_sync_render_offset(const body_sync_t *s, body_sync_id_t id, float posi
     rotation[0] = rotation[1] = rotation[2] = 0.0f;
     rotation[3] = 1.0f;
     return true;
+}
+
+uint32_t body_sync_old_owner_drops(const body_sync_t *s, body_sync_id_t id, uint8_t seat) {
+    return s ? sync_authority_old_owner_drops(&s->authority, id, seat) : 0u;
 }
 
 bool body_sync_traffic(const body_sync_t *s, uint8_t seat, body_sync_traffic_t *out) {

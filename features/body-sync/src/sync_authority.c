@@ -242,16 +242,22 @@ void sync_authority_seat_left(sync_authority_t *a, uint8_t seat) {
 }
 
 body_sync_result_t sync_authority_bind(sync_authority_t *a, body_sync_id_t id, uint8_t seat, uint16_t number) {
-    sync_authority_body_t *b = &a->bodies[body_sync_id_slot(id)];
+    uint32_t slot = body_sync_id_slot(id), generation = body_sync_id_generation(id);
+    sync_authority_body_t *b = &a->bodies[slot];
     if (b->bound) {
+        return BODY_SYNC_TAKEN;
+    }
+    if (sync_authority_is_host(a) && a->now - a->unbound_tick[slot] < a->rebind_ticks && (a->unbound_low[slot] & (1u << (generation & 15u)))) {
         return BODY_SYNC_TAKEN;
     }
     memset(b, 0, sizeof(*b));
     for (uint8_t s = 0; s < BODY_SYNC_SEATS_MAX; s++) {
-        a->ended[s][body_sync_id_slot(id)] = (sync_authority_ended_t){0};
+        a->ended[s][slot] = (sync_authority_ended_t){0};
+        a->old_owner_drops[slot][s] = 0;
     }
+    a->old_owner_generation[slot] = (uint16_t)generation;
     b->bound = true;
-    b->generation = (uint16_t)body_sync_id_generation(id);
+    b->generation = (uint16_t)generation;
     b->seat = seat;
     b->number = number;
     return BODY_SYNC_OK;
@@ -267,6 +273,11 @@ body_sync_result_t sync_authority_unbind(sync_authority_t *a, body_sync_id_t id)
         a->owned_by[b->seat]--;
     }
     b->bound = false;
+    if (a->now - a->unbound_tick[slot] >= a->rebind_ticks) {
+        a->unbound_low[slot] = 0;
+    }
+    a->unbound_low[slot] |= (uint16_t)(1u << (b->generation & 15u));
+    a->unbound_tick[slot] = a->now;
     for (uint8_t seat = 0; seat < BODY_SYNC_SEATS_MAX; seat++) {
         a->owed[seat][slot / 64] &= ~(1ull << (slot % 64));
         a->refused[seat][slot / 64] &= ~(1ull << (slot % 64));
@@ -620,6 +631,7 @@ body_sync_result_t sync_authority_receive(sync_authority_t *a, uint8_t seat, uin
     sync_authority_body_t *b = sync_authority_body(a, r.id);
     if (!b) {
         (*stale)++;
+        sync_authority_old_owner_drop(a, seat, body_sync_id_slot(r.id), body_sync_id_generation(r.id), 16u);
         return BODY_SYNC_OK;
     }
     uint32_t slot = slot_of(a, b);
@@ -655,6 +667,7 @@ body_sync_result_t sync_authority_receive(sync_authority_t *a, uint8_t seat, uin
             take_record(b, &r, false);
         } else if (!withdrew) {
             (*stale)++;
+            sync_authority_old_owner_drop(a, seat, slot, b->generation, 16u);
         }
         break;
     }
@@ -1086,6 +1099,25 @@ body_sync_result_t sync_authority_reclaim(sync_authority_t *a, body_sync_id_t id
     a->reclaimed[b->seat]++;
     host_move(a, b, BODY_SYNC_SEAT_HOST, BODY_SYNC_HOLD_UNTIL_REST, 0, false, SYNC_END_ARBITRATED);
     return BODY_SYNC_OK;
+}
+
+void sync_authority_old_owner_drop(sync_authority_t *a, uint8_t seat, uint32_t slot, uint32_t generation, uint8_t generation_bits) {
+    if (slot >= BODY_SYNC_BODIES_MAX || seat >= BODY_SYNC_SEATS_MAX || a->old_owner_generation[slot] == 0) {
+        return;
+    }
+    uint32_t mask = generation_bits >= 16u ? 0xFFFFu : (1u << generation_bits) - 1u;
+    if ((a->old_owner_generation[slot] & mask) == (generation & mask)) {
+        a->old_owner_drops[slot][seat]++;
+    }
+}
+
+uint32_t sync_authority_old_owner_drops(const sync_authority_t *a, body_sync_id_t id, uint8_t seat) {
+    uint32_t slot = body_sync_id_slot(id);
+    if (slot >= BODY_SYNC_BODIES_MAX || seat >= BODY_SYNC_SEATS_MAX || body_sync_id_generation(id) == 0 ||
+        a->old_owner_generation[slot] != body_sync_id_generation(id)) {
+        return 0;
+    }
+    return a->old_owner_drops[slot][seat];
 }
 
 body_sync_id_t sync_authority_holder_id(const sync_authority_t *a, uint32_t slot, uint8_t generation_low, uint8_t generation_bits) {

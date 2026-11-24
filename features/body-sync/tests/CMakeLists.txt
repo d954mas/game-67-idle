@@ -289,6 +289,8 @@ body_sync_must_fail(mf_layer_off 1 "FAIL line 14 metric~response_ticks.max")
 # The late claim must reach the host (line 13 passes) and leave the glass standing (line 14) for the
 # refusal count to be what fails.
 body_sync_must_fail(mf_recall_claim 1 "FAIL line 15 metric~claims_rejected.count" "FAIL line 1[234] ")
+# The recall must find her owning the rock (lines 16 and 17 pass) for the late count to be what fails.
+body_sync_must_fail(mf_recall_still 1 "FAIL line 18 metric~late_drops.count" "FAIL line 1[67] ")
 # The rock must reach the dummy (line 15 passes) for the knockdown check to be what fails.
 body_sync_must_fail(mf_dummy_stands 1 "FAIL line 16 effect~dummy: no effect took it on the host" "FAIL line 1[45] ")
 # The stub takes nothing by interaction, so only the real seam has a take that can lose.

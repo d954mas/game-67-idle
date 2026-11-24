@@ -71,6 +71,7 @@ typedef struct stand_schedule {
     uint32_t cursor[BODY_SYNC_PLAYERS_MAX];
     int32_t active[BODY_SYNC_PLAYERS_MAX]; /* action index, -1 idle */
     uint32_t net_next;
+    uint32_t fired[BODY_SYNC_SCENARIO_ACTIONS_MAX]; /* an `on` action's start tick + 1, 0 before its event */
 } stand_schedule_t;
 
 void stand_schedule_init(stand_schedule_t *schedule, const body_sync_scenario_t *scenario);
@@ -79,8 +80,12 @@ void stand_schedule_init(stand_schedule_t *schedule, const body_sync_scenario_t 
    start per player per tick, so instant actions in a row take one tick each. */
 int32_t stand_schedule_next(stand_schedule_t *schedule, uint8_t player, uint32_t tick);
 void stand_schedule_end(stand_schedule_t *schedule, uint8_t player);
+/* The event of action `index` (its `on`) happened at `tick`: from then it starts as a timed action
+   at tick plus its delay. Only the first counts; nothing for an action without one. */
+void stand_schedule_fire(stand_schedule_t *schedule, uint32_t index, uint32_t tick);
 int32_t stand_schedule_active(const stand_schedule_t *schedule, uint8_t player);
-/* Every player idle with nothing left to start, and every network item fired. */
+/* Every player idle with nothing left to start but actions whose event has not happened (and
+   the untimed ones behind them), and every network item fired. */
 bool stand_schedule_done(const stand_schedule_t *schedule);
 /* The next network item due at `tick`, or NULL; each is returned once. */
 const body_sync_net_event_t *stand_schedule_net(stand_schedule_t *schedule, uint32_t tick);

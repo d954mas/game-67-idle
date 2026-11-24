@@ -134,6 +134,11 @@ float sync_policy_take_reach(float agent_speed, float body_speed, float age_s);
 /* Ticks the host's copy of a guest's agent trails that guest: a round trip, a playback delay
    and a tick, at most SYNC_POLICY_EVIDENCE_AGE_MAX_S. */
 float sync_policy_evidence_ticks(float round_trip_ticks, float delay_ticks, uint32_t tick_hz);
+/* Ticks the host keeps a slot it unbound from a generation equal modulo 16 to the one it held
+   (sync_authority_bind): the evidence cap and the longest playback delay. A record the old owner
+   sent before it heard of the unbind arrives within that on a path whose round trip is inside the
+   cap, so the real seam's 4 generation bits never read it as the new body's. */
+uint32_t sync_policy_rebind_ticks(uint32_t tick_hz);
 /* How far a body's own path may bend from its straight line before its contact, m/s^2: gravity
    (the stand's 12) with room for a game's stronger one and drag. It applies only where the host
    saw the path: over a short chord (4 ticks: 4.4 cm) and over the slack after the last state (a

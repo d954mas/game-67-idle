@@ -57,7 +57,8 @@ What a caller of the seam relies on:
   refused; UNKNOWN means the claim is gone and the event is dropped), and moves
   a body without a claim with `body_sync_assign`; a move to the host's own seat
   takes over within the call, so what the host does to the body next (a recall
-  puts it home at rest) is never undone by the next apply. Only the claimant's newest
+  puts it home at rest) is never undone by the next apply; one granted away in the same
+  tick, never a copy yet, goes on as the host simulates it. Only the claimant's newest
   claim of a body counts; a released claim is withdrawn; a release that crosses
   a grant leaves the body with the host; a release older than a forced move is
   stale. Matching relies on seam records arriving reliably and in order.
@@ -151,7 +152,16 @@ bits, a moving sim record 201, a rest record 123, a relayed record 8 more,
 every rare group 51 more and the data group 4 plus 8 a byte.
 The generation goes as its low **4 bits**: a stale record whose generation
 matches modulo 16 reads as current; records are newest-wins per sender, so
-only a pose sent before a respawn and read after it could pass. The grids hold while every coordinate of the box is below 2048 m in
+only a pose sent before a respawn and read after it could pass. The host
+closes that gap with a quarantine: `body_sync_bind` refuses (TAKEN) a
+generation equal modulo 16 to one it unbound from the slot less than
+`SYNC_POLICY_EVIDENCE_AGE_MAX_S` and the longest playback delay ago (75 ticks
+at 60 Hz), on both implementations; another generation binds at once, and
+guests bind as the host tells them. A record the old owner sent before she
+heard of the unbind arrives within that on a path whose round trip is inside
+the evidence cap; one later still can read as the new body's. The number does
+not rise across a rebind instead: every endpoint binds the number it is given,
+and a guest's copy takes a pose without asking its number. The grids hold while every coordinate of the box is below 2048 m in
 magnitude (a float cannot keep 1/4096 m apart past it), max_speed below
 262144 m/s and max_spin below 524288 rad/s; `body_sync_create` refuses limits
 past them. A position grid ends at its last point inside the box and a
@@ -324,7 +334,9 @@ starved body shows as a catch-up the render offset or a dynamic hold smooths
 - **The render offset.** The drawn pose is physics plus the offset
   (`body_sync_render_offset`); physics never sees it. A placement, a take-over
   and a local body turning back into a copy hand it the jump so the drawn pose
-  stays; a body that turned local keeps it until it has decayed. It gives the move back
+  stays; a body that turned local keeps it until it has decayed, or until the caller
+  teleports it (`body_sync_teleported` after its own `b3Body_SetTransform`: a recall
+  home is drawn there at once). It gives the move back
   at 0.95 a tick up to 25 cm and 0.85 from 1 m, by distance between; past 2 m
   it is cleared and the body is seen to jump.
 - **Data and characters.** `body_sync_set_data` gives a local body up to 8
@@ -789,6 +801,8 @@ rate <host|gN> <x>hz                 # that endpoint steps x times a second of v
 [at <time>] <p0..p3> walk <x> <z> [speed <v>] | walk <body> [as <label>]
 [at <time>] <player> grab <body> | throw <x> <y> <z> [speed <v>] | throw <body> | drop | punch [<body>] | wait <time>
 [at <time>] p0 recall <body> [to <x> <y> <z>] | remove <body>   # the host's rule over a body whoever owns it
+<player> <verb> <args> on <pN> contact <body> [+<time>] [as <label>]   # starts that long after pN's world sees the hit
+<player> <verb> <args> on <label> [+<time>] [as <label>]               # starts that long after the earlier action starts
 [at <time>] net <g1..g3> [to_host|to_guest] rtt|delay|jitter|reorder_delay <time> loss|dup|reorder <share> rate <B/s>|off
 at <time> cut <guest> for <time>     # nothing passes; 10 s or more disconnects
 at <time> stall <host|gN> for <time> # a long frame, then the missed ticks, 8 a frame
@@ -807,9 +821,16 @@ Units are required: `250ms`, `1.5s`, `90t` (ticks), `5cm`, `0.05m`, `3deg`,
 `2%`, `64KB/s`; `speed` is a bare number in m/s. A positive time that rounds
 to zero ticks is refused. An action with `at` starts then and cuts off what the
 player was doing; one without it starts when the player's previous action
-ends. `recall` and `remove` are the host's rule, p0's alone: a recall is
+ends. One with `on` starts that long after its event instead (0 without a
+delay), as a timed one does, and an untimed action behind it waits for it: the
+first tick pN's own world records a hit between a body pN simulates and the
+named body, or the start of the earlier labelled action. `on` ends the
+arguments; it and `at` are refused together. An event can fire until the run
+ends; one that never fired leaves its action pending. `recall` and `remove`
+are the host's rule, p0's alone: a recall is
 `body_sync_assign` of the body to the host, its carrier letting go, then a
-placement at rest at the point or at its spawn pose; a removal unbinds and
+placement at rest at the point or at its spawn pose (`body_sync_teleported`:
+the host draws it there at once); a removal unbinds and
 destroys the body on the host and tells every guest. Both are done at once. A
 grab is optimistic: the action ends at once, and its label's outcome
 becomes `granted` or `refused` when the host's answer arrives. A grab out of
@@ -1060,8 +1081,9 @@ claim dropped (`recall_flight`, `recall_carry`), a removal of a guest's body in
 flight (`remove_owned`), and hostile bytes on every parser (seeded fuzz in the
 tests). The stand never reuses a scene body's slot, so an old packet meeting a
 reused slot is covered at the seam only (`test_body_sync_stub`, both
-implementations: a guest's state and release of the old generation after the
-host binds the slot again under her seat and number are stale). Not yet
+implementations: a guest's state and release of another generation after the
+host binds the slot again under her seat and number are stale, and a
+generation equal modulo 16 is refused for the quarantine). Not yet
 covered: a grab of a body flying under another guest's authority, a sleeping
 body moved by the host, more moving bodies than a budget allows, a record over the unfragmented limit, a reader that stalls for 10 s,
 reconnects, joins and the host leaving (the seam has no baseline yet), the
@@ -1123,8 +1145,10 @@ moving with authority, settled holds ending at a contact and at rest, queues
 that never drop, opaque data both ways, a LIGHT copy its own character walks
 through with its mask restored exactly at the take, and fuzz of both receive
 calls through apply, a step and collect with Box3D's own asserts counted, a recall's placement
-that stays where the host put it, and a guest's old generation stale after the host binds the slot
-again. `test_body_sync_stand` (core) builds
+that stays where the host put it and is drawn there the tick after, a recall in the tick of a grant
+that keeps the host's motion, a guest's old generation stale after the host binds the slot again
+and an aliasing one refused for the quarantine, and the old owner's drops counted per id and
+ownership, never an older sample. `test_body_sync_stand` (core) builds
 every catalog scene on four endpoints with equal world hashes, walks the view,
 and runs `two_walk` twice in one process for byte-equal JSON.
 `test_body_sync_policy` (core) runs the authority policy alone and the takes it
@@ -1146,13 +1170,21 @@ spawn missing, a break that lost its spawns, a pause held past the cap, a
 still copy crept off its host body) and requires the check to fail, holds a
 creeping awake host body's end of a rest to a host wake, and checks that the
 world hash sees what it names.
-`late_drops.count` counts what the host's seam dropped of a guest's bytes, as
-stale or rejected, from each recall or removal of a body she simulated until she
+`late_drops.count` counts what the host's seam dropped of a guest's bytes of a
+body she simulated as her ended ownership's (`body_sync_old_owner_drops`: her
+old number, or the id unbound), from each recall or removal of it until she
 stopped simulating it and the run's slowest one-way trip (and longest cut, stall
-or deafness) after: her late packets. `recall_flight` and `remove_owned` recall
-or remove the rock on tick 84, two ticks after it meets the glass on the
-thrower's world: each way takes at least three ticks, so her claim and release
-reach the host after the move, and the host's last taken state of the flight
+or deafness) after: her late packets. Older samples and her other bodies never
+count, and a report taken mid-run counts an open window so far. Each recall
+scenario holds it to 1..30; `mf_recall_still` recalls a rock she holds still
+while her path to the host loses everything around the recall, so no late
+packet arrives, and must fail on `late_drops.count >= 1`. (Without the loss the
+stub has late packets of a still rock: it sends every body it simulates each
+tick.) `recall_flight` and `remove_owned` recall or remove the rock two ticks
+after it meets the glass on the thrower's world (`on p1 contact glass +2t`), and
+the later steps follow the recall: each way takes at least three ticks, so her
+claim and release reach the host after the move at any throw speed (6 to 9 m/s
+over seeds pass on every seam), and the host's last taken state of the flight
 lies within the gate's four ticks of the contact. The claim is refused as
 revoked (a recall) or stale (a removal), the glass stands
 (`mf_recall_claim` must fail on its refusal count), and on a host planted to
@@ -1194,7 +1226,8 @@ words `rate` and `expect moved`, the playback metrics and schema
 and the hold until rest (two bits on the wire), the traffic's take counts, the
 scenario word `authority`, `>=` in metric checks, the CLI and viewer flag
 `--authority`, `body_sync_is_pull_paused`, `aligned_gap`, `local_correction`, `local_turn` and the take counts in the
-metrics; 0.7.0 the second layer: `light_mass_max`,
+metrics, `body_sync_old_owner_drops`, `body_sync_teleported`, the host's rebind quarantine, the scenario
+verbs `recall` and `remove`, the `on` trigger and `late_drops`; 0.7.0 the second layer: `light_mass_max`,
 `body_sync_is_predicted`, `body_sync_is_layer_copy`, `body_sync_round_trip`,
 the scenario word `light_mass`, `expect moved ...
 layer <length>`, the CLI and viewer flag `--light-mass`, and the layer

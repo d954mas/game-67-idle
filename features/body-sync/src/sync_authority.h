@@ -171,6 +171,17 @@ typedef struct sync_authority {
     /* Host: each seat's newest ownership of each body that ended, kept through a leave until the
        body is bound again or the seat joins after one. */
     sync_authority_ended_t ended[BODY_SYNC_SEATS_MAX][BODY_SYNC_BODIES_MAX];
+    /* Per slot, for the generation bound there last (kept through its unbind): what this side
+       dropped of each seat's bytes speaking for an ownership it does not hold for that seat
+       (body_sync_old_owner_drops). */
+    uint16_t old_owner_generation[BODY_SYNC_BODIES_MAX];
+    uint32_t old_owner_drops[BODY_SYNC_BODIES_MAX][BODY_SYNC_SEATS_MAX];
+    /* Host: per slot, `now` at its last unbind and a bit per generation modulo 16 unbound since
+       the quarantine before it ended; bind refuses those for rebind_ticks
+       (sync_policy_rebind_ticks), set by the shell. */
+    uint32_t unbound_tick[BODY_SYNC_BODIES_MAX];
+    uint16_t unbound_low[BODY_SYNC_BODIES_MAX];
+    uint32_t rebind_ticks;
     /* A planted defect for tests that require a check to catch it: a revocation is recorded as
        an arbitrated end. Never set outside tests. */
     bool plant_revoked_as_arbitrated;
@@ -211,7 +222,8 @@ bool sync_authority_is_host(const sync_authority_t *a);
 void sync_authority_seat_joined(sync_authority_t *a, uint8_t seat);
 void sync_authority_seat_left(sync_authority_t *a, uint8_t seat);
 
-/* The shell has checked the id and the body; TAKEN when the slot holds a body. */
+/* The shell has checked the id and the body; TAKEN when the slot holds a body, and on the host
+   while it quarantines a generation equal modulo 16 that it unbound there. */
 body_sync_result_t sync_authority_bind(sync_authority_t *a, body_sync_id_t id, uint8_t seat, uint16_t number);
 body_sync_result_t sync_authority_unbind(sync_authority_t *a, body_sync_id_t id);
 
@@ -388,6 +400,12 @@ bool sync_authority_contact_number(const sync_authority_t *a, const sync_authori
 /* The id a record's holder names on this side, by slot and low generation bits; NONE when no
    body of that generation is bound there. */
 body_sync_id_t sync_authority_holder_id(const sync_authority_t *a, uint32_t slot, uint8_t generation_low, uint8_t generation_bits);
+
+/* `seat`'s bytes naming `slot` at `generation` (its low `generation_bits` on the real seam's wire)
+   were dropped as speaking for an ownership this side does not hold for that seat: counted for the
+   generation the slot was bound with last, when it matches. */
+void sync_authority_old_owner_drop(sync_authority_t *a, uint8_t seat, uint32_t slot, uint32_t generation, uint8_t generation_bits);
+uint32_t sync_authority_old_owner_drops(const sync_authority_t *a, body_sync_id_t id, uint8_t seat);
 
 /* Guest: the authority a host state names (seat, number, hold). A state never makes this
    endpoint local: only an announcement or its own claim does. */

@@ -195,6 +195,13 @@ typedef struct action_track {
     body_sync_outcome_t outcome;
     int32_t host_ticks, echo_ticks, seen_ticks;
     int32_t own_ticks; /* a throw: until the actor's own world draws the body moved */
+    /* A recall or removal of a body a guest simulated: the host's count of that guest's late
+       packets of it (body_sync_old_owner_drops) at the move, open until she stopped simulating it
+       and the slowest one-way trip more, then what came in. late_seat 0: no window. */
+    bool late_open, late_stopped;
+    uint8_t late_seat;
+    body_sync_id_t late_id;
+    uint32_t late_base, late_count, late_stopped_tick;
 } action_track_t;
 
 struct body_sync_stand {
@@ -246,15 +253,6 @@ struct body_sync_stand {
     uint32_t plant_declared_endpoint, plant_declared_ticks; /* stand_testing_plant_declared_velocity; 0 ticks none */
     body_sync_id_t plant_declared_body;
     float plant_declared_add[3];
-    /* A recall or removal of a body a guest simulated, per seat: the host's drops of that seat's
-       bytes from the move (base) until the guest stopped simulating the body and the slowest
-       one-way trip more (late_drops). */
-    struct {
-        bool open, stopped;
-        body_sync_id_t id;
-        uint32_t base, stopped_tick;
-    } late[BODY_SYNC_ENDPOINTS_MAX];
-    uint32_t late_drops[BODY_SYNC_ENDPOINTS_MAX];
     effect_t effects[EFFECTS_MAX];
     uint32_t effect_count;
     action_track_t actions[BODY_SYNC_SCENARIO_ACTIONS_MAX];
@@ -569,48 +567,67 @@ static void target_point(body_sync_stand_t *st, endpoint_t *ep, const body_sync_
     memcpy(out, target->point, sizeof(float) * 3);
 }
 
-static uint32_t host_drops(const body_sync_stand_t *st, uint8_t seat) {
-    body_sync_traffic_t t;
-    return body_sync_traffic(st->ep[0].sync, seat, &t) ? t.stale + t.rejected : 0u;
+static uint32_t late_so_far(const body_sync_stand_t *st, const action_track_t *t) {
+    uint32_t now = body_sync_old_owner_drops(st->ep[0].sync, t->late_id, t->late_seat);
+    return now > t->late_base ? now - t->late_base : 0u; /* a slot bound again starts its count over */
 }
 
-static void close_late(body_sync_stand_t *st, uint8_t seat) {
-    if (st->late[seat].open) {
-        st->late[seat].open = false;
-        st->late_drops[seat] += host_drops(st, seat) - st->late[seat].base;
+static void close_late(body_sync_stand_t *st, action_track_t *t) {
+    if (t->late_open) {
+        t->late_open = false;
+        t->late_count = late_so_far(st, t);
     }
 }
 
-static void open_late(body_sync_stand_t *st, body_sync_id_t id) {
+/* Opened before the move, while the host still names the guest that simulates the body. A new
+   window of the same guest and body ends the one before, so no late packet counts twice. */
+static void open_late(body_sync_stand_t *st, int32_t index, body_sync_id_t id) {
     body_sync_authority_t a;
     if (!body_sync_authority(st->ep[0].sync, id, &a) || a.seat == BODY_SYNC_SEAT_HOST || a.seat >= st->endpoints) {
         return;
     }
-    close_late(st, a.seat);
-    st->late[a.seat].open = true;
-    st->late[a.seat].stopped = false;
-    st->late[a.seat].id = id;
-    st->late[a.seat].base = host_drops(st, a.seat);
+    for (uint32_t i = 0; i < st->scenario.action_count; i++) {
+        if (st->actions[i].late_seat == a.seat && st->actions[i].late_id == id) {
+            close_late(st, &st->actions[i]);
+        }
+    }
+    action_track_t *t = &st->actions[index];
+    t->late_open = true;
+    t->late_stopped = false;
+    t->late_seat = a.seat;
+    t->late_id = id;
+    t->late_base = body_sync_old_owner_drops(st->ep[0].sync, id, a.seat);
 }
 
 /* Packets the old owner sent before it stopped simulating the body reach the host within the
    slowest one-way trip, a cut, stall or deafness included. */
 static void watch_late(body_sync_stand_t *st) {
     uint32_t way = (uint32_t)ceilf(st->one_way_max_ms * (float)BODY_SYNC_TICK_HZ / 1000.0f) + st->frozen_max + 2u;
-    for (uint8_t g = 1; g < st->endpoints; g++) {
-        endpoint_t *ep = &st->ep[g];
-        if (!st->late[g].open) {
+    for (uint32_t i = 0; i < st->scenario.action_count; i++) {
+        action_track_t *t = &st->actions[i];
+        if (!t->late_open) {
             continue;
         }
-        body_sync_id_t id = st->late[g].id;
-        if (!st->late[g].stopped && (!ep->active || !stand_world_slot(ep->world, id) || !body_sync_is_local(ep->sync, id))) {
-            st->late[g].stopped = true;
-            st->late[g].stopped_tick = st->now;
+        endpoint_t *ep = &st->ep[t->late_seat];
+        if (!t->late_stopped && (!ep->active || !stand_world_slot(ep->world, t->late_id) || !body_sync_is_local(ep->sync, t->late_id))) {
+            t->late_stopped = true;
+            t->late_stopped_tick = st->now;
         }
-        if (st->late[g].stopped && st->now >= st->late[g].stopped_tick + way) {
-            close_late(st, g);
+        if (t->late_stopped && st->now >= t->late_stopped_tick + way) {
+            close_late(st, t);
         }
     }
+}
+
+/* A guest's late packets over every window, an open one's so far: a report taken mid-run counts
+   what came in until then. */
+static uint32_t late_drops_of(const body_sync_stand_t *st, uint8_t seat) {
+    uint32_t n = 0;
+    for (uint32_t i = 0; i < st->scenario.action_count; i++) {
+        const action_track_t *t = &st->actions[i];
+        n += t->late_seat != seat ? 0u : t->late_open ? late_so_far(st, t) : t->late_count;
+    }
+    return n;
 }
 
 /* p0's recall and removal: the host's own rule over a body whoever owns it. A recall is the
@@ -627,7 +644,7 @@ static void host_rule(body_sync_stand_t *st, endpoint_t *ep, int32_t index) {
         return;
     }
     if (!st->local) {
-        open_late(st, id);
+        open_late(st, index, id);
     }
     if (a->verb == BODY_SYNC_VERB_REMOVE) {
         drop_if_held(ep, id);
@@ -651,6 +668,7 @@ static void host_rule(body_sync_stand_t *st, endpoint_t *ep, int32_t index) {
         b3Body_SetLinearVelocity(s->body, (b3Vec3){0.0f, 0.0f, 0.0f});
         b3Body_SetAngularVelocity(s->body, (b3Vec3){0.0f, 0.0f, 0.0f});
         b3Body_SetAwake(s->body, true);
+        body_sync_teleported(ep->sync, id);
         body_sync_authority_t auth;
         body_sync_authority(ep->sync, id, &auth);
         track->answer_number = auth.number;
@@ -661,12 +679,50 @@ static void host_rule(body_sync_stand_t *st, endpoint_t *ep, int32_t index) {
     finish_action(st, ep, index, BODY_SYNC_OUTCOME_DONE);
 }
 
+/* An `on` action's event: it starts its delay after `tick` (the firing endpoint's), and the run's
+   items are not over until it has run. */
+static void fire_trigger(body_sync_stand_t *st, uint32_t index, uint32_t tick) {
+    if (st->schedule.fired[index] != 0) {
+        return;
+    }
+    stand_schedule_fire(&st->schedule, index, tick);
+    st->items_done = false;
+}
+
+/* `on pN contact <body>`: a hit on pN's own world between a body it simulates and that body (the
+   reference run, one world for every player, sees every player's there). */
+static void fire_contacts(body_sync_stand_t *st, endpoint_t *ep) {
+    for (uint32_t i = 0; i < st->scenario.action_count; i++) {
+        const body_sync_action_t *a = &st->scenario.actions[i];
+        if (a->trigger != BODY_SYNC_TRIGGER_CONTACT || st->schedule.fired[i] != 0 || (a->trigger_player != ep->index && !st->local)) {
+            continue;
+        }
+        for (uint32_t k = 0; k < ep->world->hit_count && st->schedule.fired[i] == 0; k++) {
+            const stand_hit_t *h = &ep->world->hits[k];
+            for (int side = 0; side < 2; side++) {
+                uint32_t mine = side ? h->slot_b : h->slot_a, touched = side ? h->slot_a : h->slot_b;
+                body_sync_id_t mid = stand_world_id(ep->world, mine);
+                if (mid && body_sync_is_local(ep->sync, mid) && touched < st->scene.body_count &&
+                    strcmp(st->scene.bodies[touched].name, a->trigger_body) == 0) {
+                    fire_trigger(st, i, ep->ticks_run);
+                    break;
+                }
+            }
+        }
+    }
+}
+
 static void start_action(body_sync_stand_t *st, endpoint_t *ep, int32_t index) {
     const body_sync_action_t *a = &st->scenario.actions[index];
     action_track_t *track = &st->actions[index];
     stand_character_t *c = player_character(st, ep, a->player);
     track->started = true;
     track->start_tick = st->now;
+    for (uint32_t i = 0; i < st->scenario.action_count; i++) {
+        if (st->scenario.actions[i].trigger == BODY_SYNC_TRIGGER_ACTION && st->scenario.actions[i].trigger_action == (uint32_t)index) {
+            fire_trigger(st, i, ep->ticks_run);
+        }
+    }
     body_sync_id_t me = stand_world_id(ep->world, c->slot);
     float point[3];
     body_sync_id_t id;
@@ -1511,6 +1567,7 @@ static void endpoint_tick(body_sync_stand_t *st, endpoint_t *ep) {
     }
     character_tick(st, ep);
     stand_world_step(ep->world);
+    fire_contacts(st, ep);
     note_hits(st, ep);
     note_shoves(st, ep);
     record_owner(ep, coop_session_tick(ep->session)); /* the tick its state packets carry */
@@ -3111,9 +3168,6 @@ static void evaluate(body_sync_stand_t *st) {
     r->rest_tick = st->rest_tick;
     stand_metrics_summarize(&st->metrics, r);
     endpoint_t *host = &st->ep[0];
-    for (uint8_t g = 1; g < st->endpoints; g++) {
-        close_late(st, g);
-    }
     for (uint32_t g = 1; g < st->endpoints; g++) {
         body_sync_guest_metrics_t *gm = &r->guests[g - 1];
         coop_seat_stats_t stats;
@@ -3137,7 +3191,7 @@ static void evaluate(body_sync_stand_t *st) {
         gm->returns = b.returns;
         gm->stale = a.stale + b.stale;
         gm->rejected = a.rejected + b.rejected;
-        gm->late_drops = st->late_drops[g];
+        gm->late_drops = late_drops_of(st, (uint8_t)g);
         gm->deferred = a.deferred + b.deferred;
         gm->stale_max_ticks = a.stale_max_ticks > b.stale_max_ticks ? a.stale_max_ticks : b.stale_max_ticks;
         gm->flush_over_limit = st->flush_over[g - 1];
@@ -3288,6 +3342,12 @@ static bool check_scenario(const body_sync_stand_t *st, body_sync_error_t *error
         if (a->has_target && a->target.is_body && body_sync_scene_find_body(&st->scene, a->target.body) == UINT32_MAX) {
             char text[BODY_SYNC_ERROR_TEXT_MAX];
             snprintf(text, sizeof(text), "the scene has no body '%s'", a->target.body);
+            error_text(error, a->line, text);
+            return false;
+        }
+        if (a->trigger == BODY_SYNC_TRIGGER_CONTACT && body_sync_scene_find_body(&st->scene, a->trigger_body) == UINT32_MAX) {
+            char text[BODY_SYNC_ERROR_TEXT_MAX];
+            snprintf(text, sizeof(text), "the scene has no body '%s'", a->trigger_body);
             error_text(error, a->line, text);
             return false;
         }

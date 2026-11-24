@@ -145,7 +145,10 @@ typedef struct body_sync_bind {
 } body_sync_bind_t;
 
 /* Binds `id` to a body of this endpoint's world. INVALID for a slot out of range, generation
-   zero or a static body; TAKEN when the slot holds a body. */
+   zero or a static body; TAKEN when the slot holds a body. On the host TAKEN too for a generation
+   equal modulo 16 to one it unbound from that slot less than the evidence cap and the longest
+   playback delay ago (75 ticks at 60 Hz): the real seam's wire names a generation modulo 16, and
+   the old one's late packets would read as the new body's. Another generation binds at once. */
 body_sync_result_t body_sync_bind(body_sync_t *sync, body_sync_id_t id, const body_sync_bind_t *bind);
 
 /* Forgets the body; the caller destroys it afterwards. Later bytes naming this id are stale:
@@ -223,7 +226,8 @@ body_sync_result_t body_sync_answer(body_sync_t *sync, const body_sync_claim_eve
    no holder and a new number; the announcement says it answers no claim, so even a seat whose
    claim of the body was answered or released meanwhile takes it. Pending claims of the body
    stay pending. A move to the host's own seat takes over within the call, as a claim does: what
-   the caller does to the body from then on (a recall puts it home at rest) is never undone. */
+   the caller does to the body from then on (a recall puts it home at rest) is never undone; a body
+   granted away in the same tick, never a copy yet, goes on as the host simulates it. */
 body_sync_result_t body_sync_assign(body_sync_t *sync, body_sync_id_t id, uint8_t seat, body_sync_hold_t hold);
 
 /* The character carrying a local body; it travels with the body's state. BODY_SYNC_ID_NONE
@@ -339,6 +343,12 @@ void body_sync_pop_record(body_sync_t *sync, uint8_t seat);
    a new one; physics never sees it. */
 bool body_sync_render_offset(const body_sync_t *sync, body_sync_id_t id, float position[3], float rotation[4]);
 
+/* The caller teleported a local body (a recall home, a respawn) with b3Body_SetTransform: it is
+   drawn where physics has it from now on, its render offset dropped, so a take-over's smoothing
+   just before (body_sync_assign) does not draw it off the new pose. UNKNOWN for an id not bound,
+   INVALID for a copy, whose pose is its owner's. */
+body_sync_result_t body_sync_teleported(body_sync_t *sync, body_sync_id_t id);
+
 /* Measurement: the owner's tick a copy shows now, in that owner's tick count; for a local body
    the endpoint's own last collect tick. False when unknown, and while a copy has no state to
    play: one turned back into a copy, until the next apply drives it and its owner's first state
@@ -377,6 +387,16 @@ float body_sync_round_trip(const body_sync_t *sync, uint8_t seat);
 /* ---- measurements ---- */
 
 bool body_sync_traffic(const body_sync_t *sync, uint8_t seat, body_sync_traffic_t *out);
+
+/* Measurement: what this side dropped of `seat`'s bytes naming `id` (its states and its records)
+   because they speak for an ownership this side does not hold for that seat: a number the seat
+   no longer holds (the body was recalled or moved on), a seat that never owned it, the id
+   unbound since. An old owner's late packets, told apart from the older samples and far ticks
+   every path drops (body_sync_traffic counts all of them as stale or rejected). The count stays
+   through the id's unbind and starts over when its slot is bound again; 0 for an id never bound.
+   The real seam's wire names a generation modulo 16, so a slot's bytes count for the generation
+   bound there last. */
+uint32_t body_sync_old_owner_drops(const body_sync_t *sync, body_sync_id_t id, uint8_t seat);
 
 #ifdef __cplusplus
 }

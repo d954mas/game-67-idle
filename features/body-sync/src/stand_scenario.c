@@ -263,6 +263,42 @@ static bool speed_tail(parser_t *p, const line_words_t *w, uint32_t at, uint32_t
     return true;
 }
 
+/* `on <pN> contact <body> [+<time>]` or `on <label> [+<time>]`, words at..end after the `on`. */
+static bool trigger(parser_t *p, const line_words_t *w, uint32_t at, uint32_t end, body_sync_action_t *a) {
+    const body_sync_scenario_t *s = p->out;
+    if (end > at && w->word[end - 1][0] == '+') {
+        if (!time_word(p, w->word[end - 1] + 1, &a->trigger_ticks)) {
+            return false;
+        }
+        end--;
+    }
+    uint8_t player;
+    if (end - at == 3 && player_word(w->word[at], &player) && strcmp(w->word[at + 1], "contact") == 0) {
+        body_sync_target_t touched;
+        if (!body_word(p, w->word[at + 2], &touched)) {
+            return false;
+        }
+        a->trigger = BODY_SYNC_TRIGGER_CONTACT;
+        a->trigger_player = player;
+        copy_text(a->trigger_body, sizeof(a->trigger_body), touched.body);
+        return true;
+    }
+    if (end - at == 1 && !player_word(w->word[at], &player)) {
+        if (!name_word(w->word[at], BODY_SYNC_LABEL_MAX - 1)) {
+            return refuse(p, "'%s' is not a label ([a-z0-9_], at most 15)", w->word[at]);
+        }
+        for (uint32_t i = 0; i < s->action_count; i++) {
+            if (strcmp(s->actions[i].label, w->word[at]) == 0) {
+                a->trigger = BODY_SYNC_TRIGGER_ACTION;
+                a->trigger_action = i;
+                return true;
+            }
+        }
+        return refuse(p, "no earlier action is labelled '%s'", w->word[at]);
+    }
+    return refuse(p, "on takes '<player> contact <body> [+<time>]' or '<label> [+<time>]'%s", "");
+}
+
 static bool action(parser_t *p, const line_words_t *w, uint32_t first, bool timed, uint32_t tick) {
     body_sync_scenario_t *s = p->out;
     if (s->action_count >= BODY_SYNC_SCENARIO_ACTIONS_MAX) {
@@ -286,6 +322,18 @@ static bool action(parser_t *p, const line_words_t *w, uint32_t first, bool time
         }
         copy_text(a.label, sizeof(a.label), w->word[end - 1]);
         end -= 2;
+    }
+    for (uint32_t i = first + 2; i < end; i++) {
+        if (strcmp(w->word[i], "on") == 0) {
+            if (timed) {
+                return refuse(p, "an action starts at a time or on an event, not both%s", "");
+            }
+            if (!trigger(p, w, i + 1, end, &a)) {
+                return false;
+            }
+            end = i;
+            break;
+        }
     }
     if (first + 1 >= end) {
         return refuse(p, "a player needs a verb%s", "");
@@ -930,6 +978,10 @@ static bool finish(parser_t *p) {
     uint32_t last = 0;
     for (uint32_t i = 0; i < s->action_count; i++) {
         const body_sync_action_t *a = &s->actions[i];
+        if (a->trigger == BODY_SYNC_TRIGGER_CONTACT && a->trigger_player > s->guests) {
+            p->line = a->line;
+            return refuse(p, "this trigger's player is not in the run: raise 'guests'%s", "");
+        }
         uint32_t *t = &earliest[a->player];
         *t = a->timed ? a->tick : *t;
         if (*t >= cap) {

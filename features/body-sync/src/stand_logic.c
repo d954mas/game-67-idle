@@ -153,6 +153,30 @@ void stand_schedule_init(stand_schedule_t *schedule, const body_sync_scenario_t 
     }
 }
 
+/* A timed action's tick, or a fired `on` action's; false while the start is not known. */
+static bool fixed_start(const stand_schedule_t *schedule, uint32_t index, uint32_t *tick) {
+    const body_sync_action_t *a = &schedule->scenario->actions[index];
+    if (a->timed) {
+        *tick = a->tick;
+        return true;
+    }
+    if (schedule->fired[index] != 0) {
+        *tick = schedule->fired[index] - 1u;
+        return true;
+    }
+    return false;
+}
+
+static bool untimed(const body_sync_action_t *a) { return !a->timed && a->trigger == BODY_SYNC_TRIGGER_NONE; }
+
+void stand_schedule_fire(stand_schedule_t *schedule, uint32_t index, uint32_t tick) {
+    const body_sync_scenario_t *s = schedule->scenario;
+    if (index < s->action_count && s->actions[index].trigger != BODY_SYNC_TRIGGER_NONE && schedule->fired[index] == 0) {
+        uint64_t at = (uint64_t)tick + s->actions[index].trigger_ticks;
+        schedule->fired[index] = at >= UINT32_MAX ? UINT32_MAX : (uint32_t)at + 1u;
+    }
+}
+
 int32_t stand_schedule_next(stand_schedule_t *schedule, uint8_t player, uint32_t tick) {
     if (player >= BODY_SYNC_PLAYERS_MAX) {
         return -1;
@@ -162,15 +186,15 @@ int32_t stand_schedule_next(stand_schedule_t *schedule, uint8_t player, uint32_t
     uint32_t count = schedule->count[player];
     int64_t due = -1;
     for (uint32_t j = cursor; j < count; j++) {
-        const body_sync_action_t *a = &actions[schedule->order[player][j]];
-        if (a->timed && a->tick <= tick) {
+        uint32_t at;
+        if (fixed_start(schedule, schedule->order[player][j], &at) && at <= tick) {
             due = j;
         }
     }
     uint32_t start;
     if (due >= 0) {
         start = (uint32_t)due;
-    } else if (schedule->active[player] < 0 && cursor < count && !actions[schedule->order[player][cursor]].timed) {
+    } else if (schedule->active[player] < 0 && cursor < count && untimed(&actions[schedule->order[player][cursor]])) {
         start = cursor;
     } else {
         return -1;
@@ -192,8 +216,17 @@ int32_t stand_schedule_active(const stand_schedule_t *schedule, uint8_t player) 
 
 bool stand_schedule_done(const stand_schedule_t *schedule) {
     for (uint32_t p = 0; p < BODY_SYNC_PLAYERS_MAX; p++) {
-        if (schedule->active[p] >= 0 || schedule->cursor[p] < schedule->count[p]) {
+        if (schedule->active[p] >= 0) {
             return false;
+        }
+        bool waiting = false; /* behind an `on` action whose event has not happened */
+        for (uint32_t j = schedule->cursor[p]; j < schedule->count[p]; j++) {
+            uint32_t index = schedule->order[p][j], at;
+            const body_sync_action_t *a = &schedule->scenario->actions[index];
+            if (fixed_start(schedule, index, &at) || (untimed(a) && !waiting)) {
+                return false;
+            }
+            waiting = true;
         }
     }
     return schedule->net_next >= schedule->scenario->net_count;

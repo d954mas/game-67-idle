@@ -76,7 +76,9 @@ static body_sync_stand_t *make(const char *text, int mode) {
     body_sync_stand_t *stand = body_sync_stand_create(&config, &error);
     TEST_ASSERT_NOT_NULL_MESSAGE(stand, error.text);
     stand_testing_plant_claim_limits(stand, plant_reach, plant_approach);
-#ifndef CLAIMS_STUB /* the seam's plants are the real one's */
+/* The stub has none of the seam's plants: its build runs every case honest, so the claims
+   must-fails are the real seam's alone. */
+#ifndef CLAIMS_STUB
     if (plant_take_reach) {
         body_sync_plant_take_reach_unbounded(stand_testing_sync(stand, 0));
     }

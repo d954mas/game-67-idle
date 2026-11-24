@@ -1,0 +1,18 @@
+# A guest holds a rock still, and the host recalls it while her path to the host loses everything
+# from just before the recall until after she has heard: nothing she sent of the rock under her old
+# number reaches the host, so a check that her late packets were dropped must fail: whatever else
+# of hers the host drops in the window (an older sample under reordering) is not the rock's.
+scenario mf_recall_still
+scene glass_door
+seed 5
+guests 1
+settle 6s
+net g1 rtt 100ms jitter 20ms reorder 10% reorder_delay 40ms
+p1 grab rock_a as lift
+p1 wait 3s
+at 1900ms net g1 to_host loss 100%
+at 2s p0 recall rock_a as recall
+at 2200ms net g1 to_host loss 0%
+expect result lift granted
+expect result recall done
+expect late_drops.count >= 1

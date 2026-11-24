@@ -3,6 +3,7 @@
 #include <math.h>
 
 #include "features/body_sync/body_sync_types.h"
+#include "sync_playback.h"
 #include "sync_soft.h"
 
 /* An agent that takes is one that marks: one speed for both rules. */
@@ -75,6 +76,10 @@ float sync_policy_take_reach(float agent_speed, float body_speed, float age_s) {
 float sync_policy_evidence_ticks(float round_trip_ticks, float delay_ticks, uint32_t tick_hz) {
     float ticks = round_trip_ticks + delay_ticks + 1.0f, cap = SYNC_POLICY_EVIDENCE_AGE_MAX_S * (float)tick_hz;
     return ticks < cap ? ticks : cap;
+}
+
+uint32_t sync_policy_rebind_ticks(uint32_t tick_hz) {
+    return (uint32_t)ceilf(SYNC_POLICY_EVIDENCE_AGE_MAX_S * (float)tick_hz) + SYNC_DELAY_MAX;
 }
 
 float sync_policy_box_gap(const float lo[3], const float hi[3], const float other_lo[3], const float other_hi[3]) {

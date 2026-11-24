@@ -85,6 +85,59 @@ static void test_host_rules_parse(void) {
     TEST_ASSERT_EQUAL_STRING("remove", stand_verb_name(BODY_SYNC_VERB_REMOVE));
 }
 
+static void test_triggers_parse(void) {
+    body_sync_error_t error;
+    TEST_ASSERT_TRUE_MESSAGE(parse("scenario a\nscene b\nguests 1\np0 recall crate to 1 0.5 -2 on p1 contact glass +2t as back\n"
+                                   "p1 grab crate on back +750ms as regrab\np0 remove crate on regrab\np1 drop on p1 contact crate\n",
+                                   &error),
+                             error.text);
+    TEST_ASSERT_EQUAL_UINT32(4, scenario.action_count);
+    const body_sync_action_t *a = &scenario.actions[0];
+    TEST_ASSERT_EQUAL(BODY_SYNC_TRIGGER_CONTACT, a->trigger);
+    TEST_ASSERT_FALSE(a->timed);
+    TEST_ASSERT_EQUAL_UINT8(1, a->trigger_player);
+    TEST_ASSERT_EQUAL_STRING("glass", a->trigger_body);
+    TEST_ASSERT_EQUAL_UINT32(2, a->trigger_ticks);
+    TEST_ASSERT_TRUE(a->has_home && fabsf(a->home[2] + 2.0f) < 1e-6f);
+    TEST_ASSERT_EQUAL_STRING("back", a->label);
+    TEST_ASSERT_EQUAL(BODY_SYNC_TRIGGER_ACTION, scenario.actions[1].trigger);
+    TEST_ASSERT_EQUAL_UINT32(0, scenario.actions[1].trigger_action);
+    TEST_ASSERT_EQUAL_UINT32(45, scenario.actions[1].trigger_ticks);
+    TEST_ASSERT_EQUAL_STRING("crate", scenario.actions[1].target.body);
+    TEST_ASSERT_EQUAL_UINT32(1, scenario.actions[2].trigger_action);
+    TEST_ASSERT_EQUAL_UINT32(0, scenario.actions[2].trigger_ticks);
+    TEST_ASSERT_EQUAL(BODY_SYNC_VERB_DROP, scenario.actions[3].verb);
+    TEST_ASSERT_EQUAL(BODY_SYNC_TRIGGER_CONTACT, scenario.actions[3].trigger);
+}
+
+/* An `on` action waits for its event, then starts as a timed one at the event plus its delay; an
+   untimed action behind it waits too, and a schedule left with only unfired ones is done. */
+static void test_schedule_starts_on_events(void) {
+    body_sync_error_t error;
+    TEST_ASSERT_TRUE_MESSAGE(parse("scenario a\nscene b\nguests 1\np0 walk 1 1\np0 recall crate on p1 contact glass +2t\np0 wait 10t\n"
+                                   "p1 grab crate on p1 contact glass\n",
+                                   &error),
+                             error.text);
+    stand_schedule_t *s = malloc(sizeof(*s));
+    stand_schedule_init(s, &scenario);
+    TEST_ASSERT_EQUAL_INT32(0, stand_schedule_next(s, 0, 0));
+    stand_schedule_end(s, 0);
+    TEST_ASSERT_EQUAL_INT32(-1, stand_schedule_next(s, 0, 50)); /* no event: the recall and the wait behind it wait */
+    TEST_ASSERT_TRUE(stand_schedule_done(s));
+    stand_schedule_fire(s, 1, 80);
+    stand_schedule_fire(s, 1, 90); /* only the first counts */
+    TEST_ASSERT_FALSE(stand_schedule_done(s));
+    TEST_ASSERT_EQUAL_INT32(-1, stand_schedule_next(s, 0, 81));
+    TEST_ASSERT_EQUAL_INT32(1, stand_schedule_next(s, 0, 82));
+    stand_schedule_end(s, 0);
+    TEST_ASSERT_EQUAL_INT32(2, stand_schedule_next(s, 0, 83));
+    stand_schedule_end(s, 0);
+    TEST_ASSERT_TRUE(stand_schedule_done(s));
+    stand_schedule_fire(s, 0, 10); /* no `on`: nothing */
+    TEST_ASSERT_TRUE(stand_schedule_done(s));
+    free(s);
+}
+
 static void test_net_items_sorted_by_tick(void) {
     body_sync_error_t error;
     TEST_ASSERT_TRUE_MESSAGE(parse("scenario a\nscene b\nguests 2\nat 3s cut g1 for 1s\nnet g2 to_host loss 5%\nat 1s stall host for 200ms\n"
@@ -154,6 +207,22 @@ static void test_refusals_name_their_line(void) {
         {"scenario a\nscene b\np0 recall crate to 1 2 3000\n", 3},
         {"scenario a\nscene b\np0 remove crate to 1 2 3\n", 3},
         {"scenario a\nscene b\np0 remove NAME\n", 3},
+        {"scenario a\nscene b\nguests 1\np0 recall crate on\n", 4},
+        {"scenario a\nscene b\nguests 1\np0 recall crate on p1 contact\n", 4},
+        {"scenario a\nscene b\nguests 1\np0 recall crate on p1 touch glass\n", 4},
+        {"scenario a\nscene b\nguests 1\np0 recall crate on p1 contact glass 2t\n", 4},
+        {"scenario a\nscene b\nguests 1\np0 recall crate on p1 contact glass +\n", 4},
+        {"scenario a\nscene b\nguests 1\np0 recall crate on p1 contact glass +2\n", 4},
+        {"scenario a\nscene b\nguests 1\np0 recall crate on p1 contact glass +-2t\n", 4},
+        {"scenario a\nscene b\nguests 1\np0 recall crate on p1 contact glass +700s\n", 4},
+        {"scenario a\nscene b\nguests 1\np0 recall crate on p1 contact NAME\n", 4},
+        {"scenario a\nscene b\nguests 1\np0 recall crate on p1 contact glass +2t +2t\n", 4},
+        {"scenario a\nscene b\nguests 1\np0 recall crate on p2 contact glass\n", 4},
+        {"scenario a\nscene b\nguests 1\np0 recall crate on later\n", 4},
+        {"scenario a\nscene b\nguests 1\np0 recall crate on later as later\n", 4},
+        {"scenario a\nscene b\nguests 1\np0 recall crate on p1\n", 4},
+        {"scenario a\nscene b\nguests 1\nat 1s p0 recall crate on p1 contact glass\n", 4},
+        {"scenario a\nscene b\nguests 1\np1 drop as d\np0 recall crate on d +1s +1s\n", 5},
     };
     for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
         body_sync_error_t error;
@@ -799,10 +868,12 @@ int main(void) {
     RUN_TEST(test_shipped_scenarios_parse);
     RUN_TEST(test_parse_reads_the_grammar);
     RUN_TEST(test_host_rules_parse);
+    RUN_TEST(test_triggers_parse);
     RUN_TEST(test_net_items_sorted_by_tick);
     RUN_TEST(test_refusals_name_their_line);
     RUN_TEST(test_parser_fuzz);
     RUN_TEST(test_schedule_orders_actions);
+    RUN_TEST(test_schedule_starts_on_events);
     RUN_TEST(test_rules_verdicts);
     RUN_TEST(test_records_round_trip_and_refuse);
     RUN_TEST(test_impact_rules_by_role);

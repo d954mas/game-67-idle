@@ -60,7 +60,15 @@ extern "C" {
      remove <body>                p0 only: the host unbinds and destroys the body whoever owns
                                   it, and tells every guest; done at once, failed when gone
    An action with `at` starts at that time and cuts off what the player was doing; one without
-   it starts when the player's previous action in the file ends, at 0 for the first. A schedule
+   it starts when the player's previous action in the file ends, at 0 for the first. An action
+   may instead start on an event, `<player> <verb> <args> on <event> [+<time>] [as <label>]`,
+   that long after it (0 without), cutting off what runs as a timed one does; the word `on`
+   ends the arguments:
+     on <pN> contact <body>       the first tick pN's own world records a hit between a body pN
+                                  simulates and the body (pN's thrown rock meeting glass)
+     on <label>                   the tick the earlier action with that label starts
+   Its event can fire until the run ends; one that never fired leaves the action pending. An
+   action after it with neither waits for it to end. A schedule
    that cannot fit in 600 s (a timed start plus the waits after it, a condition's end) is
    refused, not cut.
 
@@ -148,6 +156,12 @@ typedef enum body_sync_outcome {
 /* The scenario word: "done", "granted", ...; "pending" for PENDING. */
 const char *body_sync_outcome_name(body_sync_outcome_t outcome);
 
+typedef enum body_sync_trigger {
+    BODY_SYNC_TRIGGER_NONE,
+    BODY_SYNC_TRIGGER_CONTACT, /* on <pN> contact <body> */
+    BODY_SYNC_TRIGGER_ACTION,  /* on <label> */
+} body_sync_trigger_t;
+
 typedef struct body_sync_target {
     bool is_body;
     char body[BODY_SYNC_NAME_MAX]; /* when is_body */
@@ -167,6 +181,12 @@ typedef struct body_sync_action {
     uint32_t wait_ticks; /* WAIT */
     bool has_home;       /* RECALL `to`: where the host puts the body, else its spawn pose */
     float home[3];
+    /* `on`: the action starts trigger_ticks after an event instead of at a time */
+    body_sync_trigger_t trigger;
+    uint8_t trigger_player;                /* CONTACT: whose own world sees it */
+    char trigger_body[BODY_SYNC_NAME_MAX]; /* CONTACT: the body touched */
+    uint32_t trigger_action;               /* ACTION: the earlier action, by index */
+    uint32_t trigger_ticks;
 } body_sync_action_t;
 
 typedef enum body_sync_net_kind {
