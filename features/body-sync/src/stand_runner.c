@@ -240,6 +240,9 @@ struct body_sync_stand {
     uint32_t claims_rejected[BODY_SYNC_ENDPOINTS_MAX], claims_idle[BODY_SYNC_ENDPOINTS_MAX], claim_effects[BODY_SYNC_ENDPOINTS_MAX];
     uint32_t claims_format[BODY_SYNC_ENDPOINTS_MAX];
     float claim_reach_scale, claim_approach_scale; /* 1 and 1; stand_testing_plant_claim_limits */
+    uint32_t plant_declared_endpoint, plant_declared_ticks; /* stand_testing_plant_declared_velocity; 0 ticks none */
+    body_sync_id_t plant_declared_body;
+    float plant_declared_add[3];
     effect_t effects[EFFECTS_MAX];
     uint32_t effect_count;
     action_track_t actions[BODY_SYNC_SCENARIO_ACTIONS_MAX];
@@ -1382,7 +1385,20 @@ static void endpoint_tick(body_sync_stand_t *st, endpoint_t *ep) {
     record_owner(ep, coop_session_tick(ep->session)); /* the tick its state packets carry */
     record_drawn(st, ep, coop_session_tick(ep->session));
     impacts(st, ep);
+    /* stand_testing_plant_declared_velocity: what collect reads, and then the body's own again. */
+    b3BodyId lied = b3_nullBodyId;
+    b3Vec3 true_velocity = {0.0f, 0.0f, 0.0f};
+    if (st->plant_declared_ticks > 0 && ep->index == st->plant_declared_endpoint && stand_world_slot(ep->world, st->plant_declared_body)) {
+        lied = ep->world->slots[body_sync_id_slot(st->plant_declared_body)].body;
+        true_velocity = b3Body_GetLinearVelocity(lied);
+        const float *add = st->plant_declared_add;
+        b3Body_SetLinearVelocity(lied, (b3Vec3){true_velocity.x + add[0], true_velocity.y + add[1], true_velocity.z + add[2]});
+        st->plant_declared_ticks--;
+    }
     body_sync_collect(ep->sync, seam_tick);
+    if (B3_IS_NON_NULL(lied)) {
+        b3Body_SetLinearVelocity(lied, true_velocity);
+    }
     send_all(st, ep);
     coop_session_end_tick(ep->session);
     ep->ticks_run++;
@@ -3373,6 +3389,13 @@ bool stand_testing_record(body_sync_stand_t *st, uint8_t seat, const uint8_t *da
         return false;
     }
     return stand_bytes_in(st, &st->ep[0], seat, data + 1, size - 1);
+}
+
+void stand_testing_plant_declared_velocity(body_sync_stand_t *st, uint32_t endpoint, body_sync_id_t body, const float add[3], uint32_t ticks) {
+    st->plant_declared_endpoint = endpoint;
+    st->plant_declared_body = body;
+    memcpy(st->plant_declared_add, add, sizeof(st->plant_declared_add));
+    st->plant_declared_ticks = ticks;
 }
 
 void stand_testing_plant_claim_limits(body_sync_stand_t *st, float reach_scale, float approach_scale) {

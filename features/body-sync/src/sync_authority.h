@@ -170,6 +170,8 @@ typedef struct sync_authority {
     /* A planted defect for tests that require a check to catch it: a revocation is recorded as
        an arbitrated end. Never set outside tests. */
     bool plant_revoked_as_arbitrated;
+    /* A planted defect: every take's evidence reads an unbounded reach. Never set outside tests. */
+    bool plant_take_reach_unbounded;
     /* Host: the shell's measure of a take's evidence (sync_policy_grant_in_t agent_gap, *reach).
        None: every take counts as touching, for the parts tested without a world. */
     float (*take_gap)(void *context, uint8_t seat, uint32_t slot, float *reach);
@@ -301,9 +303,9 @@ body_sync_result_t sync_authority_reclaim(sync_authority_t *a, body_sync_id_t id
    read, NULL while the seat owns the agent or for STALE. */
 body_sync_contact_verdict_t sync_authority_check_contact(const sync_authority_t *a, uint8_t seat, body_sync_id_t agent, uint16_t number,
                                                          uint32_t grace_ticks, const sync_authority_ended_t **ended);
-/* What the host's world says around a contact claim, for sync_authority_contact_measure: the
-   target's box and speed (m/s), the agent's box less its position (where it sits around a pose),
-   and the limits. */
+/* What the host's world says around a contact or a take, for sync_authority_contact_measure:
+   the target's box and speed (m/s), the agent's box less its position (where it sits around a
+   pose), and the limits. */
 typedef struct sync_contact_scene {
     float target_lo[3], target_hi[3];
     float agent_lo[3], agent_hi[3];
@@ -312,6 +314,13 @@ typedef struct sync_contact_scene {
     float max_speed;
     float slack_ticks;     /* a state may cross slower than the claim behind it: the playback delay and a tick */
     uint32_t window_ticks; /* how old a taken state may be and still place the contact: the claim's grace */
+    /* The least time the target may have travelled since the touch, ticks: the guest touched its
+       copy of it, a one-way trip and a delay old, and the claim takes the way back. */
+    float target_ticks;
+    /* Ticks the agent may have pushed its own copy of the target ahead of the host's picture (the
+       second layer predicts a light copy an agent touches): the reach adds the agent's travel over
+       them. 0 for a contact claim. */
+    float push_ticks;
 } sync_contact_scene_t;
 
 /* Host: a contact claim measured on what the host itself took of `seat`'s ownership of the
@@ -327,6 +336,9 @@ typedef struct sync_contact_scene {
    in the window: it has no evidence of the contact, and the claim is a missed effect. */
 bool sync_authority_contact_measure(const sync_authority_t *a, body_sync_id_t agent, uint8_t seat, const sync_authority_ended_t *ended,
                                     const sync_contact_scene_t *scene, float *gap, float *reach, float *approach_max);
+/* The same of the body `b` itself: a take's evidence asks it of each of the claimant's agents. */
+bool sync_authority_path_measure(const sync_authority_t *a, const sync_authority_body_t *b, uint8_t seat, const sync_authority_ended_t *ended,
+                                 const sync_contact_scene_t *scene, float *gap, float *reach, float *approach_max);
 /* The number a contact claim of a local body names (body_sync_contact_number). */
 bool sync_authority_contact_number(const sync_authority_t *a, const sync_authority_body_t *b, uint16_t *number);
 

@@ -572,6 +572,7 @@ static void touch_claim(sync_authority_t *a, uint8_t seat, sync_authority_body_t
     bool granted = sync_policy_grants(&in);
     if (granted && b->seat != seat && a->take_gap) {
         in.agent_gap = a->take_gap(a->take_context, seat, slot, &in.agent_reach);
+        in.agent_reach = a->plant_take_reach_unbounded ? INFINITY : in.agent_reach;
         granted = sync_policy_grants(&in);
     }
     a->take_budget[seat] -= a->take_budget[seat] >= 1.0f ? 1.0f : 0.0f;
@@ -874,8 +875,10 @@ typedef struct contact_fit {
 static void fit_path(contact_fit_t *f, const float from[3], const float along[3], float ticks) {
     float cap = SYNC_POLICY_EVIDENCE_AGE_MAX_S * (float)f->in->tick_hz;
     float s = (ticks < cap ? ticks : cap) / (float)f->in->tick_hz;
+    float moved = ticks > f->in->target_ticks ? ticks : f->in->target_ticks;
+    float t = (moved < cap ? moved : cap) / (float)f->in->tick_hz;
     float gap = segment_gap(f->lo, f->hi, from, along);
-    float reach = SYNC_POLICY_TAKE_SLOP_M + f->in->target_speed * s + 0.5f * SYNC_POLICY_CONTACT_BEND_MS2 * s * s;
+    float reach = SYNC_POLICY_TAKE_SLOP_M + f->in->target_speed * t + 0.5f * SYNC_POLICY_CONTACT_BEND_MS2 * s * s;
     if (gap - reach < f->margin) {
         f->margin = gap - reach;
         f->gap = gap;
@@ -889,13 +892,29 @@ static void fit_ray(contact_fit_t *f, const float at[3], const float step[3], fl
     fit_path(f, at, along, ticks);
 }
 
+/* Ticks the agent may have moved past its last taken state unseen: a body moving sends a state
+   every tick, so the first state of a move would cross within the claim's grace; a body at rest
+   sends none, and its last state stands for as long as it rests. */
+static float unseen_ticks(const sync_authority_t *a, const sync_contact_scene_t *in, uint32_t taken) {
+    uint32_t age = a->now - taken;
+    return (float)(age < in->window_ticks ? age : in->window_ticks) + in->slack_ticks;
+}
+
 bool sync_authority_contact_measure(const sync_authority_t *a, body_sync_id_t agent, uint8_t seat, const sync_authority_ended_t *ended,
                                     const sync_contact_scene_t *in, float *gap, float *reach, float *approach_max) {
     *gap = INFINITY;
     *reach = SYNC_POLICY_TAKE_SLOP_M;
     *approach_max = in->target_speed;
     const sync_authority_body_t *b = sync_authority_body_const(a, agent);
-    if (!b || in->tick_hz == 0) {
+    return b && sync_authority_path_measure(a, b, seat, ended, in, gap, reach, approach_max);
+}
+
+bool sync_authority_path_measure(const sync_authority_t *a, const sync_authority_body_t *b, uint8_t seat, const sync_authority_ended_t *ended,
+                                 const sync_contact_scene_t *in, float *gap, float *reach, float *approach_max) {
+    *gap = INFINITY;
+    *reach = SYNC_POLICY_TAKE_SLOP_M;
+    *approach_max = in->target_speed;
+    if (in->tick_hz == 0) {
         return false;
     }
     contact_fit_t f = {.in = in, .margin = INFINITY, .gap = INFINITY, .reach = SYNC_POLICY_TAKE_SLOP_M};
@@ -908,22 +927,21 @@ bool sync_authority_contact_measure(const sync_authority_t *a, body_sync_id_t ag
     uint16_t number = ended ? ended->number : b->number;
     bool ring = b->pose_count > 0 && b->pose_seat == seat && b->pose_number == number && (ended || b->seat == seat);
     if (!ring) {
-        if (!ended || !ended->has_pose || a->now - ended->pose_tick > in->window_ticks) {
+        if (!ended || !ended->has_pose) {
             return false;
         }
-        fit_ray(&f, ended->position, ended->step, (float)(a->now - ended->pose_tick) + in->slack_ticks);
+        fit_ray(&f, ended->position, ended->step, unseen_ticks(a, in, ended->pose_tick));
         travel = ended->travel;
     } else {
         uint32_t first = (b->pose_next + SYNC_AUTHORITY_POSES - b->pose_count) % SYNC_AUTHORITY_POSES;
-        bool any = false;
         for (uint32_t i = 0; i < b->pose_count; i++) {
             const sync_authority_pose_t *p = &b->poses[(first + i) % SYNC_AUTHORITY_POSES];
             const sync_authority_pose_t *next = i + 1u < b->pose_count ? &b->poses[(first + i + 1u) % SYNC_AUTHORITY_POSES] : NULL;
-            /* A state before the window still bounds the path to the first one in it. */
-            if (a->now - p->host_tick > in->window_ticks && (!next || a->now - next->host_tick > in->window_ticks)) {
+            /* A state before the window still bounds the path to the first one in it; the last one
+               always stands, a body at rest sending none. */
+            if (next && a->now - p->host_tick > in->window_ticks && a->now - next->host_tick > in->window_ticks) {
                 continue;
             }
-            any = true;
             float step = length3(p->step);
             travel = step > travel ? step : travel;
             if (next) {
@@ -932,16 +950,14 @@ bool sync_authority_contact_measure(const sync_authority_t *a, body_sync_id_t ag
                 fit_path(&f, p->position, chord, ticks);
                 fit_ray(&f, p->position, p->step, ticks);
             } else {
-                fit_ray(&f, p->position, p->step, (float)(a->now - p->host_tick) + in->slack_ticks);
+                fit_ray(&f, p->position, p->step, unseen_ticks(a, in, p->host_tick));
             }
-        }
-        if (!any) {
-            return false;
         }
     }
     float speed = sync_policy_contact_speed(travel, in->tick_hz, in->max_speed);
+    float cap = SYNC_POLICY_EVIDENCE_AGE_MAX_S * (float)in->tick_hz, push = in->push_ticks < cap ? in->push_ticks : cap;
     *gap = f.gap;
-    *reach = f.reach;
+    *reach = f.reach + speed * push / (float)in->tick_hz;
     *approach_max = speed + in->target_speed;
     return true;
 }

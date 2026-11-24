@@ -3,10 +3,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "body_sync_plant.h"
 #include "features/body_sync/body_sync.h"
 #include "features/body_sync/body_sync_stand.h"
 #include "stand_logic.h"
 #include "stand_testing.h"
+#include "stub_wire.h"
 #include "unity.h"
 
 /* Impact claims end to end on the stand: an honest throw's claim applies once under both
@@ -18,6 +20,7 @@ void setUp(void) {}
 void tearDown(void) {}
 
 static float plant_reach = 1.0f, plant_approach = 1.0f;
+static bool plant_take_reach; /* --plant-take-reach-unbounded: the host grants every take's evidence */
 static body_sync_scene_t scene;
 static body_sync_scenario_t scenario;
 static bool third_player; /* the next make() gives the breakables a third player and a rock for it */
@@ -66,6 +69,9 @@ static body_sync_stand_t *make(const char *text, int mode) {
     body_sync_stand_t *stand = body_sync_stand_create(&config, &error);
     TEST_ASSERT_NOT_NULL_MESSAGE(stand, error.text);
     stand_testing_plant_claim_limits(stand, plant_reach, plant_approach);
+    if (plant_take_reach) {
+        body_sync_plant_take_reach_unbounded(stand_testing_sync(stand, 0));
+    }
     return stand;
 }
 
@@ -311,6 +317,38 @@ static void test_a_flood_starves_only_its_own_seat(void) {
     body_sync_stand_destroy(stand);
 }
 
+/* A guest declares its character 60 m/s faster than it moves, then claims a take of the box two
+   metres off: the take's evidence is what the host took of the character, which never came
+   near, so the host refuses it. */
+static void test_inflated_far_take_is_refused(void) {
+    body_sync_stand_t *stand = make("scenario take\nscene two_chars_item\nseed 5\nguests 1\nend 6s\nnet g1 rtt 60ms\np1 wait 3s\n",
+                                    MODE_INTERACTION);
+    body_sync_t *host = stand_testing_sync(stand, 0);
+    body_sync_id_t box = id_of("box"), me = body_sync_id_make(scene.body_count + 1u, 1);
+    for (int i = 0; i < 30; i++) {
+        TEST_ASSERT_TRUE(body_sync_stand_tick(stand));
+    }
+    const float add[3] = {60.0f, 0.0f, 0.0f};
+    stand_testing_plant_declared_velocity(stand, 1, me, add, 40);
+    for (int i = 0; i < 20; i++) {
+        TEST_ASSERT_TRUE(body_sync_stand_tick(stand));
+    }
+    body_sync_traffic_t before, after;
+    body_sync_traffic(host, 1, &before);
+    stub_record_t take = {.type = STUB_REC_CLAIM, .id = box, .hold = BODY_SYNC_HOLD_UNTIL_REST, .sequence = 0x7001};
+    uint8_t bytes[STUB_RECORD_BYTES_MAX];
+    uint32_t size = stub_wire_put_record(&take, bytes, sizeof(bytes));
+    TEST_ASSERT_TRUE(size > 0);
+    TEST_ASSERT_EQUAL(BODY_SYNC_OK, body_sync_receive_record(host, 1, body_sync_stand_now(stand), bytes, size));
+    TEST_ASSERT_TRUE(body_sync_stand_tick(stand));
+    body_sync_authority_t a;
+    TEST_ASSERT_TRUE(body_sync_authority(host, box, &a));
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(BODY_SYNC_SEAT_HOST, a.seat, "a take two metres off its agent was granted");
+    body_sync_traffic(host, 1, &after);
+    TEST_ASSERT_EQUAL_UINT32(before.take_refusals + 1u, after.take_refusals);
+    body_sync_stand_destroy(stand);
+}
+
 /* Honest throws under loss and jitter: the host accepts their claims, however many states the
    network lost. At most one throw in twelve may lose all the states that show its flight (a
    missed effect, README "Contact claims"). */
@@ -378,6 +416,8 @@ int main(int argc, char **argv) {
             plant_reach = INFINITY;
         } else if (strcmp(argv[i], "--plant-claim-approach-unbounded") == 0) {
             plant_approach = INFINITY;
+        } else if (strcmp(argv[i], "--plant-take-reach-unbounded") == 0) {
+            plant_take_reach = true;
         } else if (strcmp(argv[i], "--sweep") == 0) {
             sweep = true;
         }
@@ -402,5 +442,6 @@ int main(int argc, char **argv) {
     RUN_TEST(test_inflated_claim_speed_is_rejected);
     RUN_TEST(test_two_seats_claim_one_target);
     RUN_TEST(test_a_flood_starves_only_its_own_seat);
+    RUN_TEST(test_inflated_far_take_is_refused);
     return UNITY_END();
 }

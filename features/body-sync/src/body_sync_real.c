@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "features/body_sync/body_sync.h"
+#include "body_sync_plant.h"
 #include "sync_authority.h"
 #include "sync_codec.h"
 #include "sync_masks.h"
@@ -142,32 +143,6 @@ static float evidence_ticks(const body_sync_t *s, uint8_t seat) {
     return sync_policy_evidence_ticks(sync_sender_round_trip(&s->sender, seat), (float)s->playback.timelines[seat].delay, s->config.tick_hz);
 }
 
-/* The gap from `box` to the agent in slot `k`, where the host shows it or where its newest state
-   puts it (a playback delay nearer the guest's present), whichever is nearer. *reach is what the
-   two may travel apart over `age_s`, *agent_speed the faster of the agent's shown and sent
-   speeds. */
-static float agent_gap(const body_sync_t *s, uint32_t k, b3AABB box, float body_speed, float age_s, float *reach, float *agent_speed) {
-    const entry_t *g = &s->entries[k];
-    b3AABB other = b3Body_ComputeAABB(g->body);
-    const sync_received_t *in = &s->receiver.bodies[k];
-    b3Vec3 at = b3Body_GetPosition(g->body);
-    float shift[2][3] = {{0.0f, 0.0f, 0.0f}, {in->newest.position[0] - at.x, in->newest.position[1] - at.y, in->newest.position[2] - at.z}};
-    const float lo[3] = {box.lowerBound.x, box.lowerBound.y, box.lowerBound.z}, hi[3] = {box.upperBound.x, box.upperBound.y, box.upperBound.z};
-    float sent = in->has ? sqrtf(in->velocity[0] * in->velocity[0] + in->velocity[1] * in->velocity[1] + in->velocity[2] * in->velocity[2]) : 0.0f;
-    float shown = speed_of(g->body);
-    *agent_speed = sent > shown ? sent : shown;
-    int windows = in->has ? 2 : 1;
-    *reach = sync_policy_take_reach(*agent_speed, body_speed, age_s);
-    float best = INFINITY;
-    for (int w = 0; w < windows; w++) {
-        const float olo[3] = {other.lowerBound.x + shift[w][0], other.lowerBound.y + shift[w][1], other.lowerBound.z + shift[w][2]};
-        const float ohi[3] = {other.upperBound.x + shift[w][0], other.upperBound.y + shift[w][1], other.upperBound.z + shift[w][2]};
-        float d = sync_policy_box_gap(lo, hi, olo, ohi);
-        best = d < best ? d : best;
-    }
-    return best;
-}
-
 /* The boxes a contact claim is measured with: the target's, and the agent's about its position. */
 static void contact_boxes(b3AABB target, b3AABB agent, b3Vec3 at, sync_contact_scene_t *scene) {
     const float t_lo[3] = {target.lowerBound.x, target.lowerBound.y, target.lowerBound.z}, t_hi[3] = {target.upperBound.x, target.upperBound.y, target.upperBound.z};
@@ -179,9 +154,11 @@ static void contact_boxes(b3AABB target, b3AABB agent, b3Vec3 at, sync_contact_s
     memcpy(scene->agent_hi, a_hi, sizeof(a_hi));
 }
 
-/* Host: a take's evidence (sync_policy_grants). The claimant's agents as the host shows them: its
-   characters, what it carries, throws or owns by interaction, the nearest by its gap less its
-   reach. */
+/* Host: a take's evidence (sync_policy_grants). The claimant's agents (its characters, what it
+   carries, throws or owns by interaction) on the path the host's own taken states of each show,
+   the one that comes nearest within its reach; never the velocity they declare
+   (sync_authority_contact_measure). The target travelled a round trip, a delay and a tick since
+   the touch at most. */
 static float take_gap(void *context, uint8_t seat, uint32_t slot, float *reach) {
     body_sync_t *s = context;
     const entry_t *e = &s->entries[slot];
@@ -190,8 +167,10 @@ static float take_gap(void *context, uint8_t seat, uint32_t slot, float *reach) 
         return INFINITY;
     }
     b3AABB box = b3Body_ComputeAABB(e->body);
-    float age_s = evidence_ticks(s, seat) * s->dt;
-    float body_speed = speed_of(e->body), best = INFINITY;
+    float ticks = evidence_ticks(s, seat), best = INFINITY;
+    sync_contact_scene_t scene = {.target_speed = speed_of(e->body), .tick_hz = s->config.tick_hz, .max_speed = s->config.max_speed,
+                                  .slack_ticks = (float)s->playback.timelines[seat].delay + 1.0f, .window_ticks = (uint32_t)ceilf(ticks),
+                                  .target_ticks = ticks, .push_ticks = ticks};
     for (uint32_t k = 0; k < BODY_SYNC_BODIES_MAX; k++) {
         const sync_authority_body_t *a = &s->authority.bodies[k];
         const entry_t *g = &s->entries[k];
@@ -203,15 +182,17 @@ static float take_gap(void *context, uint8_t seat, uint32_t slot, float *reach) 
         if (k == slot || !a->bound || a->seat != seat || !b3Body_IsValid(g->body) || !(g->body_class == BODY_SYNC_CLASS_CHARACTER || held || moving)) {
             continue;
         }
-        float r, speed;
-        float d = agent_gap(s, k, box, body_speed, age_s, &r, &speed);
-        if (d - r < best - *reach) {
+        float d, r, approach;
+        contact_boxes(box, b3Body_ComputeAABB(g->body), b3Body_GetPosition(g->body), &scene);
+        if (sync_authority_path_measure(&s->authority, a, seat, NULL, &scene, &d, &r, &approach) && d - r < best - *reach) {
             best = d;
             *reach = r;
         }
     }
     return best;
 }
+
+void body_sync_plant_take_reach_unbounded(body_sync_t *s) { s->authority.plant_take_reach_unbounded = true; }
 
 body_sync_t *body_sync_create(const body_sync_config_t *config) {
     if (!config || !b3World_IsValid(config->world) || config->seats < 1 || config->seats > BODY_SYNC_SEATS_MAX ||

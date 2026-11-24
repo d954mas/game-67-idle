@@ -511,14 +511,14 @@ ignores the mode.
   own agents, the seat has take budget left (16 a tick, up to 8 ticks of it
   kept for a hitch of the record lane, counted on the host's own ticks, never a
   record's stamp), and the host's own world shows one of
-  the claimant's agents within reach of the body: its gap to the agent's copy,
-  or to the agent's newest state, at most 15 cm plus what the agent and the
-  body travel over a round trip, a playback delay and a tick. The claim and the
-  contact's state cross the same one-way trip, so the agent's copy trails the
-  contact by a delay and the tick; a claim the record lane resends finds it
-  about a round trip ahead instead; and the body the guest touched was its copy
-  of the host's, a one-way trip and a delay old, with the claim's way back on
-  top (`src/sync_policy.h` derives the slop). A take whose agent the host refused, or a forged claim of
+  the claimant's agents within reach of the body, by the same rule as a contact
+  claim's (below): the agent along the path the host's own taken states of it
+  show, never by the velocity they declare, its last state standing while it
+  rests. The reach adds what the body travels and what the agent travels at its
+  fastest taken step over a round trip, a playback delay and a tick: the body
+  the guest touched was its copy of the host's, a one-way trip and a delay old,
+  with the claim's way back on top, and the second layer may have pushed that
+  copy ahead with the agent (`src/sync_policy.h` derives the slop). A take whose agent the host refused, or a forged claim of
   a body no agent is near, is refused. While its take waits, a body's state declares the number the
   grant will give, so the host takes its states from the grant on, not a round
   trip later. A refusal moves no number, so another guest's take granted next
@@ -635,7 +635,9 @@ ignores the mode.
   states replace them. A contact lies on the path they show: between two
   consecutive states, on from a state along the step that led to it (only the
   contact turns the body) until the next one, or on from the last for the
-  ticks since plus a playback delay and a tick. The gap is the agent's box from
+  ticks since, at most the claim's grace (a body at rest sends no state, so its
+  last one stands; a moving one sends every tick), plus a playback delay and a
+  tick. The gap is the agent's box from
   the target's along the nearest such path of the claim's grace; the reach is
   the take slop, the target's travel over that time and a bend of the path of
   `SYNC_POLICY_CONTACT_BEND_MS2` (20 m/s^2), the time capped at 1 s; the

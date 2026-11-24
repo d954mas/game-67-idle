@@ -16,6 +16,10 @@ void stand_testing_mark_left(body_sync_stand_t *stand, uint8_t seat);
 /* A stand record (family byte first) reaching the host from guest `seat` now, as the network
    would hand it: parsed, then judged at the host's next tick. False when it was not taken. */
 bool stand_testing_record(body_sync_stand_t *stand, uint8_t seat, const uint8_t *data, uint32_t size);
+/* For the next `ticks` of `endpoint`, the velocity its seam reads of `body` at collect, and so
+   declares in its states, is `add` more than the body's own; the body moves as it would. A peer
+   lying about its speed. */
+void stand_testing_plant_declared_velocity(body_sync_stand_t *stand, uint32_t endpoint, body_sync_id_t body, const float add[3], uint32_t ticks);
 /* The host's limits on an impact claim read `reach_scale` times the seam's reach and
    `approach_scale` times its approach (1 and 1 unplanted): an approach of 0 refuses every honest
    claim of a throw, an infinite reach takes a claim of a target far from its agent. */
