@@ -55,8 +55,9 @@ class TestProxyAndBinding(unittest.TestCase):
         self.assertEqual(kinds[(0, 3)], EDGE_WARP)
         self.assertEqual(kinds[(3, 4)], EDGE_WEFT)
         self.assertEqual(kinds[(0, 4)], EDGE_DIAG)
-        mesh = cook_mesh("cape", pts, faces, pins, wearable=True, edge_kinds=kinds, drive=(1.0 - norm) * 100.0)
-        np.testing.assert_array_equal(mesh["drive"], (1.0 - norm) * 100.0)
+        r = np.minimum(0.5 * dist_m, 0.2)
+        mesh = cook_mesh("cape", pts, faces, pins, wearable=True, edge_kinds=kinds, max_distance=r)
+        np.testing.assert_array_equal(mesh["max_distance"], r)
 
     def test_validate_proxy_detects_bind_pose_penetration_and_edge_limit(self):
         pts = np.array([[0.0, 1.0, 0.0], [0.1, 1.0, 0.0], [0.05, 0.9, 0.0]])

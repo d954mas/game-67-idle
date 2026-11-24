@@ -36,6 +36,13 @@ class TestCook(unittest.TestCase):
             with self.assertRaises(ValueError):
                 cook_mesh("invalid", POINTS, faces, [])
 
+    def test_max_distance_is_zero_exactly_on_the_pins(self):
+        mesh = cook_mesh("fold", POINTS, FACES, [0, 1], wearable=True)
+        self.assertTrue(np.all(mesh["max_distance"][[0, 1]] == 0) and np.all(mesh["max_distance"][[2, 3]] > 0))
+        self.assertTrue(np.all(mesh["inv_area"] > 0))
+        with self.assertRaisesRegex(ValueError, "zero on the pins"):
+            cook_mesh("fold", POINTS, FACES, [0, 1], max_distance=[0, 0.1, 0.1, 0.1])
+
     def test_tether_path_follows_edges_and_leaves_free_islands(self):
         points = np.asarray([(0,0,0), (0,1,0), (1,1,0), (1,0,0), (0,0,2)])
         limits = _tethers(points, [(0,1), (1,2), (2,3)], [0], 1.1)
@@ -58,13 +65,14 @@ def emit(out, name, mesh):
     array(f"ClothEdge {name}_edges[]", (f"{{{a},{b},{c},{d},{length:.9e}F,{angle:.9e}F,{kind}}}"
                                         for a, b, c, d, length, angle, kind in mesh["edges"]))
     out.write(f"static const float {name}_inv[] = {vector(mesh['inv_area'])};\n")
+    out.write(f"static const float {name}_r[] = {vector(mesh['max_distance'])};\n")
+    array(f"ClothBackstop {name}_backstop[]", (f"{{{d:.9e}F,{r:.9e}F}}" for d, r in mesh["backstop"]))
     tethers = "0"
     if mesh["tethers"] is not None:
         tethers = name + "_tethers"
         array(f"ClothTether {tethers}[]", (f"{{{pin},{length:.9e}F}}" for pin, length in mesh["tethers"]))
-    # Fixtures start undriven; a test that needs a drive sets its own array.
     out.write(f"static const ClothMesh {name} = {{{len(mesh['rest'])}, {len(mesh['faces'])}, {len(mesh['edges'])}, "
-              f"{name}_rest, {name}_inv, {name}_faces, {name}_edges, {tethers}, 0}};\n")
+              f"{name}_rest, {name}_inv, {name}_faces, {name}_edges, {tethers}, {name}_r, {name}_backstop}};\n")
 
 
 if __name__ == "__main__":
@@ -73,5 +81,12 @@ if __name__ == "__main__":
             emit(out, "fold", cook_mesh("fold", POINTS, FACES, [0, 1, 2], wearable=True))
             emit(out, "seam", cook_mesh("seam", POINTS[:3], FACES[:1], [0, 1], wearable=True, tether_slack=1.0))
             emit(out, "small_seam", cook_mesh("small_seam", np.asarray(POINTS[:3]) * 0.055, FACES[:1], [0, 1], wearable=True))
+            # A 0.4 m square hanging in the XY plane, its top row pinned.
+            n = 9
+            grid = [(-0.2 + 0.4 * i / (n - 1), 0.4 * j / (n - 1), 0.0) for j in range(n) for i in range(n)]
+            cells = [(j * n + i, j * n + i + 1, (j + 1) * n + i, (j + 1) * n + i + 1) for j in range(n - 1) for i in range(n - 1)]
+            tris = [t for a, b, c, d in cells for t in ((a, b, d), (a, d, c))]
+            emit(out, "panel", cook_mesh("panel", grid, tris, list(range(n * (n - 1), n * n)), wearable=True,
+                                         tether_slack=1.05))
     else:
         unittest.main()

@@ -18,68 +18,59 @@ game's `dependencies.json`.
 
 The cook reads its contract from the garment GLB. Each piece is the set of vertices whose float attribute
 `_CLOTH_PIECE` holds the piece's number (any unique positive integer; 0 or no attribute is not cloth), across every
-primitive. `_CLOTH` is the piece's freedom: 0 is a pin that follows skinning and anchors the tethers, and a free
-vertex is driven toward its target at `drive_hz` x (1 - `_CLOTH`). The seam of a piece is its unlabelled side: those
-vertices are skinned and hold the border, so the labelled row next to them may move. A labelled vertex split from an
-unlabelled one at the same position must be a pin, or the render seam would open there. Skin weights reference the body's joints only. They are the cloth's
-target, the pose each free vertex is driven toward, and are authored like the weights of any skinned garment; the
-feature does not generate them.
+primitive. `_CLOTH` = 0 marks the piece's pins: they follow skinning (max distance 0) and anchor the tethers; any
+other value is free. The seam of a piece is its unlabelled side: those vertices are skinned and hold the border, so
+the labelled row next to them may move. A labelled vertex split from an unlabelled one at the same position must be
+a pin, or the render seam would open there. Skin weights reference the body's joints only. They are the cloth's
+reference, the skinned pose its motion is measured from, and are authored like the weights of any skinned garment;
+the feature does not generate them.
 
-Put the feature's `tools/` on the authoring Python path. To paint `_CLOTH` of piece 1 in one primitive:
-
-```python
-from garment_glb import Glb
-from garment_paint import baseline_freedom, coincident
-
-model = Glb(path)
-primitive = model.primitives()[0]
-positions = model.accessor(primitive["attributes"]["POSITION"])
-label = model.accessor(primitive["attributes"]["_CLOTH_PIECE"]).ravel()
-faces = model.accessor(primitive["indices"], False).reshape(-1, 3)
-piece = label == 1
-split = np.flatnonzero(piece & coincident(positions, positions[label == 0]))  # copies of an unlabelled vertex stay pins
-freedom = baseline_freedom(positions, faces[piece[faces].all(1)], seam_fraction=0.05, curve=(0.85, 0.42, 0.8),
-                           pinned=split)
-model.set_attribute(primitive, "_CLOTH", np.where(piece, freedom, 0.0).astype(np.float32))  # the cook refuses NaN
-path.write_bytes(model.to_bytes())
-```
-
+Put the feature's `tools/` on the authoring Python path. `garment_paint.baseline_freedom` paints a `_CLOTH` map from
+a piece's geometry (the top seam band and copies of unlabelled vertices are pins); only its zeros matter to the cook.
 A rig that still lists garment joints after the body's drops them with `model.truncate_skin(len(body_joints))`, which
 refuses a vertex still weighted to a dropped joint.
 
 ## Cook
 
 `garment_cook.cook_outfit` builds each piece's simulation proxy from the outer sheet of its `source_material`
-primitive, interpolates `_CLOTH` and the weights onto it, and writes the blob. `bind_outfit` binds the render
-vertices of the model, or of another model wearing the same garment, to the proxy, and `stage_model` adds the
-`_GARMENT` attribute the shader reads:
+primitive, carries the pins and the weights onto it, derives the max-distance and backstop maps, and writes the
+blob. `bind_outfit` binds the render vertices of the model, or of another model wearing the same garment, to the
+proxy, and `stage_model` adds the `_GARMENT` attribute the shader reads:
 
 ```python
 from garment_cook import bind_outfit, cook_outfit, depfile_text, stage_model
 
-piece = dict(id="coat", piece=1, source_material="cloth", outer_surface=None, budget=240, drive_hz=1.9, swing=0.33,
-             backstop_per_m=0.3, material=dict(density=0.24, stretch=1e-5, bend=0.4, drag=2.0, thickness=0.003, iterations=2),
-             colliders=[("Hips", [-0.07, 0.9, 0], "Hips", [0.07, 0.9, 0], 0.09, 0.0, 0)],
-             linear_inertia=0.45, angular_inertia=0.35, downward_follow=0.85)
-blob, sheets, report = cook_outfit("coat", Glb(path), [piece], body_joints)
+piece = dict(id="coat", piece=1, source_material="cloth", outer_surface=None, budget=240,
+             max_distance=dict(rate=0.3, cap_m=0.08),
+             material=dict(density=0.24, stretch=1e-5, bend=0.4, drag=2.0, thickness=0.003, iterations=2, friction=0.4),
+             linear_inertia=0.45, angular_inertia=0.35)
+colliders = [("Hips", [-0.07, 0.9, 0], "Hips", [0.07, 0.9, 0], 0.09, 0.0)]
+blob, sheets, report = cook_outfit("coat", Glb(path), [piece], body_joints, colliders=colliders,
+                                   body_primitives=["skin", "legwear"])
 staged_path.write_bytes(stage_model(Glb(path), bind_outfit(Glb(path), sheets, body_joints)))
 depfile_path.write_text(depfile_text(blob_path, inputs))
 ```
 
-`swing` is the travel radius per metre of fabric to the nearest pin and `backstop_per_m` how far below its target, along the skinned normal, a free vertex may sink per metre. Colliders are round cones in rest model space,
-the margin is the fabric thickness, and flag 1 marks an outside obstacle. The report lists, per piece, the free
-proxy vertices that already lie inside their own colliders at rest. The cook refuses a lost label, a label no
-recipe piece names, `_CLOTH` off a piece, a free vertex split from an unlabelled one, and weights outside the body
-rig; `garment_blob.encode` checks every value the solver trusts and names the outfit, piece and field it rejects. Add the blob to the pack with
-`nt_builder_add_blob`; tools read it back with `garment_blob.decode`.
+The maps follow from meaning, not from tuning against old frames:
 
-For radii measured from a character mesh, pass rest-space points in meters, one joint name per point, and the
-authored body description to `garment_fit_capsules.fit_body_capsules(points, joints, body, shape)`.
+- `r = min(rate x geodesic distance to the pins, cap_m)`: 0 on the pins, growing along the fabric to the hem value
+  the garment allows (a pencil skirt a few centimetres, a loose hem more).
+- the body direction `b` points from each proxy vertex to the closest point of the `body_primitives` surface at rest,
+  smoothed over the proxy; `d` is that distance less the thickness; `R` is the sphere that best fits the body around
+  the closest point over a disc of radius `r`, 0 where `d >= r`. `backstop=False` on a piece, or no body primitives,
+  turns the backstop off.
+
+Colliders are the outfit's one set of round cones in rest model space; the cook stores them as spheres on their
+joints and the cones that join them, shared by every piece. The report lists, per piece, the proxy vertices that lie
+inside a shape at rest and those a shape holds deeper than their `r`. The cook refuses a lost label, a label no recipe
+piece names, `_CLOTH` off a piece, a free vertex split from an unlabelled one, and weights outside the body rig;
+`garment_blob.encode` checks every value the solver trusts and names the outfit, piece and field it rejects. Add the
+blob to the pack with `nt_builder_add_blob`; tools read it back with `garment_blob.decode`.
 
 `cook_mesh` remains the low-level step for one surface: invalid winding, repeated or degenerate triangles,
 out-of-bounds indices and capacity overflows fail it, and `wearable=True` requires a pin on every connected piece.
 `tether_slack=1.0` limits each reachable free vertex to the rest edge-path length to its nearest pin; `1.03` adds
-three percent. Body contact runs after tethers and may leave residual extension when the two conflict.
+three percent.
 
 ## Load a cooked outfit
 
@@ -111,92 +102,58 @@ A blob payload only needs 4-byte alignment; engine blob payloads have at least
 the alignment of `malloc`. An outfit cooked without cloth views as NULL, so
 track whether its blob is in by the winner, not by the view.
 
-## Simulate
+## Simulate a wearer
+
+For a NeoTolis character, include `garment/actor.h`. Keep a zero-initialized `GarmentActor` for each wearer and share
+the outfit's `GarmentSet` view. Once per animation update pass the final model-space pose, the world transform, the
+elapsed seconds and the scene's convexes:
+
+```c
+static const ClothConvex floor = {.plane_count = 1, .planes = {{0, 1, 0, 0}}}; /* world y <= 0 is inside */
+const GarmentInput in = {.pose = pose, .world = world, .dt = dt, .reset = placed_anew, .render = true,
+                         .convexes = &floor, .convex_count = 1, .max_distance_scale = 1.0F};
+if (garment_actor_update(&actor, outfit, rig, &in)) draw_garment_surface(actor.palette, actor.palette_count);
+```
+
+Set `reset` on the first frame and whenever the wearer is placed anew: staged, seated, cut or teleported. The cloth
+then starts on its reference with no velocity; there is no warm-up and no teleport guess, and an actor without a
+previous update resets regardless. Between pose samples the actor slerps the joints' local rotations and runs forward
+kinematics at every substep, so a fast turn sweeps the arc. `max_distance_scale` and `max_distance_bias` blend the
+cloth toward the animation: scale 0 with bias 0 is fully skinned and skips the solve.
+
+A convex is a world-space plane set (`n . x + d <= 0` inside, up to `CLOTH_CONVEX_PLANES` planes): one plane for a
+floor, a box plus its hull planes for a seat. The actor moves them into its own simulation space at every substep. A
+vertex inside leaves through the face it entered by; friction is the fabric's Coulomb `friction`.
+
+## Simulate a surface directly
 
 ```c
 #include "garment/cloth.h"
 
 static ClothState state;
-static const ClothMaterial fabric = {
-    .density = 0.24F, .stretch = 0.00001F, .bend = 0.4F,
-    .drag = 2.0F, .thickness = 0.003F, .iterations = 6
-};
+static ClothReference ref[CLOTH_VERTICES]; /* skinned position and unit body direction per vertex */
 
-static const ClothMesh *panel; /* outfit->pieces[0].mesh from the view */
-
-void equip_panel(const float pose[][3]) {
-    cloth_reset(&state, panel, pose);
-}
-
-void step_panel(float seconds, const float pose[][3], const ClothGuide *limits,
-                const ClothCapsule *capsules, int capsule_count) {
-    cloth_step(&state, panel, &fabric, seconds, NULL, pose, limits, capsules, capsule_count);
-}
+cloth_reset(&state, panel, &fabric, ref, NULL, &shapes);
+cloth_step(&state, panel, &fabric, 1.0F / 180.0F, NULL, ref, NULL, &shapes);
 ```
 
-Keep the view and its blob alive and immutable through every use of
-`state`. Reset succeeds when `state.mesh == panel`. Each pose and guide
-array must cover every simulation vertex. Pins follow their current anchor.
-The capsule endpoints define the centerline. Sample the rig and colliders
-at physics frequency, then present `state.x`. To carry inertia through a
-world-origin shift, apply the same translation to `state.x` and
-`state.target`: the target holds the last pushed targets, whose side keeps
-each push exit on its side.
-
-## Scene contact
-
-Pass the upper face of a supporting scene object to `garment_actor_update`.
-Transform the center as a point and each half-edge as a vector using the object's
-current world transform. Their cross product points toward the cloth. For a level
-Y-up surface, use the positive X and negative Z half-edges in that order.
-Set `depth` to the measured distance in world meters from the top to the underside.
-The actor converts the face to its own simulation space for the duration of the call.
-Pass `NULL` when the character has no supporting object.
-
-For a shaped cushion, supply its closed outward planes in `ClothSupport.planes`
-and set `plane_count`. A plane in model space satisfies `dot(n, x - center) + d <= 0`
-inside the cushion. Transform its normal by the inverse transpose of the object's
-world basis and keep the offset relative to the transformed center. Leave the
-count at zero for a rectangular support.
-
-At spawn or teleport, the solver resolves overlaps toward the nearest face.
-It also checks mesh edges that cross the object between two endpoints. A free
-vertex's target inside the object leaves it through the face it entered by, after
-the body capsules, so the drive never pulls fabric into the seat. Fabric can
-slide off the edge and swing back underneath. Zero depth represents a one-sided
-sheet.
-The low-level solver accepts the same face in simulation coordinates through
-`cloth_reset_supported` and `ClothFrame.support`.
+`NULL` max distance uses the mesh's `r`; pass a runtime array to scale it. `ClothShapes` holds spheres at their current
+and previous substep centres, the cones joining them and the convexes in simulation space. Keep the view and its blob
+alive and immutable through every use of `state`. Reset succeeds when `state.mesh == panel`. An invalid input clears
+`state.frame_valid` and leaves the positions.
 
 ## Inspect a posed garment
 
-For a NeoTolis character, include `garment/actor.h`. Keep a zero-initialized `GarmentActor` for each wearer and share the outfit's `GarmentSet` view. Pass the character's final model-space skeletal pose, its world transform and elapsed seconds once per animation update. A successful update with `render=true` exposes `actor.palette` and `actor.palette_count` for drawing. In the workbench, inspect that same actor and pose:
-
 ```c
-if (garment_actor_update(&actor, outfit, rig, pose, world, dt, true, NULL)) {
-    draw_garment_surface(actor.palette, actor.palette_count);
-    garment_actor_debug_lines(&actor, rig, pose, layers, selected_joint, draw_line, view);
-}
+garment_actor_debug_lines(&actor, rig, pose, layers, selected_joint, draw_line, view);
 ```
 
-`draw_garment_surface` and `draw_line` are host drawing functions. The line callback receives endpoints in model space and their RGB color. Apply the garment's model transform and camera. Set `selected_joint` to a skeleton index for skinning weights or `-1` for animation-drive weights. On a frozen pose, call only the debug function to change layers. Call `garment_actor_clear(&actor)` when releasing the wearer. The [isolated actor test](tests/test_actor.c) exercises different wearers of one asset with a two-joint rig.
-
-For a host supplying its own posed vertices, include `garment/debug.h` and use the geometry helpers directly:
-
-```c
-cloth_debug_mesh(mesh, display_positions, weights, layers, draw_line, view);
-if (layers & CLOTH_DEBUG_CAPSULES) {
-    for (int i = 0; i < contact_count; ++i)
-        cloth_debug_capsule(&contacts[i], draw_line, view);
-}
-if (layers & CLOTH_DEBUG_SKELETON) {
-    for (int i = 0; i < joint_count; ++i)
-        if (parent[i] >= 0)
-            cloth_debug_bone(joint_position[parent[i]], joint_position[i], draw_line, view);
-}
-```
-
-Call the mesh helper for each simulated piece. Pass `NULL` for its cooked animation-drive weights, or one float per proxy vertex for a selected joint's anchor-skinning weights. When the host interpolates the displayed pose, call the helper separately with `CLOTH_DEBUG_WEIGHTS` on the displayed positions and `CLOTH_DEBUG_TETHERS` on the physical positions. The tether color then measures actual distance against the cooked limit. Use the capsule endpoints and both radii from that same physical step and the skeleton from the displayed pose. Toggling layers changes only drawing.
+`draw_line` receives endpoints in model space and their RGB color. Layers: `CLOTH_DEBUG_WEIGHTS` (a skeleton joint's
+skin weights, or `-1` for the max-distance map), `TETHERS`, `SHAPES` (spheres and cones at the last substep),
+`SKELETON`, `REFERENCE` (the reference wire), `MAX_DISTANCE` (each vertex's offset from its reference, red beyond `r`)
+and `BACKSTOP` (the body direction from the reference to the backstop surface). Call `garment_actor_clear(&actor)`
+when releasing the wearer. A host with its own posed vertices uses `cloth_debug_mesh`, `cloth_debug_reference`,
+`cloth_debug_cone` and `cloth_debug_bone` directly.
 
 ## Verify
 

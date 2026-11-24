@@ -8,26 +8,23 @@
 #include <stdlib.h>
 #include <string.h>
 
-typedef struct {
-    float anchors[CLOTH_VERTICES][3];
-    ClothGuide guide[CLOTH_VERTICES];
-    ClothCapsule caps[GARMENT_CAPSULES_MAX];
-    int cap_count;
-} GarmentFrame;
-
 typedef struct GarmentPiece {
-    int joint[GARMENT_BONES_MAX];
     ClothState cloth;
-    GarmentFrame previous;
-    float sim_anchors[CLOTH_VERTICES][3];
-    ClothCapsule sim_caps[GARMENT_CAPSULES_MAX];
-    int sim_cap_count;
+    ClothReference frame[CLOTH_VERTICES]; /* Reference at the frame pose. */
+    float step[CLOTH_VERTICES][3];        /* Reference at the last substep. */
+    float r[CLOTH_VERTICES];              /* Runtime max distance. */
 } GarmentPiece;
 
 /* Concurrent actor updates use separate scratch; simulation never calls back into user code. */
 static _Thread_local struct {
-    GarmentFrame current, step;
+    nt_skeletal_trs_t current[GARMENT_JOINTS_MAX];
+    nt_skeletal_mat34_t model[GARMENT_JOINTS_MAX]; /* Chain joints at the evaluated time. */
     nt_skeletal_mat34_t skin[GARMENT_BONES_MAX];
+    ClothReference ref[CLOTH_VERTICES];
+    ClothSphere spheres[CLOTH_SHAPES];
+    ClothCone cones[CLOTH_SHAPES];
+    ClothConvex convexes[CLOTH_CONVEXES];
+    float move[3][4];
     float dressed[CLOTH_VERTICES][3];
     ClothVertexBasis basis[CLOTH_VERTICES];
     float mats[CLOTH_VERTICES][12];
@@ -43,6 +40,13 @@ void garment_actor_clear(GarmentActor *actor) {
     memset(actor, 0, sizeof *actor);
 }
 
+/* Position of each outfit bone's joint in the chain, or -1 for a joint the skeleton lacks. */
+static int chain_slot(const GarmentActor *a, int joint) {
+    for (int i = 0; i < a->chain_count; ++i)
+        if (a->chain[i] == joint) return i;
+    return -1;
+}
+
 /* The set comes from garment_asset_view, which asserted its structure; only the skeleton is checked here. */
 static bool bind_actor(GarmentActor *a, const GarmentSet *set, const nt_skeletal_skeleton_t *skel) {
     garment_actor_clear(a);
@@ -51,44 +55,64 @@ static bool bind_actor(GarmentActor *a, const GarmentSet *set, const nt_skeletal
     a->stats.id = set->id;
     a->stats.finite = true;
     NT_ASSERT(set->pieces && set->piece_count > 0 && set->piece_count <= GARMENT_PIECES_MAX);
-    if (!skel->joint_id)
-        return false;
+    if (!skel->joint_id || !skel->parent) return false;
     a->pieces = calloc((size_t)set->piece_count, sizeof *a->pieces);
     if (!a->pieces) {
         a->set = NULL;
         return false;
     }
-    for (int p = 0; p < set->piece_count; ++p) {
-        const GarmentAsset *asset = &set->pieces[p];
-        GarmentPiece *piece = &a->pieces[p];
-        for (int i = 0; i < asset->bone_count; ++i) {
-            uint32_t id = nt_hash32_str(asset->bones[i].name).value;
-            int j = 0;
-            while (j < skel->joint_count && skel->joint_id[j] != id)
-                ++j;
-            if (j == skel->joint_count)
-                ++a->stats.missing_bindings;
-            piece->joint[i] = j;
+    uint8_t *used = calloc(skel->joint_count, 1);
+    if (!used) return false;
+    for (int i = 0; i < set->bone_count; ++i) {
+        uint32_t id = nt_hash32_str(set->bones[i].name).value;
+        int j = 0;
+        while (j < skel->joint_count && skel->joint_id[j] != id) ++j;
+        if (j == skel->joint_count) {
+            ++a->stats.missing_bindings;
+            a->joint[i] = -1;
+            continue;
         }
-        a->stats.vertices += asset->mesh->vertices;
-        a->stats.render_vertices += asset->render_vertices;
+        a->joint[i] = j;
+        for (int k = j; k != NT_SKELETAL_NO_PARENT; k = skel->parent[k]) used[k] = true;
+    }
+    /* The skeleton is in preorder, so ascending indices put every parent before its children. */
+    bool fits = true;
+    for (int j = 0; j < skel->joint_count && fits; ++j) {
+        if (!used[j]) continue;
+        fits = a->chain_count < GARMENT_JOINTS_MAX;
+        if (fits) a->chain[a->chain_count++] = (uint16_t)j;
+    }
+    free(used);
+    if (!fits) return false;
+    for (int i = 0; i < a->chain_count; ++i) {
+        uint16_t parent = skel->parent[a->chain[i]];
+        a->chain_parent[i] = (int16_t)(parent == NT_SKELETAL_NO_PARENT ? -1 : chain_slot(a, parent));
+    }
+    for (int i = 0; i < set->bone_count; ++i)
+        if (a->joint[i] >= 0) a->joint[i] = chain_slot(a, a->joint[i]);
+    for (int p = 0; p < set->piece_count; ++p) {
+        a->stats.vertices += set->pieces[p].mesh->vertices;
+        a->stats.render_vertices += set->pieces[p].render_vertices;
     }
     a->stats.pieces = set->piece_count;
     a->stats.ready = a->stats.missing_bindings == 0;
     return a->stats.ready;
 }
 
+bool garment_actor_prepare(GarmentActor *a, const GarmentSet *set, const nt_skeletal_skeleton_t *skel) {
+    if (!a || !set || !skel) return false;
+    if (a->set != set || a->rig != skel->rig_compat_id.value) return bind_actor(a, set, skel);
+    return a->stats.ready;
+}
+
 static void point(const nt_skeletal_mat34_t *m, const float p[3], float out[3]) {
-    for (int k = 0; k < 3; ++k)
-        out[k] = m->r[k][0] * p[0] + m->r[k][1] * p[1] + m->r[k][2] * p[2] + m->r[k][3];
+    for (int k = 0; k < 3; ++k) out[k] = m->r[k][0] * p[0] + m->r[k][1] * p[1] + m->r[k][2] * p[2] + m->r[k][3];
 }
 
 static bool normalize(float p[3]) {
     float length = sqrtf(p[0] * p[0] + p[1] * p[1] + p[2] * p[2]);
-    if (!isfinite(length) || length < 1e-8F)
-        return false;
-    for (int k = 0; k < 3; ++k)
-        p[k] /= length;
+    if (!isfinite(length) || length < 1e-8F) return false;
+    for (int k = 0; k < 3; ++k) p[k] /= length;
     return true;
 }
 
@@ -99,195 +123,218 @@ static float wrap_angle(float a) {
     return a;
 }
 
-bool garment_actor_prepare(GarmentActor *a, const GarmentSet *set, const nt_skeletal_skeleton_t *skel) {
-    if (!a || !set || !skel)
-        return false;
-    if (a->set != set || a->rig != skel->rig_compat_id.value)
-        return bind_actor(a, set, skel);
-    return a->stats.ready;
+static bool invert(const nt_skeletal_mat34_t *m, nt_skeletal_mat34_t *out) {
+    mat3 a, inv;
+    for (int c = 0; c < 3; ++c)
+        for (int r = 0; r < 3; ++r) a[c][r] = m->r[r][c];
+    float det = glm_mat3_det(a);
+    if (!isfinite(det) || fabsf(det) < 1e-12F) return false;
+    glm_mat3_inv(a, inv);
+    for (int r = 0; r < 3; ++r) {
+        for (int c = 0; c < 3; ++c) out->r[r][c] = inv[c][r];
+        out->r[r][3] = -(inv[0][r] * m->r[0][3] + inv[1][r] * m->r[1][3] + inv[2][r] * m->r[2][3]);
+    }
+    return true;
 }
 
-/* Sample anchors, guides, and capsules directly in actor-root local space (metres, Y-up). */
-static bool sample_frame_local(const GarmentAsset *g, const GarmentPiece *s, const nt_skeletal_mat34_t *pose) {
-    GarmentFrame *f = &scratch.current;
-    for (int i = 0; i < g->bone_count; ++i) {
-        nt_skeletal_mat34_t inverse;
-        memcpy(&inverse, g->bones[i].inverse_bind, sizeof inverse);
-        nt_skeletal_mat34_t posed;
-        nt_skeletal_mat34_mul(&pose[s->joint[i]], &inverse, &posed);
-        scratch.skin[i] = posed;
+/* Rotation and per-axis scale of an affine transform without shear, which is what a TRS hierarchy of uniform
+   scales produces. */
+static bool decompose(const nt_skeletal_mat34_t *m, nt_skeletal_trs_t *out) {
+    mat3 rotation;
+    for (int c = 0; c < 3; ++c) {
+        float s = sqrtf(m->r[0][c] * m->r[0][c] + m->r[1][c] * m->r[1][c] + m->r[2][c] * m->r[2][c]);
+        if (!isfinite(s) || s < 1e-8F) return false;
+        out->s[c] = s;
+        for (int r = 0; r < 3; ++r) rotation[c][r] = m->r[r][c] / s;
     }
+    if (glm_mat3_det(rotation) < 0.0F) {
+        out->s[0] = -out->s[0];
+        glm_vec3_negate(rotation[0]);
+    }
+    glm_mat3_quat(rotation, out->q);
+    glm_quat_normalize(out->q);
+    for (int k = 0; k < 3; ++k) out->t[k] = m->r[k][3];
+    return true;
+}
+
+/* Parent-local transforms of the chain from model-space joints. */
+static bool chain_locals(const GarmentActor *a, const nt_skeletal_skeleton_t *skel, const nt_skeletal_mat34_t *pose,
+                         nt_skeletal_trs_t *out) {
+    for (int i = 0; i < a->chain_count; ++i) {
+        int j = a->chain[i];
+        nt_skeletal_mat34_t local = pose[j];
+        uint16_t parent = skel->parent[j];
+        if (parent != NT_SKELETAL_NO_PARENT) {
+            nt_skeletal_mat34_t inverse;
+            if (!invert(&pose[parent], &inverse)) return false;
+            nt_skeletal_mat34_mul(&inverse, &pose[j], &local);
+        }
+        if (!decompose(&local, &out[i])) return false;
+    }
+    return true;
+}
+
+/* Slerp of the local rotations and lerp of the local translations and scales, then forward kinematics. u = 1 takes the
+   sampled pose itself, so a substep on a sample is exact. */
+static void interpolate_joints(const GarmentActor *a, const nt_skeletal_mat34_t *pose, float u) {
+    if (u >= 1.0F) {
+        for (int i = 0; i < a->chain_count; ++i) scratch.model[i] = pose[a->chain[i]];
+        return;
+    }
+    for (int i = 0; i < a->chain_count; ++i) {
+        const nt_skeletal_trs_t *p = &a->previous[i], *c = &scratch.current[i];
+        nt_skeletal_trs_t trs;
+        for (int k = 0; k < 3; ++k) {
+            trs.t[k] = p->t[k] + u * (c->t[k] - p->t[k]);
+            trs.s[k] = p->s[k] + u * (c->s[k] - p->s[k]);
+        }
+        glm_quat_slerp((float *)p->q, (float *)c->q, u, trs.q);
+        glm_quat_normalize(trs.q);
+        nt_skeletal_mat34_t local;
+        nt_skeletal_mat34_from_trs(&trs, &local);
+        int slot = a->chain_parent[i];
+        if (slot < 0) scratch.model[i] = local;
+        else nt_skeletal_mat34_mul(&scratch.model[slot], &local, &scratch.model[i]);
+    }
+}
+
+static void skin_matrices(const GarmentActor *a) {
+    const GarmentSet *set = a->set;
+    for (int i = 0; i < set->bone_count; ++i) {
+        nt_skeletal_mat34_t inverse;
+        memcpy(&inverse, set->bones[i].inverse_bind, sizeof inverse);
+        nt_skeletal_mat34_mul(&scratch.model[a->joint[i]], &inverse, &scratch.skin[i]);
+    }
+}
+
+/* ref = sum_j w_j S_j rest and b = normalize(sum_j w_j R_j b_rest), at the evaluated joints. */
+static bool evaluate_reference(const GarmentAsset *g, ClothReference *out) {
     for (int i = 0; i < g->mesh->vertices; ++i) {
-        const GarmentVertex *v = &g->vertices[i];
-        float *pos = f->anchors[i], *n = f->guide[i].normal;
-        memset(pos, 0, 3 * sizeof(float));
-        memset(n, 0, 3 * sizeof(float));
+        const GarmentSkin *v = &g->skin[i];
+        float *x = out[i].x, *b = out[i].b;
+        memset(x, 0, 3 * sizeof(float));
+        memset(b, 0, 3 * sizeof(float));
         for (int j = 0; j < 4; ++j) {
-            if (v->weight[j] == 0)
-                continue;
+            if (v->weight[j] == 0) continue;
             const nt_skeletal_mat34_t *m = &scratch.skin[v->bone[j]];
+            const float *d = g->direction[i];
             float influenced[3];
             point(m, g->mesh->rest[i], influenced);
             for (int k = 0; k < 3; ++k) {
-                pos[k] += v->weight[j] * influenced[k];
-                n[k] += v->weight[j] *
-                        (m->r[k][0] * v->normal[0] + m->r[k][1] * v->normal[1] + m->r[k][2] * v->normal[2]);
+                x[k] += v->weight[j] * influenced[k];
+                b[k] += v->weight[j] * (m->r[k][0] * d[0] + m->r[k][1] * d[1] + m->r[k][2] * d[2]);
             }
         }
-        if (!normalize(n))
-            return false;
-        f->guide[i].travel = v->travel_m;
-        f->guide[i].backstop = v->backstop_m;
-    }
-    for (int i = 0; i < g->collider_count; ++i) {
-        const GarmentCollider *c = &g->colliders[i];
-        memset(&f->caps[i], 0, sizeof f->caps[i]);
-        point(&scratch.skin[c->bone_a], c->point_a, f->caps[i].a);
-        point(&scratch.skin[c->bone_b], c->point_b, f->caps[i].b);
-        f->caps[i].radius = c->radius_m;
-        f->caps[i].radius_b = c->radius_b_m;
-        f->caps[i].flags = c->flags;
-    }
-    f->cap_count = g->collider_count;
-    return true;
-}
-
-static void blend3(const float a[3], const float b[3], float u, float out[3]) {
-    for (int k = 0; k < 3; ++k)
-        out[k] = a[k] + u * (b[k] - a[k]);
-}
-
-static void interpolate(const GarmentAsset *asset, GarmentPiece *piece, float u) {
-    const GarmentFrame *prev = &piece->previous;
-    const GarmentFrame *curr = &scratch.current;
-    GarmentFrame *step = &scratch.step;
-    for (int i = 0; i < asset->mesh->vertices; ++i) {
-        blend3(prev->anchors[i], curr->anchors[i], u, step->anchors[i]);
-        step->guide[i] = curr->guide[i];
-        blend3(prev->guide[i].normal, curr->guide[i].normal, u, step->guide[i].normal);
-        if (!normalize(step->guide[i].normal))
-            memcpy(step->guide[i].normal, curr->guide[i].normal, 3 * sizeof(float));
-    }
-    step->cap_count = curr->cap_count;
-    for (int i = 0; i < curr->cap_count; ++i) {
-        step->caps[i] = curr->caps[i];
-        blend3(prev->caps[i].a, curr->caps[i].a, u, step->caps[i].a);
-        blend3(prev->caps[i].b, curr->caps[i].b, u, step->caps[i].b);
-        /* A render pose can fall between physical steps. Sweep from the last solved endpoint. */
-        memcpy(step->caps[i].prev_a, piece->sim_caps[i].a, sizeof step->caps[i].prev_a);
-        memcpy(step->caps[i].prev_b, piece->sim_caps[i].b, sizeof step->caps[i].prev_b);
-        step->caps[i].has_prev = 1U;
-    }
-    piece->sim_cap_count = step->cap_count;
-    /* A step on a pose timestamp shares the exact input endpoint with the next interval. */
-    memcpy(piece->sim_caps, u == 1.0F ? curr->caps : step->caps, (size_t)step->cap_count * sizeof *step->caps);
-}
-
-static void geometry_stats(GarmentStats *stats, const GarmentPiece *s, const ClothMesh *m) {
-    for (int i = 0; i < m->edges; ++i) {
-        const ClothEdge *e = &m->edge[i];
-        float length2 = 0;
-        for (int k = 0; k < 3; ++k) {
-            float v = s->cloth.x[e->a][k] - s->cloth.x[e->b][k];
-            length2 += v * v;
-        }
-        stats->max_strain = fmaxf(stats->max_strain, sqrtf(length2) / e->length - 1.0F);
-    }
-    for (int i = 0; i < m->vertices; ++i) {
-        float error2 = 0;
-        for (int k = 0; k < 3; ++k) {
-            float value = s->cloth.x[i][k];
-            if (!isfinite(value))
-                stats->finite = false;
-            float d = value - s->sim_anchors[i][k];
-            error2 += d * d;
-        }
-        if (m->inv_area[i] == 0)
-            stats->pin_error_m = fmaxf(stats->pin_error_m, sqrtf(error2));
-    }
-}
-
-static bool local_support(const ClothSupport *source, const float world[16], ClothSupport *local) {
-    mat3 basis, inverse;
-    for (int i = 0; i < 3; ++i) glm_vec3_copy((float *)&world[4 * i], basis[i]);
-    float det = glm_mat3_det(basis);
-    if (!isfinite(det) || fabsf(det) < 1e-12F) return false;
-    glm_mat3_inv(basis, inverse);
-    vec3 center;
-    glm_vec3_sub((float *)source->center, (float *)&world[12], center);
-    glm_mat3_mulv(inverse, center, local->center);
-    glm_mat3_mulv(inverse, (float *)source->half_u, local->half_u);
-    glm_mat3_mulv(inverse, (float *)source->half_v, local->half_v);
-    if (det < 0.0F) glm_vec3_negate(local->half_v);
-    if (source->plane_count < 0 || source->plane_count > CLOTH_SUPPORT_PLANES) return false;
-    local->plane_count = source->plane_count;
-    for (int f = 0; f < source->plane_count; ++f) {
-        for (int k = 0; k < 3; ++k)
-            local->planes[f][k] = glm_vec3_dot(basis[k], (float *)source->planes[f]);
-        local->planes[f][3] = source->planes[f][3];
-    }
-    local->depth = source->depth;
-    if (source->depth > 0.0F) {
-        vec3 world_area, local_area;
-        glm_vec3_cross((float *)source->half_u, (float *)source->half_v, world_area);
-        glm_vec3_cross(local->half_u, local->half_v, local_area);
-        /* Volume scales by the determinant even when the local face is skewed. */
-        float area = glm_vec3_norm(local_area);
-        if (area <= 1e-12F) return false;
-        local->depth *= glm_vec3_norm(world_area) / (fabsf(det) * area);
+        if (!normalize(b)) return false;
     }
     return true;
 }
 
-static bool simulate(GarmentActor *a, const GarmentSet *set, const nt_skeletal_skeleton_t *skel,
-                     const nt_skeletal_mat34_t *pose, const float transform[16], float dt,
-                     const ClothSupport *world_support) {
-    if (!set || !skel || !pose || !transform || !isfinite(dt) || dt < 0)
-        return false;
-    ClothSupport support;
-    if (world_support && !local_support(world_support, transform, &support)) return false;
-    if (!garment_actor_prepare(a, set, skel))
-        return false;
-    nt_skeletal_mat34_t world;
-    float move2 = 0;
-    for (int k = 0; k < 3; ++k) {
-        float axis[] = {transform[4 * k], transform[4 * k + 1], transform[4 * k + 2]};
-        if (!normalize(axis) || !isfinite(transform[12 + k]))
-            return false;
-        for (int j = 0; j < 3; ++j)
-            world.r[j][k] = axis[j];
-        world.r[k][3] = transform[12 + k];
-        float move = world.r[k][3] - a->origin[k];
-        move2 += move * move;
+static void pose_spheres(const GarmentActor *a, ClothSphere *out) {
+    const GarmentSet *set = a->set;
+    for (int i = 0; i < set->sphere_count; ++i) {
+        const GarmentSphere *s = &set->spheres[i];
+        point(&scratch.model[a->joint[s->bone]], s->center, out[i].c);
+        out[i].r = s->radius;
     }
-    float yaw = atan2f(world.r[0][2], world.r[2][2]);
-    float dyaw = a->primed ? wrap_angle(yaw - a->yaw) : 0.0F;
+}
 
+/* Root rotation and translation of a column-major world matrix whose axes are normalized. */
+static bool root_of(const float world[16], float q[4], float t[3]) {
+    mat3 rotation;
+    for (int c = 0; c < 3; ++c) {
+        float axis[3] = {world[4 * c], world[4 * c + 1], world[4 * c + 2]};
+        if (!normalize(axis) || !isfinite(world[12 + c])) return false;
+        glm_vec3_copy(axis, rotation[c]);
+        t[c] = world[12 + c];
+    }
+    glm_mat3_quat(rotation, q);
+    glm_quat_normalize(q);
+    return true;
+}
+
+/* World-space convexes in actor space at root (q, t), and the map from the last substep's actor space to this one for
+   a world-fixed point. */
+static bool local_convexes(GarmentActor *a, const GarmentInput *in, const float q[4], const float t[3]) {
+    mat3 r, prev_r;
+    glm_quat_mat3((float *)q, r);
+    glm_quat_mat3(a->sim_root_q, prev_r);
+    for (int c = 0; c < in->convex_count; ++c) {
+        const ClothConvex *source = &in->convexes[c];
+        ClothConvex *local = &scratch.convexes[c];
+        if (source->plane_count < 1 || source->plane_count > CLOTH_CONVEX_PLANES) return false;
+        local->plane_count = source->plane_count;
+        for (int f = 0; f < source->plane_count; ++f) {
+            const float *n = source->planes[f];
+            for (int k = 0; k < 3; ++k) local->planes[f][k] = glm_vec3_dot(r[k], (float *)n);
+            local->planes[f][3] = glm_vec3_dot((float *)n, (float *)t) + n[3];
+        }
+    }
+    vec3 offset;
+    glm_vec3_sub(a->sim_root_t, (float *)t, offset);
+    for (int row = 0; row < 3; ++row) {
+        for (int col = 0; col < 3; ++col) scratch.move[row][col] = glm_vec3_dot(r[row], prev_r[col]);
+        scratch.move[row][3] = glm_vec3_dot(r[row], offset);
+    }
+    return true;
+}
+
+static void runtime_max_distance(const GarmentAsset *g, const GarmentInput *in, float *out) {
+    for (int i = 0; i < g->mesh->vertices; ++i)
+        out[i] = fmaxf(0.0F, g->mesh->max_distance[i] * in->max_distance_scale + in->max_distance_bias);
+}
+
+static void record_measure(GarmentStats *stats, const ClothMetrics *mt) {
+    stats->max_distance_excess_m = fmaxf(stats->max_distance_excess_m, mt->max_distance_excess_m);
+    stats->backstop_depth_m = fmaxf(stats->backstop_depth_m, mt->backstop_depth_m);
+    stats->held_depth_m = fmaxf(stats->held_depth_m, mt->held_depth_m);
+    stats->held_vertices += mt->held_vertices;
+    stats->max_strain = fmaxf(stats->max_strain, mt->stretch);
+    if (!mt->finite) stats->finite = false;
+}
+
+static bool inputs_valid(const GarmentInput *in) {
+    return in && in->pose && in->world && isfinite(in->dt) && in->dt >= 0 && in->convex_count >= 0 &&
+           in->convex_count <= CLOTH_CONVEXES && (!in->convex_count || in->convexes) &&
+           isfinite(in->max_distance_scale) && in->max_distance_scale >= 0 && isfinite(in->max_distance_bias);
+}
+
+static bool simulate(GarmentActor *a, const GarmentSet *set, const nt_skeletal_skeleton_t *skel, const GarmentInput *in) {
+    if (!set || !skel || !inputs_valid(in) || !garment_actor_prepare(a, set, skel)) return false;
+    float root_q[4], root_t[3];
+    if (!root_of(in->world, root_q, root_t) || !chain_locals(a, skel, in->pose, scratch.current)) return false;
+    const float *world = in->world;
+    float yaw = atan2f(world[8], world[10]);
+    const bool reset = in->reset || !a->primed;
+    if (reset) {
+        memcpy(a->previous, scratch.current, (size_t)a->chain_count * sizeof a->previous[0]);
+        memcpy(a->root_q, root_q, sizeof root_q);
+        memcpy(a->root_t, root_t, sizeof root_t);
+        memcpy(a->sim_root_q, root_q, sizeof root_q);
+        memcpy(a->sim_root_t, root_t, sizeof root_t);
+        a->remainder = 0.0F;
+    }
+    float dyaw = reset ? 0.0F : wrap_angle(yaw - a->yaw);
     const float step = 1.0F / (float)GARMENT_SIM_HZ;
-    bool reset = !a->primed || move2 > 4.0F || fabsf(dyaw) > 1.8F;
-    float clamped_dt = fminf(dt, (float)GARMENT_MAX_SUBSTEPS * step);
+    float clamped_dt = fminf(in->dt, (float)GARMENT_MAX_SUBSTEPS * step);
     float elapsed = reset ? 0.0F : a->remainder + clamped_dt;
     int steps = (int)floorf(elapsed / step + 1e-5F);
-    if (steps > GARMENT_MAX_SUBSTEPS)
-        steps = GARMENT_MAX_SUBSTEPS;
+    if (steps > GARMENT_MAX_SUBSTEPS) steps = GARMENT_MAX_SUBSTEPS;
+    const bool kinematic = in->max_distance_scale == 0.0F && in->max_distance_bias <= 0.0F;
 
-    /* Compute gravity-aligned actor-root fictitious acceleration in local space. */
+    /* Gravity-aligned actor-root fictitious acceleration in actor space, from the frame's root motion. */
     float local_accel[3] = {0, 0, 0};
     float yaw_vel = 0.0F, yaw_accel = 0.0F;
-    if (!reset && dt > 1e-5F) {
-        float inv_dt = 1.0F / dt;
-        float world_vel[3] = {
-            (world.r[0][3] - a->origin[0]) * inv_dt,
-            (world.r[1][3] - a->origin[1]) * inv_dt,
-            (world.r[2][3] - a->origin[2]) * inv_dt
-        };
-        float world_accel[3] = {
-            (world_vel[0] - a->prev_vel[0]) * inv_dt,
-            (world_vel[1] - a->prev_vel[1]) * inv_dt,
-            (world_vel[2] - a->prev_vel[2]) * inv_dt
-        };
-        for (int k = 0; k < 3; ++k)
-            local_accel[k] = world.r[0][k] * world_accel[0] + world.r[1][k] * world_accel[1] + world.r[2][k] * world_accel[2];
+    if (!reset && in->dt > 1e-5F) {
+        float inv_dt = 1.0F / in->dt;
+        float world_vel[3], world_accel[3];
+        for (int k = 0; k < 3; ++k) {
+            world_vel[k] = (root_t[k] - a->origin[k]) * inv_dt;
+            world_accel[k] = (world_vel[k] - a->prev_vel[k]) * inv_dt;
+        }
+        mat3 r;
+        glm_quat_mat3(root_q, r);
+        for (int k = 0; k < 3; ++k) local_accel[k] = glm_vec3_dot(r[k], world_accel);
         yaw_vel = dyaw * inv_dt;
         yaw_accel = (yaw_vel - a->prev_yaw_vel) * inv_dt;
         memcpy(a->prev_vel, world_vel, sizeof a->prev_vel);
@@ -297,88 +344,87 @@ static bool simulate(GarmentActor *a, const GarmentSet *set, const nt_skeletal_s
         a->prev_yaw_vel = 0.0F;
     }
 
-    a->stats.max_strain = a->stats.pin_error_m = a->stats.max_displacement_m = 0;
-    a->stats.finite = true;
-    a->stats.surface_faces = 0;
+    GarmentStats *stats = &a->stats;
+    stats->max_strain = stats->max_displacement_m = 0;
+    stats->max_distance_excess_m = stats->backstop_depth_m = stats->held_depth_m = 0;
+    stats->held_vertices = 0;
+    stats->finite = true;
+    stats->surface_faces = 0;
+    for (int i = 0; i < set->cone_count; ++i) scratch.cones[i] = (ClothCone){(uint8_t)set->cones[i].a, (uint8_t)set->cones[i].b};
+    ClothShapes shapes = {.spheres = scratch.spheres, .sphere_count = set->sphere_count, .cones = scratch.cones,
+                          .cone_count = set->cone_count, .convexes = scratch.convexes, .convex_count = in->convex_count};
+
+    /* The frame pose: every piece's frame reference, and the whole state on a reset. */
+    interpolate_joints(a, in->pose, 1.0F);
+    skin_matrices(a);
     for (int p = 0; p < set->piece_count; ++p) {
-        const GarmentAsset *g = &set->pieces[p];
-        GarmentPiece *s = &a->pieces[p];
-        if (!sample_frame_local(g, s, pose)) {
-            a->stats.finite = false;
-            break;
-        }
-        size_t bytes = (size_t)g->mesh->vertices * sizeof s->sim_anchors[0];
-        if (reset) {
-            cloth_reset_supported(&s->cloth, g->mesh, &g->material, scratch.current.anchors,
-                                  scratch.current.guide, scratch.current.caps, scratch.current.cap_count,
-                                  world_support ? &support : NULL);
-            /* The reset placed the cloth on the pushed targets; those are this sample's targets. */
-            memcpy(scratch.current.anchors, s->cloth.target, bytes);
-            memcpy(s->sim_anchors, scratch.current.anchors, bytes);
-            s->sim_cap_count = scratch.current.cap_count;
-            memcpy(s->sim_caps, scratch.current.caps, (size_t)s->sim_cap_count * sizeof *s->sim_caps);
-        } else {
-            /* The pushed target depends on the pose alone, so it is found once per sample; the sweep from the last
-               sample's capsules keeps each exit on its side. */
-            for (int c = 0; c < scratch.current.cap_count; ++c) {
-                ClothCapsule *cap = &scratch.current.caps[c];
-                cap->has_prev = 1U;
-                memcpy(cap->prev_a, s->previous.caps[c].a, sizeof cap->prev_a);
-                memcpy(cap->prev_b, s->previous.caps[c].b, sizeof cap->prev_b);
-            }
-            if (!cloth_push_targets(&s->cloth, g->mesh, &g->material, scratch.current.anchors, scratch.current.guide,
-                                    scratch.current.caps, scratch.current.cap_count, world_support ? &support : NULL)) {
-                a->stats.finite = false;
-                break;
-            }
-        }
-        ClothFrame frame = {
-            .linear_accel = {local_accel[0], local_accel[1], local_accel[2]},
-            .angular_vel_y = yaw_vel,
-            .angular_accel_y = yaw_accel,
-            .linear_inertia = g->linear_inertia,
-            .angular_inertia = g->angular_inertia,
-            .support = world_support ? &support : NULL
-        };
-        for (int j = 0; j < steps; ++j) {
-            float u = clamped_dt > 1e-6F ? fminf(1.0F, ((float)(j + 1) * step - a->remainder) / clamped_dt) : 1.0F;
-            interpolate(g, s, u);
-            /* Inherit downward skeletal hip drops so snappy crouches do not outrun gravity and invert skirts. */
-            float prev_pin_y = 0.0F, curr_pin_y = 0.0F;
-            int pin_count = 0;
-            for (int v = 0; v < g->mesh->vertices; ++v) {
-                if (g->mesh->inv_area[v] == 0.0F) {
-                    prev_pin_y += s->sim_anchors[v][1];
-                    curr_pin_y += scratch.step.anchors[v][1];
-                    ++pin_count;
-                }
-            }
-            float dy = pin_count ? (curr_pin_y - prev_pin_y) / (float)pin_count : 0.0F;
-            frame.anchor_shift_y = g->downward_follow * fminf(dy, 0.0F);
-            cloth_step(&s->cloth, g->mesh, &g->material, step, &frame, scratch.step.anchors,
-                       scratch.step.guide, scratch.step.caps, scratch.step.cap_count);
-            memcpy(s->sim_anchors, scratch.step.anchors, bytes);
-            if (!s->cloth.frame_valid)
-                break;
-        }
-        if (!s->cloth.frame_valid) {
-            a->stats.finite = false;
-            break;
-        }
-        memcpy(s->previous.anchors, scratch.current.anchors, bytes);
-        memcpy(s->previous.guide, scratch.current.guide, (size_t)g->mesh->vertices * sizeof(ClothGuide));
-        s->previous.cap_count = scratch.current.cap_count;
-        memcpy(s->previous.caps, scratch.current.caps, (size_t)scratch.current.cap_count * sizeof(ClothCapsule));
-        geometry_stats(&a->stats, s, g->mesh);
+        if (!evaluate_reference(&set->pieces[p], a->pieces[p].frame)) return false;
+        runtime_max_distance(&set->pieces[p], in, a->pieces[p].r);
     }
-    a->primed = a->stats.finite;
-    if (!a->primed)
-        return false;
-    a->stats.steps = (reset ? 0U : a->stats.steps) + (unsigned)steps;
+    if (reset || kinematic) {
+        pose_spheres(a, a->spheres);
+        for (int i = 0; i < set->sphere_count; ++i) memcpy(a->spheres[i].prev, a->spheres[i].c, sizeof a->spheres[i].prev);
+        memcpy(scratch.spheres, a->spheres, (size_t)set->sphere_count * sizeof scratch.spheres[0]);
+        if (!local_convexes(a, in, root_q, root_t)) return false;
+        for (int p = 0; p < set->piece_count; ++p) {
+            const GarmentAsset *g = &set->pieces[p];
+            GarmentPiece *s = &a->pieces[p];
+            if (!cloth_reset(&s->cloth, g->mesh, &g->material, s->frame, s->r, &shapes)) return false;
+            for (int i = 0; i < g->mesh->vertices; ++i) memcpy(s->step[i], s->frame[i].x, sizeof s->step[i]);
+            ClothMetrics mt = cloth_measure(&s->cloth, g->mesh, &g->material, s->frame, s->r, &shapes);
+            record_measure(stats, &mt);
+        }
+        steps = reset ? 0 : steps;
+        if (kinematic) {
+            memcpy(a->sim_root_q, root_q, sizeof root_q);
+            memcpy(a->sim_root_t, root_t, sizeof root_t);
+        }
+    }
+    shapes.convex_move = (const float (*)[4])scratch.move;
+    for (int k = 0; k < steps && !kinematic; ++k) {
+        float u = clamped_dt > 1e-6F ? fminf(1.0F, ((float)(k + 1) * step - a->remainder) / clamped_dt) : 1.0F;
+        float q[4], t[3];
+        glm_quat_slerp(a->root_q, root_q, u, q);
+        glm_quat_normalize(q);
+        for (int i = 0; i < 3; ++i) t[i] = a->root_t[i] + u * (root_t[i] - a->root_t[i]);
+        if (!local_convexes(a, in, q, t)) return false;
+        interpolate_joints(a, in->pose, u);
+        skin_matrices(a);
+        pose_spheres(a, scratch.spheres);
+        /* A frame can end between substeps; the next substep sweeps from the last solved centres. */
+        for (int i = 0; i < set->sphere_count; ++i) memcpy(scratch.spheres[i].prev, a->spheres[i].c, sizeof scratch.spheres[i].prev);
+        ClothFrame frame = {.linear_accel = {local_accel[0], local_accel[1], local_accel[2]}, .angular_vel_y = yaw_vel,
+                            .angular_accel_y = yaw_accel};
+        for (int p = 0; p < set->piece_count; ++p) {
+            const GarmentAsset *g = &set->pieces[p];
+            GarmentPiece *s = &a->pieces[p];
+            if (!evaluate_reference(g, scratch.ref)) return false;
+            frame.linear_inertia = g->linear_inertia;
+            frame.angular_inertia = g->angular_inertia;
+            cloth_step(&s->cloth, g->mesh, &g->material, step, &frame, scratch.ref, s->r, &shapes);
+            if (!s->cloth.frame_valid) {
+                stats->finite = false;
+                return false;
+            }
+            for (int i = 0; i < g->mesh->vertices; ++i) memcpy(s->step[i], scratch.ref[i].x, sizeof s->step[i]);
+            if (k + 1 == steps) {
+                ClothMetrics mt = cloth_measure(&s->cloth, g->mesh, &g->material, scratch.ref, s->r, &shapes);
+                record_measure(stats, &mt);
+            }
+        }
+        memcpy(a->spheres, scratch.spheres, (size_t)set->sphere_count * sizeof a->spheres[0]);
+        memcpy(a->sim_root_q, q, sizeof q);
+        memcpy(a->sim_root_t, t, sizeof t);
+    }
+    if (!stats->finite) return false;
+    memcpy(a->previous, scratch.current, (size_t)a->chain_count * sizeof a->previous[0]);
+    memcpy(a->root_q, root_q, sizeof root_q);
+    memcpy(a->root_t, root_t, sizeof root_t);
+    a->primed = true;
+    stats->steps = (reset ? 0U : stats->steps) + (unsigned)steps;
     a->remainder = reset ? 0.0F : fmaxf(0.0F, elapsed - (float)steps * step);
     a->yaw = yaw;
-    for (int k = 0; k < 3; ++k)
-        a->origin[k] = world.r[k][3];
+    memcpy(a->origin, root_t, sizeof a->origin);
     return true;
 }
 
@@ -389,12 +435,18 @@ static bool prepare_vertex_frames(GarmentActor *a) {
     if (total_verts <= 0) return false;
     ClothVertexBasis *basis = calloc((size_t)total_verts, sizeof *basis);
     nt_skeletal_mat34_t *frames = calloc((size_t)total_verts, sizeof *frames);
-    if (!basis || !frames) { free(basis); free(frames); return false; }
+    if (!basis || !frames) {
+        free(basis);
+        free(frames);
+        return false;
+    }
     int offset = 0;
     for (int p = 0; p < a->set->piece_count; ++p) {
         const ClothMesh *m = a->set->pieces[p].mesh;
         if (!cloth_vertex_frames_prepare(m, scratch.basis)) {
-            free(basis); free(frames); return false;
+            free(basis);
+            free(frames);
+            return false;
         }
         memcpy(basis + offset, scratch.basis, (size_t)m->vertices * sizeof *basis);
         offset += m->vertices;
@@ -406,10 +458,13 @@ static bool prepare_vertex_frames(GarmentActor *a) {
 }
 
 bool garment_actor_update(GarmentActor *a, const GarmentSet *set, const nt_skeletal_skeleton_t *skel,
-                          const nt_skeletal_mat34_t *pose, const float transform[16], float dt, bool render,
-                          const ClothSupport *world_support) {
-    if (!simulate(a, set, skel, pose, transform, dt, world_support)) return false;
-    if (!render) return true;
+                          const GarmentInput *in) {
+    if (!a) return false;
+    if (!simulate(a, set, skel, in)) {
+        a->primed = false;
+        return false;
+    }
+    if (!in->render) return true;
     if (!prepare_vertex_frames(a)) return false;
     int offset = 0;
     for (int p = 0; p < set->piece_count; ++p) {
@@ -418,17 +473,16 @@ bool garment_actor_update(GarmentActor *a, const GarmentSet *set, const nt_skele
         for (int v = 0; v < m->vertices; ++v) {
             float d2 = 0.0F;
             for (int k = 0; k < 3; ++k) {
-                float d = piece->cloth.x[v][k] - piece->sim_anchors[v][k];
+                float d = piece->cloth.x[v][k] - piece->step[v][k];
                 d2 += d * d;
-                /* Compensate for fractional substep remainder so pins stay locked to current frame. */
-                scratch.dressed[v][k] = d + piece->previous.anchors[v][k];
+                /* The frame can end between substeps: the offset from the last substep's reference rides on the
+                   frame's reference, so kinematic vertices sit exactly on the frame pose. */
+                scratch.dressed[v][k] = d + piece->frame[v].x[k];
             }
             a->stats.max_displacement_m = fmaxf(a->stats.max_displacement_m, sqrtf(d2));
         }
-        if (!cloth_vertex_quats_eval(m, a->vertex_basis + offset, scratch.dressed, scratch.mats))
-            return false;
-        for (int v = 0; v < m->vertices; ++v)
-            memcpy(&a->palette[offset + v], scratch.mats[v], sizeof a->palette[0]);
+        if (!cloth_vertex_quats_eval(m, a->vertex_basis + offset, scratch.dressed, scratch.mats)) return false;
+        for (int v = 0; v < m->vertices; ++v) memcpy(&a->palette[offset + v], scratch.mats[v], sizeof a->palette[0]);
         offset += m->vertices;
     }
     return true;
@@ -451,31 +505,43 @@ bool garment_actor_debug_lines(const GarmentActor *actor, const nt_skeletal_skel
             cloth_debug_bone(a, b, emit, user);
         }
     }
-    if (!(layers & (CLOTH_DEBUG_WEIGHTS | CLOTH_DEBUG_TETHERS | CLOTH_DEBUG_CAPSULES))) return true;
+    const unsigned cloth_layers = CLOTH_DEBUG_WEIGHTS | CLOTH_DEBUG_TETHERS | CLOTH_DEBUG_SHAPES |
+                                  CLOTH_DEBUG_REFERENCE | CLOTH_DEBUG_MAX_DISTANCE | CLOTH_DEBUG_BACKSTOP;
+    if (!(layers & cloth_layers)) return true;
     if (!actor || !actor->primed || !actor->pieces || actor->rig != skel->rig_compat_id.value) return false;
+    const GarmentSet *set = actor->set;
+    if (layers & CLOTH_DEBUG_SHAPES) {
+        bool in_cone[CLOTH_SHAPES] = {0};
+        for (int i = 0; i < set->cone_count; ++i) {
+            in_cone[set->cones[i].a] = in_cone[set->cones[i].b] = true;
+            cloth_debug_cone(&actor->spheres[set->cones[i].a], &actor->spheres[set->cones[i].b], emit, user);
+        }
+        for (int i = 0; i < set->sphere_count; ++i)
+            if (!in_cone[i]) cloth_debug_cone(&actor->spheres[i], &actor->spheres[i], emit, user);
+    }
     int offset = 0;
-    for (int p = 0; p < actor->set->piece_count; ++p) {
-        const GarmentAsset *asset = &actor->set->pieces[p];
+    for (int p = 0; p < set->piece_count; ++p) {
+        const GarmentAsset *asset = &set->pieces[p];
         const GarmentPiece *piece = &actor->pieces[p];
-        if (layers & CLOTH_DEBUG_WEIGHTS) {
-            if (!actor->palette || offset + asset->mesh->vertices > actor->palette_count) return false;
+        const int n = asset->mesh->vertices;
+        if (layers & (CLOTH_DEBUG_WEIGHTS | CLOTH_DEBUG_REFERENCE | CLOTH_DEBUG_MAX_DISTANCE | CLOTH_DEBUG_BACKSTOP)) {
+            if (!actor->palette || offset + n > actor->palette_count) return false;
             float *weights = scratch.weights, (*display)[3] = scratch.display;
-            for (int i = 0; i < asset->mesh->vertices; ++i) {
+            for (int i = 0; i < n; ++i) {
                 memcpy(display[i], actor->palette[offset + i].r[0], sizeof display[i]);
                 if (weight_joint < 0) continue;
-                const GarmentVertex *vertex = &asset->vertices[i];
                 weights[i] = 0.0F;
-                for (int j = 0; j < 4; ++j)
-                    if (piece->joint[vertex->bone[j]] == weight_joint) weights[i] += vertex->weight[j];
+                for (int j = 0; j < 4; ++j) {
+                    int slot = actor->joint[asset->skin[i].bone[j]];
+                    if (slot >= 0 && actor->chain[slot] == weight_joint) weights[i] += asset->skin[i].weight[j];
+                }
             }
-            cloth_debug_mesh(asset->mesh, display, weight_joint < 0 ? NULL : weights, CLOTH_DEBUG_WEIGHTS, emit, user);
+            if (layers & CLOTH_DEBUG_WEIGHTS)
+                cloth_debug_mesh(asset->mesh, display, weight_joint < 0 ? NULL : weights, CLOTH_DEBUG_WEIGHTS, emit, user);
+            cloth_debug_reference(asset->mesh, display, piece->frame, piece->r, layers, emit, user);
         }
-        offset += asset->mesh->vertices;
-        if (layers & CLOTH_DEBUG_TETHERS)
-            cloth_debug_mesh(asset->mesh, piece->cloth.x, NULL, CLOTH_DEBUG_TETHERS, emit, user);
-        if (layers & CLOTH_DEBUG_CAPSULES) {
-            for (int i = 0; i < piece->sim_cap_count; ++i) cloth_debug_capsule(&piece->sim_caps[i], emit, user);
-        }
+        offset += n;
+        if (layers & CLOTH_DEBUG_TETHERS) cloth_debug_mesh(asset->mesh, piece->cloth.x, NULL, CLOTH_DEBUG_TETHERS, emit, user);
     }
     return true;
 }

@@ -57,28 +57,46 @@ def model(label=None, freedom=None, weights=None, cloth_joint=None, split=False)
     return Glb(data), labels, paint
 
 
+COLLIDERS = [("Left", [0.1, 0.0, 0.0], "Left", [0.1, 0.8, 0.0], 0.06, 0.0)]
+RATE, CAP = 0.5, 0.2
+
+
 def piece(**changes):
-    base = dict(id="panel", piece=LABEL, source_material="cloth", outer_surface=None, budget=40, drive_hz=2.0, swing=0.5, backstop_per_m=0.1,
-                material=dict(density=0.2, iterations=1, thickness=0.004),
-                colliders=[("Left", [0.1, 0.0, 0.0], "Left", [0.1, 0.8, 0.0], 0.06, 0.0, 0)],
-                linear_inertia=0.45, angular_inertia=0.35, downward_follow=0.85)
+    base = dict(id="panel", piece=LABEL, source_material="cloth", outer_surface=None, budget=40,
+                max_distance=dict(rate=RATE, cap_m=CAP), material=dict(density=0.2, iterations=1, thickness=0.004),
+                linear_inertia=0.45, angular_inertia=0.35)
     return base | changes
 
 
+def cook(m, pieces, **options):
+    return cook_outfit("synthetic", m, pieces, BODY, **({"colliders": COLLIDERS, "body_primitives": ["skin"]} | options))
+
+
 class ModelCook(unittest.TestCase):
-    def test_contract_decodes_into_pins_drive_travel_and_a_closed_seam(self):
+    def test_contract_decodes_into_pins_max_distance_backstop_and_a_closed_seam(self):
         m, labels, paint = model()
-        blob, sheets, report = cook_outfit("synthetic", m, [piece()], BODY)
-        cooked = decode(blob)["pieces"][0]
-        pins = cooked["mesh"]["inv_area"] == 0
-        drive, travel = cooked["mesh"]["drive"], cooked["vertices"]["travel_m"]
+        blob, sheets, report = cook(m, [piece()])
+        outfit = decode(blob)
+        cooked = outfit["pieces"][0]
+        r, rest = cooked["mesh"]["max_distance"], cooked["mesh"]["rest"]
+        pins = r == 0
         self.assertTrue(pins.any() and (~pins).any())
-        self.assertTrue(np.all(drive[pins] == 0) and np.all(drive[~pins] > 0))
-        self.assertTrue(np.all(drive <= (2 * np.pi * 2.0) ** 2 * (1 + 1e-6)))
-        self.assertTrue(np.all(travel[pins] == 0) and np.all(travel[~pins] > 0))
+        self.assertTrue(np.all(r <= np.float32(CAP)))
+        # The gradient grows away from the pins: a vertex never exceeds rate times its distance to the nearest pin.
+        nearest = np.min(np.linalg.norm(rest[:, None] - rest[pins][None], axis=2), axis=1)
+        self.assertTrue(np.all(r <= RATE * nearest * 1.5 + 1e-6))
+        # The panel hangs in front of the legs: the body lies behind it (-z), and some free vertices have a backstop.
+        b = cooked["direction"]
+        self.assertTrue(np.allclose(np.linalg.norm(b, axis=1), 1, atol=1e-3))
+        self.assertGreater(np.mean(b[:, 2] < 0), 0.5)
+        backstop = cooked["mesh"]["backstop"]
+        self.assertTrue(np.all(backstop >= 0) and np.all(backstop[pins, 1] == 0) and np.any(backstop[~pins, 1] > 0))
+        self.assertTrue(np.all(backstop[backstop[:, 1] > 0, 0] < r[backstop[:, 1] > 0]))
         self.assertEqual(report[0]["render_vertices"], 63)
-        names = {name for name, _ in cooked["bones"]}
+        names = {name for name, _ in outfit["bones"]}
         self.assertTrue(names <= BODY)
+        self.assertEqual(len(outfit["spheres"]), 2)
+        self.assertEqual(len(outfit["cones"]), 1)
         streams = bind_outfit(m, sheets, BODY)
         cloth = streams[1]
         self.assertIsNone(streams[0])
@@ -89,62 +107,69 @@ class ModelCook(unittest.TestCase):
         staged = Glb(stage_model(m, streams))
         self.assertIn("_GARMENT", staged.primitives()[1]["attributes"])
 
+    def test_a_piece_without_a_body_behind_it_has_no_backstop(self):
+        m, _, _ = model()
+        for options, p in (({"body_primitives": []}, piece()), ({}, piece(backstop=False))):
+            cooked = decode(cook(m, [p], **options)[0])["pieces"][0]
+            self.assertTrue(np.all(cooked["mesh"]["backstop"][:, 1] == 0))
+            self.assertTrue(np.allclose(np.linalg.norm(cooked["direction"], axis=1), 1, atol=1e-3))
+
     def test_piece_numbers_follow_the_label_not_the_recipe_order(self):
         m, _, _ = model()
         for number in (0, -3, 7.0, True):
             with self.subTest(number), self.assertRaisesRegex(ValueError, "unique positive integers"):
-                cook_outfit("synthetic", m, [piece(piece=number)], BODY)
+                cook(m, [piece(piece=number)])
         with self.assertRaisesRegex(ValueError, r"labels without a recipe piece \[7\], recipe pieces without vertices \[8\]"):
-            cook_outfit("synthetic", m, [piece(piece=8)], BODY)
+            cook(m, [piece(piece=8)])
 
     def test_a_lost_label_or_a_label_without_a_piece_is_refused(self):
         _, labels, paint = model()
         # A re-export that drops both attributes leaves the recipe piece without vertices.
         with self.assertRaisesRegex(ValueError, r"recipe pieces without vertices \[7\]"):
-            cook_outfit("synthetic", model(label=0 * labels, freedom=0 * paint)[0], [piece()], BODY)
+            cook(model(label=0 * labels, freedom=0 * paint)[0], [piece()])
         # Labels lost on part of a piece leave freedom on unlabelled vertices.
         partial = labels.copy()
         partial[:20] = 0
         with self.assertRaisesRegex(ValueError, "_CLOTH is set on a vertex without a piece label"):
-            cook_outfit("synthetic", model(label=partial)[0], [piece()], BODY)
+            cook(model(label=partial)[0], [piece()])
         extra = labels.copy()
         extra[63:] = 9  # the pinned flap becomes a piece no recipe names
         with self.assertRaisesRegex(ValueError, r"labels without a recipe piece \[9\]"):
-            cook_outfit("synthetic", model(label=extra)[0], [piece()], BODY)
+            cook(model(label=extra)[0], [piece()])
 
     def test_a_non_integer_label_is_refused(self):
         _, labels, _ = model()
         labels[3] = 7.5
         with self.assertRaisesRegex(ValueError, "_CLOTH_PIECE must hold non-negative integers"):
-            cook_outfit("synthetic", model(label=labels)[0], [piece()], BODY)
+            cook(model(label=labels)[0], [piece()])
 
     def test_freedom_off_the_piece_is_refused(self):
         _, labels, paint = model()
         outside = paint.copy()
         outside[-1] = 0.5
         with self.assertRaisesRegex(ValueError, "_CLOTH is set on a vertex without a piece label"):
-            cook_outfit("synthetic", model(freedom=outside)[0], [piece()], BODY)
+            cook(model(freedom=outside)[0], [piece()])
 
     def test_a_free_row_next_to_the_skinned_border_is_accepted(self):
         _, labels, paint = model()
         border = paint.copy()
         border[56] = 0.5  # on the row sewn to the flap: the flap's skinned vertices hold the seam
-        cook_outfit("synthetic", model(freedom=border)[0], [piece()], BODY)
+        cook(model(freedom=border)[0], [piece()])
 
     def test_a_free_vertex_split_from_an_unlabelled_one_is_refused(self):
         m, _, paint = model(split=True)
-        cook_outfit("synthetic", m, [piece()], BODY)
+        cook(m, [piece()])
         torn = paint.copy()
         torn[56] = 0.5  # its flap copy is skinned, so moving it would open the seam
         with self.assertRaisesRegex(ValueError, "would open a crack"):
-            cook_outfit("synthetic", model(freedom=torn, split=True)[0], [piece()], BODY)
+            cook(model(freedom=torn, split=True)[0], [piece()])
 
     def test_a_piece_primitive_without_skin_weights_is_refused(self):
         m, _, _ = model()
         cloth = m.primitives()[1]["attributes"]
         del cloth["JOINTS_0"], cloth["WEIGHTS_0"]
         with self.assertRaisesRegex(ValueError, "have no skin weights"):
-            cook_outfit("synthetic", m, [piece()], BODY)
+            cook(m, [piece()])
 
     def test_bones_take_the_skins_inverse_bind_matrices(self):
         m, _, _ = model()
@@ -152,7 +177,7 @@ class ModelCook(unittest.TestCase):
         matrices = np.tile(np.eye(4), (len(JOINTS), 1, 1))
         matrices[:, 3, :3] = [[0.0, -0.1 * i, 0.02] for i in range(len(JOINTS))]  # column-major translation
         m.overwrite(ibm, matrices.reshape(len(JOINTS), 16).astype(np.float32))
-        cooked = decode(cook_outfit("synthetic", m, [piece()], BODY)[0])["pieces"][0]
+        cooked = decode(cook(m, [piece()])[0])
         expected = m.inverse_binds()
         for name, matrix in cooked["bones"]:
             np.testing.assert_allclose(matrix.reshape(3, 4), expected[name][:3], atol=1e-6)
@@ -173,7 +198,7 @@ class ModelCook(unittest.TestCase):
         cases.append((m, "mesh node carries a transform"))
         for broken, message in cases:
             with self.subTest(message), self.assertRaisesRegex(ValueError, message):
-                cook_outfit("synthetic", broken, [piece()], BODY)
+                cook(broken, [piece()])
 
     def test_truncating_the_rig_refuses_a_weight_on_a_dropped_joint(self):
         m, _, _ = model(cloth_joint=3)
@@ -182,7 +207,7 @@ class ModelCook(unittest.TestCase):
 
     def test_weights_outside_the_body_rig_are_refused(self):
         with self.assertRaisesRegex(ValueError, r"joints outside the body rig: \['Ribbon'\]"):
-            cook_outfit("synthetic", model(cloth_joint=3)[0], [piece()], BODY)
+            cook(model(cloth_joint=3)[0], [piece()])
 
     def test_depfile_escapes_make_metacharacters(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -13,129 +13,60 @@ static bool finite_point(const float p[3]) {
 
 static bool frame_motion_valid(const ClothFrame *frame) {
     if (!frame) return true;
-    return finite_point(frame->linear_accel) && isfinite(frame->anchor_shift_y) && isfinite(frame->angular_vel_y) && isfinite(frame->angular_accel_y) &&
+    return finite_point(frame->linear_accel) && isfinite(frame->angular_vel_y) && isfinite(frame->angular_accel_y) &&
            isfinite(frame->linear_inertia) && frame->linear_inertia >= 0.0F && frame->linear_inertia <= 1.0F &&
            isfinite(frame->angular_inertia) && frame->angular_inertia >= 0.0F && frame->angular_inertia <= 1.0F;
 }
 
-/* Mesh and material are cooked and trusted; only the per-frame inputs are checked. */
-bool cloth_frame_valid(const ClothMesh *mesh, const ClothMaterial *m, float dt,
-                       const float anchors[][3], const ClothGuide *guide, const ClothCapsule *body, int count) {
-    NT_ASSERT(mesh && mesh->vertices >= 3 && mesh->vertices <= CLOTH_VERTICES && m);
-    if (!anchors || count < 0 || count > CLOTH_CAPSULES || (count && !body) || !isfinite(dt) || dt <= 0) return false;
-    float scale = m->density / (dt * dt);
-    if (!isfinite(scale) || !isfinite(m->stretch * scale) || !isfinite(m->bend * scale)) return false;
-    for (int i = 0; i < mesh->vertices; ++i) {
-        if (!finite_point(anchors[i])) return false;
-        if (guide) {
-            const ClothGuide *g = guide + i;
-            float length2 = glm_vec3_norm2((float *)g->normal);
-            if (!isfinite(length2) || fabsf(length2 - 1.0F) > 0.002F ||
-                !isfinite(g->travel) || g->travel < 0 || !isfinite(g->backstop) || g->backstop < 0) return false;
+static bool shapes_valid(const ClothShapes *sh, float thickness) {
+    if (!sh) return true;
+    if (sh->sphere_count < 0 || sh->sphere_count > CLOTH_SHAPES || (sh->sphere_count && !sh->spheres) ||
+        sh->cone_count < 0 || sh->cone_count > CLOTH_SHAPES || (sh->cone_count && !sh->cones) ||
+        sh->convex_count < 0 || sh->convex_count > CLOTH_CONVEXES || (sh->convex_count && !sh->convexes)) return false;
+    for (int i = 0; i < sh->sphere_count; ++i) {
+        const ClothSphere *s = &sh->spheres[i];
+        if (!finite_point(s->c) || !finite_point(s->prev) || !isfinite(s->r) || s->r < 0 || !isfinite(s->r + thickness))
+            return false;
+    }
+    for (int i = 0; i < sh->cone_count; ++i)
+        if (sh->cones[i].a >= sh->sphere_count || sh->cones[i].b >= sh->sphere_count) return false;
+    for (int i = 0; i < sh->convex_count; ++i) {
+        const ClothConvex *c = &sh->convexes[i];
+        if (c->plane_count < 1 || c->plane_count > CLOTH_CONVEX_PLANES) return false;
+        for (int f = 0; f < c->plane_count; ++f) {
+            float length = glm_vec3_norm((float *)c->planes[f]);
+            if (!isfinite(length) || length < 1e-8F || !isfinite(c->planes[f][3])) return false;
         }
     }
-    for (int i = 0; i < count; ++i) {
-        float rb = cloth_capsule_radius_b(body + i);
-        if (!finite_point(body[i].a) || !finite_point(body[i].b) ||
-            !isfinite(body[i].radius) || body[i].radius < 0 ||
-            !isfinite(body[i].radius_b) || body[i].radius_b < 0 ||
-            !isfinite(body[i].radius + m->thickness) || !isfinite(rb + m->thickness)) return false;
-        if (body[i].has_prev && (!finite_point(body[i].prev_a) || !finite_point(body[i].prev_b))) return false;
+    if (sh->convex_move) {
+        for (int r = 0; r < 3; ++r)
+            for (int k = 0; k < 4; ++k)
+                if (!isfinite(sh->convex_move[r][k])) return false;
     }
     return true;
 }
 
-void cloth_reset(ClothState *s, const ClothMesh *mesh, const float pose[][3]) {
-    if (!s) return;
-    s->mesh = NULL;
-    s->frame_valid = false;
-    NT_ASSERT(mesh && mesh->vertices >= 3 && mesh->vertices <= CLOTH_VERTICES);
-    if (!pose) return;
+static bool inputs_valid(const ClothMesh *mesh, const ClothMaterial *m, const ClothReference *ref,
+                         const float *max_distance, const ClothShapes *shapes) {
+    NT_ASSERT(mesh && mesh->vertices >= 3 && mesh->vertices <= CLOTH_VERTICES && m);
+    if (!ref) return false;
+    const float *r = max_distance ? max_distance : mesh->max_distance;
     for (int i = 0; i < mesh->vertices; ++i) {
-        if (!finite_point(pose[i])) return;
+        float length2 = glm_vec3_norm2((float *)ref[i].b);
+        if (!finite_point(ref[i].x) || !isfinite(length2) || fabsf(length2 - 1.0F) > 0.002F || !isfinite(r[i]) ||
+            r[i] < 0.0F) return false;
     }
-    size_t bytes = (size_t)mesh->vertices * sizeof s->x[0];
-    memcpy(s->x, pose, bytes);
-    memcpy(s->target, pose, bytes);
-    memset(s->velocity, 0, bytes);
-    s->mesh = mesh;
-    s->frame_valid = true;
+    return shapes_valid(shapes, m->thickness);
 }
 
-static bool depenetrate_reset_vertex(float p[3], const float *guide_n, bool has_parent, const float parent_avg[3],
-                                     const ClothCapsule *c, float thickness, float out_n[3]) {
-    vec3 ab;
-    glm_vec3_sub((float *)c->b, (float *)c->a, ab);
-    float l2 = glm_vec3_norm2(ab);
-    float ra = c->radius, rb = cloth_capsule_radius_b(c);
-
-    /* Sample point p and, when a resolved parent exists, the segment parent_avg -> p so a vertex
-       that spawned completely past the far side of a limb is still detected as piercing it. */
-    float best_pen = 0.0F;
-    float best_t = 0.0F;
-    vec3 best_cl = {0.0F, 0.0F, 0.0F};
-    int samples = has_parent ? 4 : 1;
-    for (int s = 0; s < samples; ++s) {
-        float u = (s == 0) ? 1.0F : ((float)s / (float)samples);
-        vec3 q;
-        for (int k = 0; k < 3; ++k) q[k] = has_parent ? (parent_avg[k] + u * (p[k] - parent_avg[k])) : p[k];
-        vec3 ap, cl, dq;
-        glm_vec3_sub(q, (float *)c->a, ap);
-        float t = l2 > 1e-12F ? fmaxf(0.0F, fminf(1.0F, glm_vec3_dot(ap, ab) / l2)) : 0.0F;
-        glm_vec3_copy((float *)c->a, cl);
-        glm_vec3_muladds(ab, t, cl);
-        float r_eff = ra + t * (rb - ra) + thickness;
-        glm_vec3_sub(q, cl, dq);
-        float pen = r_eff - glm_vec3_norm(dq);
-        if (pen > best_pen) {
-            best_pen = pen;
-            best_t = t;
-            glm_vec3_copy(cl, best_cl);
-        }
-    }
-    if (best_pen <= 0.0F) return false;
-
-    float r_eff = ra + best_t * (rb - ra) + thickness;
-    vec3 d;
-    glm_vec3_sub(p, best_cl, d);
-    float dist = glm_vec3_norm(d);
-
-    vec3 pref = {0.0F, 0.0F, 0.0F};
-    if (guide_n) glm_vec3_copy((float *)guide_n, pref);
-    if (has_parent) {
-        vec3 up;
-        glm_vec3_sub((float *)parent_avg, best_cl, up);
-        float ulen = glm_vec3_norm(up);
-        if (ulen > 1e-5F) glm_vec3_muladds(up, 0.85F / ulen, pref);
-    }
-    if (l2 > 1e-12F && best_t > 0.0F && best_t < 1.0F) {
-        vec3 axis, perp;
-        glm_vec3_scale(ab, 1.0F / sqrtf(l2), axis);
-        float along = glm_vec3_dot(pref, axis);
-        glm_vec3_copy(pref, perp);
-        glm_vec3_muladds(axis, -along, perp);
-        if (glm_vec3_norm2(perp) > 0.01F) glm_vec3_copy(perp, pref);
-    }
-    float plen = glm_vec3_norm(pref);
-    bool has_pref = plen > 1e-5F;
-    if (has_pref) glm_vec3_scale(pref, 1.0F / plen, pref);
-
-    if (dist < 1e-5F || dist >= r_eff || (has_pref && glm_vec3_dot(d, pref) < 0.0F)) {
-        if (has_pref) {
-            glm_vec3_copy(best_cl, p);
-            glm_vec3_muladds(pref, r_eff, p);
-            glm_vec3_copy(pref, out_n);
-            return true;
-        }
-    }
-    vec3 normal;
-    float depth = cloth_point_capsule_contact(p, c, thickness, normal, NULL);
-    if (depth > 0.0F) {
-        glm_vec3_muladds(normal, depth, p);
-        glm_vec3_copy(normal, out_n);
-        return true;
-    }
-    return false;
+/* Mesh and material are cooked and trusted; only the per-frame inputs are checked. */
+bool cloth_frame_valid(const ClothMesh *mesh, const ClothMaterial *m, float dt, const ClothReference *ref,
+                       const float *max_distance, const ClothShapes *shapes) {
+    NT_ASSERT(mesh && m);
+    if (!isfinite(dt) || dt <= 0) return false;
+    float scale = m->density / (dt * dt);
+    if (!isfinite(scale) || !isfinite(m->stretch * scale) || !isfinite(m->bend * scale)) return false;
+    return inputs_valid(mesh, m, ref, max_distance, shapes);
 }
 
 static inline float fast_atan_unit(float z) {
@@ -230,349 +161,111 @@ static void bend(ClothState *s, const ClothEdge *e, const float *w, float alpha,
 }
 
 typedef struct {
-    float normal[CLOTH_VERTICES][3];
-    float vel[CLOTH_VERTICES][3];
-    float depth[CLOTH_VERTICES];
-    int count[CLOTH_VERTICES];
-} ContactAccum;
-
-static void record_contact(ContactAccum *acc, int v, const float n[3], const ClothCapsule *c,
-                           float t, float inv_dt, float shift) {
-    for (int k = 0; k < 3; ++k) acc->normal[v][k] += n[k];
-    if (c && c->has_prev) {
-        for (int k = 0; k < 3; ++k) {
-            float va = (c->a[k] - c->prev_a[k]) * inv_dt;
-            float vb = (c->b[k] - c->prev_b[k]) * inv_dt;
-            acc->vel[v][k] += va + t * (vb - va);
-        }
-    }
-    acc->depth[v] += shift;
-    ++acc->count[v];
-}
-
-typedef struct {
-    vec3 center, normal, u, v;
-    float depth, u_scale, v_scale;
-    int plane_count;
-    vec4 planes[CLOTH_SUPPORT_PLANES];
-} SupportPlane;
-
-static bool prepare_support(const ClothSupport *face, SupportPlane *p) {
-    if (!face) return true;
-    if (!finite_point(face->center) || !finite_point(face->half_u) || !finite_point(face->half_v) ||
-        !isfinite(face->depth) || face->depth < 0.0F) return false;
-    glm_vec3_cross((float *)face->half_u, (float *)face->half_v, p->normal);
-    float area = glm_vec3_norm(p->normal);
-    if (!isfinite(area) || area <= 1e-12F) return false;
-    glm_vec3_scale(p->normal, 1.0F / area, p->normal);
-    /* The inverse actor transform can turn a rectangle into a parallelogram. */
-    glm_vec3_cross((float *)face->half_v, p->normal, p->u);
-    glm_vec3_cross(p->normal, (float *)face->half_u, p->v);
-    glm_vec3_scale(p->u, 1.0F / area, p->u);
-    glm_vec3_scale(p->v, 1.0F / area, p->v);
-    p->depth = face->depth;
-    p->u_scale = 1.0F / glm_vec3_norm(p->u);
-    p->v_scale = 1.0F / glm_vec3_norm(p->v);
-    glm_vec3_copy((float *)face->center, p->center);
-    p->plane_count = face->plane_count;
-    if (p->plane_count < 0 || p->plane_count > CLOTH_SUPPORT_PLANES ||
-        (p->plane_count && (p->depth <= 0 || p->plane_count < 4))) return false;
-    for (int i = 0; i < p->plane_count; ++i) {
-        float length = glm_vec3_norm((float *)face->planes[i]);
-        if (!isfinite(length) || length < 1e-8F || !isfinite(face->planes[i][3])) return false;
-        glm_vec4_scale((float *)face->planes[i], 1.0F / length, p->planes[i]);
-    }
-    return finite_point(p->u) && finite_point(p->v);
-}
-
-static bool clip_interval(float a, float b, float low, float high, float *enter, float *leave) {
-    float delta = b - a;
-    if (fabsf(delta) < 1e-8F) return a >= low && a <= high;
-    float t0 = (low - a) / delta, t1 = (high - a) / delta;
-    *enter = fmaxf(*enter, fminf(t0, t1));
-    *leave = fminf(*leave, fmaxf(t0, t1));
-    return *leave - *enter > 1e-5F;
-}
-
-static float plane_distance(vec4 plane, vec3 offset) {
-    return glm_vec3_dot(plane, offset) + plane[3];
-}
-
-static bool clip_hull(SupportPlane *p, vec3 from, vec3 to, float *enter, float *leave, int *entry_face) {
-    for (int i = 0; i < p->plane_count; ++i) {
-        float a = plane_distance(p->planes[i], from), b = plane_distance(p->planes[i], to);
-        if (a > 0.0F && b > 0.0F) return false;
-        if (a >= 0.0F && b < a) {
-            float t = a / (a - b);
-            if (t >= *enter) {
-                *enter = t;
-                if (entry_face) *entry_face = i;
-            }
-        } else if (b > 0.0F) {
-            *leave = fminf(*leave, a / (a - b));
-        }
-        if (*enter + 1e-5F >= *leave) return false;
-    }
-    return true;
-}
-
-static bool project_support_edge(ClothState *s, const ClothMesh *mesh, const ClothEdge *edge, SupportPlane *p,
-                                 float thick) {
-    float wa = mesh->inv_area[edge->a], wb = mesh->inv_area[edge->b];
-    if (wa == 0.0F && wb == 0.0F) return false;
-    vec3 a, b;
-    glm_vec3_sub(s->x[edge->a], p->center, a);
-    glm_vec3_sub(s->x[edge->b], p->center, b);
-    float ha = glm_vec3_dot(a, p->normal), hb = glm_vec3_dot(b, p->normal);
-    float enter = 0.0F, leave = 1.0F;
-    if (!clip_interval(ha, hb, -p->depth, 0.0F, &enter, &leave)) return false;
-    float ua = glm_vec3_dot(a, p->u), ub = glm_vec3_dot(b, p->u);
-    if (!clip_interval(ua, ub, -1.0F, 1.0F, &enter, &leave)) return false;
-    float va = glm_vec3_dot(a, p->v), vb = glm_vec3_dot(b, p->v);
-    if (!clip_interval(va, vb, -1.0F, 1.0F, &enter, &leave)) return false;
-
-    if (p->plane_count && !clip_hull(p, a, b, &enter, &leave, NULL)) return false;
-    float t = (enter + leave) * 0.5F, u = ua + t * (ub - ua), v = va + t * (vb - va), h = ha + t * (hb - ha);
-    float du = (1.0F - fabsf(u)) * p->u_scale, dv = (1.0F - fabsf(v)) * p->v_scale;
-    float distance = fminf(du, dv);
-    vec3 normal;
-    if (du < dv) glm_vec3_scale(p->u, copysignf(p->u_scale, u), normal);
-    else glm_vec3_scale(p->v, copysignf(p->v_scale, v), normal);
-    /* Fabric that spans the entire thickness must pass around the rim. */
-    if (fminf(ha, hb) > -p->depth && -h < distance) {
-        distance = -h;
-        glm_vec3_copy(p->normal, normal);
-    } else if (fmaxf(ha, hb) < 0.0F && h + p->depth < distance) {
-        distance = h + p->depth;
-        glm_vec3_negate_to(p->normal, normal);
-    }
-    if (p->plane_count) {
-        vec3 midpoint;
-        glm_vec3_lerp(a, b, t, midpoint);
-        distance = FLT_MAX;
-        for (int f = 0; f < p->plane_count; ++f) {
-            float alignment = glm_vec3_dot(p->planes[f], p->normal);
-            if ((fminf(ha, hb) <= -p->depth && alignment > 0.999F) ||
-                (fmaxf(ha, hb) >= 0.0F && alignment < -0.999F)) continue;
-            float gap = -plane_distance(p->planes[f], midpoint);
-            if (gap < distance) {
-                distance = gap;
-                glm_vec3_copy(p->planes[f], normal);
-            }
-        }
-        if (distance == FLT_MAX) return false;
-    }
-    float t0 = 1.0F - t, weight = wa * t0 * t0 + wb * t * t;
-    if (weight <= 1e-7F) return false;
-    float correction = (distance + thick) / weight;
-    glm_vec3_muladds(normal, correction * wa * t0, s->x[edge->a]);
-    glm_vec3_muladds(normal, correction * wb * t, s->x[edge->b]);
-    return true;
-}
-
-/* Free points x (cloth or targets) inside the support leave through the face they entered by, judged from
-   previous; without a previous point they take the nearest exit. */
-static bool support_points(float (*x)[3], const ClothMesh *mesh, SupportPlane *p, float thick,
-                           const float previous[][3], float anchor_shift_y, ContactAccum *acc) {
-    bool hit = false;
-    for (int i = 0; i < mesh->vertices; ++i) {
-        if (mesh->inv_area[i] == 0.0F) continue;
-        vec3 offset;
-        glm_vec3_sub(x[i], p->center, offset);
-        float height = glm_vec3_dot(offset, p->normal);
-        float u = glm_vec3_dot(offset, p->u), v = glm_vec3_dot(offset, p->v);
-        if (height >= thick || fabsf(u) > 1.0F + thick / p->u_scale ||
-            fabsf(v) > 1.0F + thick / p->v_scale) continue;
-        if (p->plane_count) {
-            int face = -1;
-            float nearest = -FLT_MAX;
-            for (int f = 0; f < p->plane_count; ++f) {
-                float d = plane_distance(p->planes[f], offset);
-                if (d >= thick) { face = -1; break; }
-                if (d > nearest) { face = f; nearest = d; }
-            }
-            /* A fast fall can end nearer the underside than the entry face. */
-            if (previous && height < 0.0F) {
-                vec3 old;
-                glm_vec3_sub((float *)previous[i], p->center, old);
-                old[1] -= anchor_shift_y;
-                float enter = 0.0F, leave = 1.0F;
-                int entry_face = -1;
-                if (glm_vec3_dot(old, p->normal) >= 0.0F &&
-                    clip_hull(p, old, offset, &enter, &leave, &entry_face) && entry_face >= 0) {
-                    face = entry_face;
-                    nearest = plane_distance(p->planes[face], offset);
-                }
-            }
-            if (face < 0) continue;
-            float shift = thick - nearest;
-            glm_vec3_muladds(p->planes[face], shift, x[i]);
-            if (acc) record_contact(acc, i, p->planes[face], NULL, 0.0F, 0.0F, shift);
-            hit = true;
-            continue;
-        }
-        if (fabsf(u) > 1.0F || fabsf(v) > 1.0F) continue;
-        bool crossed_top = false;
-        if (previous) {
-            glm_vec3_sub((float *)previous[i], p->center, offset);
-            offset[1] -= anchor_shift_y;
-            float old_height = glm_vec3_dot(offset, p->normal);
-            if (old_height >= -1e-6F) {
-                float t = height < 0.0F && old_height > 0.0F ? old_height / (old_height - height) : 1.0F;
-                float old_u = glm_vec3_dot(offset, p->u), old_v = glm_vec3_dot(offset, p->v);
-                crossed_top = fabsf(old_u + t * (u - old_u)) <= 1.0F && fabsf(old_v + t * (v - old_v)) <= 1.0F;
-            }
-        }
-        vec3 normal;
-        glm_vec3_copy(p->normal, normal);
-        float distance = -height;
-        if (!crossed_top && height < 0.0F) {
-            if (height < -p->depth) continue;
-            /* Initial overlaps need the nearest exit; a long panel may already hang below the object. */
-            if (p->depth + height < distance) {
-                distance = p->depth + height;
-                glm_vec3_negate(normal);
-            }
-            float side_u = (1.0F - fabsf(u)) * p->u_scale;
-            float side_v = (1.0F - fabsf(v)) * p->v_scale;
-            if (side_u < distance && side_u <= side_v) {
-                distance = side_u;
-                glm_vec3_scale(p->u, copysignf(p->u_scale, u), normal);
-            } else if (side_v < distance) {
-                distance = side_v;
-                glm_vec3_scale(p->v, copysignf(p->v_scale, v), normal);
-            }
-        }
-        float shift = distance + thick;
-        glm_vec3_muladds(normal, shift, x[i]);
-        if (acc) record_contact(acc, i, normal, NULL, 0.0F, 0.0F, shift);
-        hit = true;
-    }
-    return hit;
-}
-
-static bool project_support(ClothState *s, const ClothMesh *mesh, SupportPlane *p, float thick,
-                            const float previous[][3], float anchor_shift_y, ContactAccum *acc) {
-    if (!p) return false;
-    bool hit = support_points(s->x, mesh, p, thick, previous, anchor_shift_y, acc);
-    if (p->depth > 0.0F) {
-        for (int i = 0; i < mesh->edges; ++i)
-            if (project_support_edge(s, mesh, &mesh->edge[i], p, thick)) hit = true;
-    }
-    return hit;
-}
-
-typedef struct {
     float min[3], max[3];
     float u[3];
-    float ra, rb, dr, r_min, r_max, r_max2, safe_edge2;
+    float ra, rb, dr, r_min, r_max, r_max2, face_edge2;
     float len, inv_len, cone_a, inv_cone_a, cos_slope, sin_slope;
-    int idx;
+    const ClothSphere *a, *b;
     bool degenerate;
-} CapsuleBox;
+} ShapeBox;
+
+typedef struct {
+    ShapeBox boxes[2 * CLOTH_SHAPES];
+    float all_min[3], all_max[3];
+    float min_face_edge2;
+    int count;
+} ShapeBroadphase;
+
+typedef struct {
+    int plane_count;
+    vec4 planes[CLOTH_CONVEX_PLANES];
+} ConvexPlanes;
+
+typedef struct {
+    float x_prev[CLOTH_VERTICES][3], v_normals[CLOTH_VERTICES][3];
+    float normal[CLOTH_VERTICES][3]; /* Sum of this substep's contact normals, for the strain passes. */
+    float w[CLOTH_VERTICES];
+    ShapeBroadphase bp;
+    ConvexPlanes convex[CLOTH_CONVEXES];
+    int convex_count;
+} StepWork;
+
+/* Solver arrays stay off the call stack, which is 64 KiB on the web. Public entry points never nest or call user
+   code, so they share this. */
+static _Thread_local StepWork work;
 
 static inline bool point_in_box(const float p[3], const float bmin[3], const float bmax[3]) {
-    return p[0] >= bmin[0] && p[0] <= bmax[0] &&
-           p[1] >= bmin[1] && p[1] <= bmax[1] &&
-           p[2] >= bmin[2] && p[2] <= bmax[2];
+    return p[0] >= bmin[0] && p[0] <= bmax[0] && p[1] >= bmin[1] && p[1] <= bmax[1] && p[2] >= bmin[2] && p[2] <= bmax[2];
 }
 
-static inline bool box_overlaps(const float amin[3], const float amax[3],
-                                const float bmin[3], const float bmax[3]) {
-    return amin[0] <= bmax[0] && amax[0] >= bmin[0] &&
-           amin[1] <= bmax[1] && amax[1] >= bmin[1] &&
+static inline bool box_overlaps(const float amin[3], const float amax[3], const float bmin[3], const float bmax[3]) {
+    return amin[0] <= bmax[0] && amax[0] >= bmin[0] && amin[1] <= bmax[1] && amax[1] >= bmin[1] &&
            amin[2] <= bmax[2] && amax[2] >= bmin[2];
 }
 
-typedef struct {
-    CapsuleBox boxes[CLOTH_CAPSULES];
-    float all_min[3], all_max[3];
-    float min_safe_edge2;
-    float min_face_thresh2;
-    int count;
-} CapsuleBroadphase;
+static void add_box(ShapeBroadphase *bp, const ClothSphere *sa, const ClothSphere *sb, float thickness) {
+    ShapeBox *b = &bp->boxes[bp->count++];
+    b->a = sa;
+    b->b = sb;
+    b->ra = sa->r + thickness;
+    b->rb = sb->r + thickness;
+    b->dr = b->ra - b->rb;
+    b->r_min = fminf(b->ra, b->rb);
+    b->r_max = fmaxf(b->ra, b->rb);
+    b->r_max2 = b->r_max * b->r_max;
+    /* A chord of length l over radius r sags l^2 / 8r; above the thickness a vertex test misses the face. */
+    b->face_edge2 = 8.0F * b->r_min * thickness;
+    bp->min_face_edge2 = fminf(bp->min_face_edge2, b->face_edge2);
+    vec3 ba;
+    glm_vec3_sub((float *)sb->c, (float *)sa->c, ba);
+    float len2 = glm_vec3_norm2(ba);
+    b->degenerate = len2 <= 1e-12F || b->dr * b->dr >= len2;
+    if (!b->degenerate) {
+        b->len = sqrtf(len2);
+        b->inv_len = 1.0F / b->len;
+        glm_vec3_scale(ba, b->inv_len, b->u);
+        b->cone_a = sqrtf(fmaxf(0.0F, len2 - b->dr * b->dr));
+        b->inv_cone_a = b->cone_a > 1e-8F ? (1.0F / b->cone_a) : 0.0F;
+        b->cos_slope = b->cone_a * b->inv_len;
+        b->sin_slope = b->dr * b->inv_len;
+    } else {
+        b->len = b->inv_len = b->cone_a = b->inv_cone_a = b->sin_slope = 0.0F;
+        b->cos_slope = 1.0F;
+        glm_vec3_zero(b->u);
+    }
+    for (int k = 0; k < 3; ++k) {
+        b->min[k] = fminf(sa->c[k], sb->c[k]) - b->r_max;
+        b->max[k] = fmaxf(sa->c[k], sb->c[k]) + b->r_max;
+        bp->all_min[k] = fminf(bp->all_min[k], b->min[k]);
+        bp->all_max[k] = fmaxf(bp->all_max[k], b->max[k]);
+    }
+}
 
-typedef struct {
-    float pushed[CLOTH_VERTICES][3], x_prev[CLOTH_VERTICES][3], v_normals[CLOTH_VERTICES][3];
-    ContactAccum acc;
-    CapsuleBroadphase bp;
-} StepWork;
-
-typedef struct {
-    int deg[CLOTH_VERTICES], off[CLOTH_VERTICES + 1], nb[2 * CLOTH_EDGES], cur[CLOTH_VERTICES];
-    int hop[CLOTH_VERTICES], order[CLOTH_VERTICES];
-    float disp[CLOTH_VERTICES][3];
-    CapsuleBroadphase bp;
-} ContactPoseWork;
-
-typedef struct {
-    float pushed[CLOTH_VERTICES][3], saved[CLOTH_VERTICES][3];
-    ContactPoseWork pose;
-} ResetWork;
-
-/* Solver arrays stay off the call stack, which is 64 KiB on the web. Public entry points never nest
-   or call user code, so they share the union. */
-static _Thread_local struct {
-    union {
-        StepWork step;
-        ResetWork reset;
-    } entry;
-} work;
-
-static void build_broadphase(const ClothMaterial *m, const ClothCapsule *body, int count, CapsuleBroadphase *bp) {
+static void build_broadphase(const ClothShapes *sh, float thickness, ShapeBroadphase *bp) {
     bp->count = 0;
-    bp->min_safe_edge2 = FLT_MAX;
-    bp->min_face_thresh2 = FLT_MAX;
+    bp->min_face_edge2 = FLT_MAX;
     for (int k = 0; k < 3; ++k) {
         bp->all_min[k] = FLT_MAX;
         bp->all_max[k] = -FLT_MAX;
     }
-    float thickness = m->thickness;
-    for (int j = 0; j < count; ++j) {
-        float ra = body[j].radius + thickness;
-        float rb = cloth_capsule_radius_b(body + j) + thickness;
-        float r_max = fmaxf(ra, rb);
-        CapsuleBox *b = &bp->boxes[bp->count++];
-        b->idx = j;
-        b->ra = ra;
-        b->rb = rb;
-        b->dr = ra - rb;
-        b->r_min = fminf(ra, rb);
-        b->r_max = r_max;
-        b->r_max2 = r_max * r_max;
-        /* Chord sagitta <= 0.5*thickness even at 14% strain when L_rest^2 <= 3*thickness*r_min. */
-        b->safe_edge2 = 3.0F * thickness * b->r_min;
-        if (b->safe_edge2 < bp->min_safe_edge2) bp->min_safe_edge2 = b->safe_edge2;
-        float ft = 1.5F * b->r_min;
-        float ft2 = ft * ft;
-        if (ft2 < bp->min_face_thresh2) bp->min_face_thresh2 = ft2;
-        vec3 ba;
-        glm_vec3_sub((float *)body[j].b, (float *)body[j].a, ba);
-        float len2 = glm_vec3_norm2(ba);
-        b->degenerate = len2 <= 1e-12F || b->dr * b->dr >= len2;
-        if (!b->degenerate) {
-            b->len = sqrtf(len2);
-            b->inv_len = 1.0F / b->len;
-            glm_vec3_scale(ba, b->inv_len, b->u);
-            b->cone_a = sqrtf(fmaxf(0.0F, len2 - b->dr * b->dr));
-            b->inv_cone_a = b->cone_a > 1e-8F ? (1.0F / b->cone_a) : 0.0F;
-            b->cos_slope = b->cone_a * b->inv_len;
-            b->sin_slope = b->dr * b->inv_len;
-        } else {
-            b->len = 0.0F;
-            b->inv_len = 0.0F;
-            glm_vec3_zero(b->u);
-            b->cone_a = 0.0F;
-            b->inv_cone_a = 0.0F;
-            b->cos_slope = 1.0F;
-            b->sin_slope = 0.0F;
-        }
-        for (int k = 0; k < 3; ++k) {
-            b->min[k] = fminf(body[j].a[k], body[j].b[k]) - r_max;
-            b->max[k] = fmaxf(body[j].a[k], body[j].b[k]) + r_max;
-            if (b->min[k] < bp->all_min[k]) bp->all_min[k] = b->min[k];
-            if (b->max[k] > bp->all_max[k]) bp->all_max[k] = b->max[k];
-        }
+    if (!sh) return;
+    bool in_cone[CLOTH_SHAPES] = {0};
+    for (int i = 0; i < sh->cone_count; ++i) {
+        const ClothCone c = sh->cones[i];
+        in_cone[c.a] = in_cone[c.b] = true;
+        add_box(bp, &sh->spheres[c.a], &sh->spheres[c.b], thickness);
+    }
+    for (int i = 0; i < sh->sphere_count; ++i)
+        if (!in_cone[i]) add_box(bp, &sh->spheres[i], &sh->spheres[i], thickness);
+}
+
+static void prepare_convexes(const ClothShapes *sh, StepWork *w) {
+    w->convex_count = sh ? sh->convex_count : 0;
+    for (int i = 0; i < w->convex_count; ++i) {
+        const ClothConvex *c = &sh->convexes[i];
+        w->convex[i].plane_count = c->plane_count;
+        for (int f = 0; f < c->plane_count; ++f)
+            glm_vec4_scale((float *)c->planes[f], 1.0F / glm_vec3_norm((float *)c->planes[f]), w->convex[i].planes[f]);
     }
 }
 
@@ -587,23 +280,19 @@ static inline float box_sphere_contact(const float p[3], const float center[3], 
     return radius - d;
 }
 
-/* Precomputed round-cone SDF with the same temporal side recovery as cloth_point_capsule_contact_swept and zero sqrt on misses. */
-static float box_point_contact_swept(const float p[3], const float prev_p[3],
-                                     const ClothCapsule *cap, const CapsuleBox *bx,
-                                     float margin, const float fallback[3],
-                                     float normal[3], float *t_out) {
+/* The round-cone SDF of cloth_point_cone_contact with precomputed terms and no sqrt on a miss. */
+static float box_point_contact(const float p[3], const ShapeBox *bx, float normal[3], float *t_out) {
     float depth = 0.0F, t = 0.0F;
     if (bx->degenerate) {
         if (bx->ra >= bx->rb) {
-            t = 0.0F;
-            depth = box_sphere_contact(p, cap->a, bx->ra, normal);
+            depth = box_sphere_contact(p, bx->a->c, bx->ra, normal);
         } else {
             t = 1.0F;
-            depth = box_sphere_contact(p, cap->b, bx->rb, normal);
+            depth = box_sphere_contact(p, bx->b->c, bx->rb, normal);
         }
     } else {
         vec3 pa;
-        glm_vec3_sub((float *)p, (float *)cap->a, pa);
+        glm_vec3_sub((float *)p, (float *)bx->a->c, pa);
         float y = glm_vec3_dot(pa, (float *)bx->u);
         if (y < -bx->ra || y > bx->len + bx->rb) return 0.0F;
         vec3 w = {pa[0] - y * bx->u[0], pa[1] - y * bx->u[1], pa[2] - y * bx->u[2]};
@@ -612,11 +301,10 @@ static float box_point_contact_swept(const float p[3], const float prev_p[3],
         float x = sqrtf(w2);
         float s = (-x * bx->dr + y * bx->cone_a) * bx->inv_len;
         if (s <= 0.0F) {
-            t = 0.0F;
-            depth = box_sphere_contact(p, cap->a, bx->ra, normal);
+            depth = box_sphere_contact(p, bx->a->c, bx->ra, normal);
         } else if (s >= bx->cone_a) {
             t = 1.0F;
-            depth = box_sphere_contact(p, cap->b, bx->rb, normal);
+            depth = box_sphere_contact(p, bx->b->c, bx->rb, normal);
         } else {
             float signed_dist = x * bx->cos_slope + y * bx->sin_slope - bx->ra;
             if (signed_dist >= 0.0F) return 0.0F;
@@ -635,175 +323,78 @@ static float box_point_contact_swept(const float p[3], const float prev_p[3],
             depth = -signed_dist;
         }
     }
-    if (depth <= 0.0F) return 0.0F;
-    if (cap->flags == CLOTH_COLLIDER_INSIDE && (cap->has_prev || fallback)) {
-        *t_out = t;
-        return cloth_capsule_exit_side(p, prev_p, cap, margin, fallback, t, depth, normal);
-    }
     *t_out = t;
-    return depth;
+    return depth > 0.0F ? depth : 0.0F;
 }
 
-enum { TARGET_PASSES = 2 };
-
-/* The target of a free vertex is its skinned anchor pushed out of the body capsules, then out of the support, in
-   TARGET_PASSES Gauss-Seidel passes with the cloth's own contact margin. previous holds the pushed targets of the
-   last pose sample, which keep each exit on the side the target came from. Pins keep their anchor. */
-static void push_targets(const ClothMesh *mesh, const ClothMaterial *m, const float anchors[][3],
-                         const ClothGuide *guide, const ClothCapsule *body, const CapsuleBroadphase *bp,
-                         SupportPlane *support, const float (*previous)[3], float out[][3]) {
-    memcpy(out, anchors, (size_t)mesh->vertices * sizeof out[0]);
-    for (int pass = 0; pass < TARGET_PASSES; ++pass) {
-        for (int i = 0; bp->count && i < mesh->vertices; ++i) {
-            if (mesh->inv_area[i] == 0.0F || !point_in_box(out[i], bp->all_min, bp->all_max)) continue;
-            for (int bi = 0; bi < bp->count; ++bi) {
-                const CapsuleBox *bx = &bp->boxes[bi];
-                if (!point_in_box(out[i], bx->min, bx->max)) continue;
-                vec3 normal;
-                float t = 0.0F;
-                float depth = box_point_contact_swept(out[i], previous ? previous[i] : NULL, body + bx->idx, bx, m->thickness,
-                                                      guide ? guide[i].normal : NULL, normal, &t);
-                if (depth > 0.0F) glm_vec3_muladds(normal, depth, out[i]);
-            }
-        }
-        if (support) support_points(out, mesh, support, m->thickness, previous, 0.0F, NULL);
+static void shape_motion(const ShapeBox *bx, float t, float out[3]) {
+    for (int k = 0; k < 3; ++k) {
+        float ma = bx->a->c[k] - bx->a->prev[k], mb = bx->b->c[k] - bx->b->prev[k];
+        out[k] = ma + t * (mb - ma);
     }
 }
 
-bool cloth_push_targets(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, float anchors[][3],
-                        const ClothGuide *guide, const ClothCapsule *body, int count, const ClothSupport *support) {
-    NT_ASSERT(s && mesh && m && anchors && count >= 0 && count <= CLOTH_CAPSULES);
-    SupportPlane plane;
-    if (!prepare_support(support, &plane)) {
-        s->frame_valid = false;
-        return false;
-    }
-    StepWork *w = &work.entry.step;
-    build_broadphase(m, body, count, &w->bp);
-    const float (*previous)[3] = s->frame_valid && s->mesh == mesh ? (const float (*)[3])s->target : NULL;
-    push_targets(mesh, m, (const float (*)[3])anchors, guide, body, &w->bp, support ? &plane : NULL, previous, w->pushed);
-    memcpy(anchors, w->pushed, (size_t)mesh->vertices * sizeof anchors[0]);
-    memcpy(s->target, w->pushed, (size_t)mesh->vertices * sizeof s->target[0]);
-    return true;
+/* Push x out along n by depth, then Coulomb friction on the substep's displacement relative to the shape point
+   (Macklin et al. 2014, 6.1): static below mu * depth, kinetic above it. */
+static void resolve_contact(float x[3], const float x_prev[3], const float n[3], float depth, const float motion[3],
+                            float mu) {
+    glm_vec3_muladds((float *)n, depth, x);
+    if (mu <= 0.0F) return;
+    vec3 rel;
+    for (int k = 0; k < 3; ++k) rel[k] = x[k] - x_prev[k] - motion[k];
+    glm_vec3_muladds((float *)n, -glm_vec3_dot(rel, (float *)n), rel);
+    float slip = glm_vec3_norm(rel), limit = mu * depth;
+    if (slip <= 1e-12F) return;
+    glm_vec3_muladds(rel, slip < limit ? -1.0F : -limit / slip, x);
 }
 
-static void project_body(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m,
-                         const float x_prev[][3], const ClothGuide *guide,
-                         const ClothCapsule *body, const CapsuleBroadphase *bp,
-                         const ClothFrame *frame, float inv_dt, bool full_contact, ContactAccum *acc) {
-    float thickness = m->thickness;
-    if (frame) {
-        float y_min = thickness;
-        const float floor_n[3] = {0.0F, 1.0F, 0.0F};
-        for (int i = 0; i < mesh->vertices; ++i) {
-            if (mesh->inv_area[i] == 0.0F) continue;
-            if (s->x[i][1] < y_min) {
-                float depth = y_min - s->x[i][1];
-                s->x[i][1] = y_min;
-                if (acc) record_contact(acc, i, floor_n, NULL, 0.0F, inv_dt, depth);
-            }
-        }
-    }
-    if (!bp || bp->count <= 0) return;
-
-    const int active_count = bp->count;
-    const CapsuleBox *boxes = bp->boxes;
-    const float *all_min = bp->all_min, *all_max = bp->all_max;
-
-    /* 1. Exact round-cone SDF on free vertices (AABB broadphase + temporal side disambiguation). */
+static void project_shapes(ClothState *s, const ClothMesh *mesh, const float *w, const float x_prev[][3],
+                           const ClothReference *ref, const ShapeBroadphase *bp, float thickness, float mu,
+                           bool faces, float (*normals)[3]) {
+    if (bp->count <= 0) return;
     for (int i = 0; i < mesh->vertices; ++i) {
-        if (mesh->inv_area[i] == 0.0F) continue;
-        if (!point_in_box(s->x[i], all_min, all_max)) continue;
-        const float *fallback = guide ? guide[i].normal : NULL;
-        for (int bi = 0; bi < active_count; ++bi) {
-            const CapsuleBox *bx = &boxes[bi];
+        if (w[i] == 0.0F || !point_in_box(s->x[i], bp->all_min, bp->all_max)) continue;
+        vec3 outward;
+        glm_vec3_negate_to((float *)ref[i].b, outward);
+        for (int bi = 0; bi < bp->count; ++bi) {
+            const ShapeBox *bx = &bp->boxes[bi];
             if (!point_in_box(s->x[i], bx->min, bx->max)) continue;
-            const ClothCapsule *cap = body + bx->idx;
-            vec3 normal;
+            vec3 normal, motion;
             float t = 0.0F;
-            float depth = box_point_contact_swept(s->x[i], x_prev[i], cap, bx, thickness,
-                                                  fallback, normal, &t);
+            float depth = box_point_contact(s->x[i], bx, normal, &t);
             if (depth <= 0.0F) continue;
-            glm_vec3_muladds(normal, depth, s->x[i]);
-            if (acc) record_contact(acc, i, normal, cap, t, inv_dt, depth);
+            depth = cloth_cone_exit_side(s->x[i], x_prev[i], bx->a, bx->b, thickness, outward, t, depth, normal);
+            shape_motion(bx, t, motion);
+            resolve_contact(s->x[i], x_prev[i], normal, depth, motion, mu);
+            if (normals) glm_vec3_add(normals[i], normal, normals[i]);
         }
     }
-    if (!full_contact) return;
-
-    /* 2. Exact round-cone SDF on edge midpoints (skip chords whose sagitta stays within thickness). */
-    const float min_safe_edge2 = bp->min_safe_edge2;
-    for (int e = 0; e < mesh->edges; ++e) {
-        const ClothEdge *edge = &mesh->edge[e];
-        float wa = mesh->inv_area[edge->a], wb = mesh->inv_area[edge->b];
-        float elen2 = edge->length * edge->length;
-        if (wa + wb <= 0.0F || elen2 <= min_safe_edge2) continue;
-        vec3 mid;
-        for (int k = 0; k < 3; ++k) mid[k] = 0.5F * (s->x[edge->a][k] + s->x[edge->b][k]);
-        if (!point_in_box(mid, all_min, all_max)) continue;
-        vec3 prev_mid, fb_avg;
-        const float *fallback = NULL;
-        bool lazy_init = false;
-        for (int bi = 0; bi < active_count; ++bi) {
-            const CapsuleBox *bx = &boxes[bi];
-            if (elen2 <= bx->safe_edge2 || !point_in_box(mid, bx->min, bx->max)) continue;
-            if (!lazy_init) {
-                for (int k = 0; k < 3; ++k) prev_mid[k] = 0.5F * (x_prev[edge->a][k] + x_prev[edge->b][k]);
-                if (guide) {
-                    for (int k = 0; k < 3; ++k) fb_avg[k] = guide[edge->a].normal[k] + guide[edge->b].normal[k];
-                    fallback = fb_avg;
-                }
-                lazy_init = true;
-            }
-            const ClothCapsule *cap = body + bx->idx;
-            vec3 normal;
-            float t = 0.0F;
-            float depth = box_point_contact_swept(mid, prev_mid, cap, bx, thickness,
-                                                  fallback, normal, &t);
-            if (depth <= 0.0F) continue;
-            /* Midpoint shift = 0.5*(da + db) = depth => scale = 2*depth/(wa+wb), capped near pins. */
-            float max_w = fmaxf(wa, wb);
-            float scale = fminf(2.0F * depth / (wa + wb), 0.5F * edge->length / max_w);
-            if (wa > 0.0F) {
-                glm_vec3_muladds(normal, scale * wa, s->x[edge->a]);
-                if (acc) record_contact(acc, edge->a, normal, cap, t, inv_dt, scale * wa);
-            }
-            if (wb > 0.0F) {
-                glm_vec3_muladds(normal, scale * wb, s->x[edge->b]);
-                if (acc) record_contact(acc, edge->b, normal, cap, t, inv_dt, scale * wb);
-            }
-            for (int k = 0; k < 3; ++k) mid[k] = 0.5F * (s->x[edge->a][k] + s->x[edge->b][k]);
-        }
-    }
-
-    /* 3. Face-interior fallback only when a triangle is large relative to a capsule radius. */
-    const float min_face_thresh2 = bp->min_face_thresh2;
+    if (!faces || mesh->faces <= 0) return;
     for (int f = 0; f < mesh->faces; ++f) {
         const ClothFace face = mesh->face[f];
         float e0 = glm_vec3_distance2((float *)mesh->rest[face.a], (float *)mesh->rest[face.b]);
         float e1 = glm_vec3_distance2((float *)mesh->rest[face.b], (float *)mesh->rest[face.c]);
         float e2 = glm_vec3_distance2((float *)mesh->rest[face.c], (float *)mesh->rest[face.a]);
         float max_e2 = fmaxf(e0, fmaxf(e1, e2));
-        if (max_e2 <= min_face_thresh2) continue;
+        if (max_e2 <= bp->min_face_edge2) continue;
         const float *pa = s->x[face.a], *pb = s->x[face.b], *pc = s->x[face.c];
         float fmin[3], fmax[3];
         for (int k = 0; k < 3; ++k) {
             fmin[k] = fminf(pa[k], fminf(pb[k], pc[k]));
             fmax[k] = fmaxf(pa[k], fmaxf(pb[k], pc[k]));
         }
-        if (!box_overlaps(fmin, fmax, all_min, all_max)) continue;
+        if (!box_overlaps(fmin, fmax, bp->all_min, bp->all_max)) continue;
         float min_e2 = fminf(e0, fminf(e1, e2));
-        int ids[] = {face.a, face.b, face.c};
-        for (int bi = 0; bi < active_count; ++bi) {
-            const CapsuleBox *bx = &boxes[bi];
-            float thresh = 1.5F * bx->r_min;
-            if (max_e2 <= thresh * thresh || !box_overlaps(fmin, fmax, bx->min, bx->max)) continue;
-            const ClothCapsule *cap = body + bx->idx;
+        const int ids[] = {face.a, face.b, face.c};
+        for (int bi = 0; bi < bp->count; ++bi) {
+            const ShapeBox *bx = &bp->boxes[bi];
+            if (max_e2 <= bx->face_edge2 || !box_overlaps(fmin, fmax, bx->min, bx->max)) continue;
             vec3 bary, normal;
-            float depth = cloth_face_contact(pa, pb, pc, cap, thickness, bary, normal);
+            float depth = cloth_face_contact(pa, pb, pc, bx->a, bx->b, thickness, bary, normal);
             if (depth <= 0.0F) continue;
             float weight = 0.0F, largest = 0.0F;
             for (int i = 0; i < 3; ++i) {
-                float bw = bary[i] * mesh->inv_area[ids[i]];
+                float bw = bary[i] * w[ids[i]];
                 weight += bary[i] * bw;
                 largest = fmaxf(largest, bw);
             }
@@ -811,19 +402,102 @@ static void project_body(ClothState *s, const ClothMesh *mesh, const ClothMateri
             /* Clamp against the shortest face edge so an irregular triangle cannot spike strain. */
             float impulse = fminf(depth / weight, 0.25F * sqrtf(min_e2) / largest);
             for (int i = 0; i < 3; ++i) {
-                if (mesh->inv_area[ids[i]] <= 0.0F) continue;
-                float shift = impulse * bary[i] * mesh->inv_area[ids[i]];
-                glm_vec3_muladds(normal, shift, s->x[ids[i]]);
-                if (acc) record_contact(acc, ids[i], normal, cap, 0.5F, inv_dt, shift);
+                if (w[ids[i]] <= 0.0F) continue;
+                glm_vec3_muladds(normal, impulse * bary[i] * w[ids[i]], s->x[ids[i]]);
+                if (normals) glm_vec3_add(normals[ids[i]], normal, normals[ids[i]]);
             }
         }
     }
 }
 
-static void project_tethers(ClothState *s, const ClothMesh *mesh) {
+static void move_point(const float (*move)[4], const float p[3], float out[3]) {
+    if (!move) {
+        glm_vec3_copy((float *)p, out);
+        return;
+    }
+    for (int r = 0; r < 3; ++r) out[r] = move[r][0] * p[0] + move[r][1] * p[1] + move[r][2] * p[2] + move[r][3];
+}
+
+/* A vertex inside a convex leaves through the face it entered by, judged from its previous position carried with the
+   convex; a vertex already inside at the substep start takes the nearest face. */
+static void project_convexes(ClothState *s, const ClothMesh *mesh, const float *w, const float x_prev[][3],
+                             const StepWork *wk, const float (*move)[4], float thickness, float mu,
+                             float (*normals)[3]) {
+    for (int c = 0; c < wk->convex_count; ++c) {
+        const ConvexPlanes *cv = &wk->convex[c];
+        for (int i = 0; i < mesh->vertices; ++i) {
+            if (w[i] == 0.0F) continue;
+            int nearest = -1;
+            float nearest_d = -FLT_MAX;
+            bool inside = true;
+            for (int f = 0; f < cv->plane_count && inside; ++f) {
+                float d = glm_vec3_dot((float *)cv->planes[f], s->x[i]) + cv->planes[f][3];
+                inside = d < thickness;
+                if (d > nearest_d) {
+                    nearest_d = d;
+                    nearest = f;
+                }
+            }
+            if (!inside) continue;
+            vec3 from;
+            move_point(move, x_prev[i], from);
+            int entry = -1;
+            float enter = -1.0F;
+            for (int f = 0; f < cv->plane_count; ++f) {
+                float a = glm_vec3_dot((float *)cv->planes[f], from) + cv->planes[f][3] - thickness;
+                float b = glm_vec3_dot((float *)cv->planes[f], s->x[i]) + cv->planes[f][3] - thickness;
+                if (a < 0.0F) continue;
+                float t = a / (a - b);
+                if (t > enter) {
+                    enter = t;
+                    entry = f;
+                }
+            }
+            int face = entry >= 0 ? entry : nearest;
+            float depth = thickness - (glm_vec3_dot((float *)cv->planes[face], s->x[i]) + cv->planes[face][3]);
+            vec3 motion;
+            glm_vec3_sub(from, (float *)x_prev[i], motion);
+            resolve_contact(s->x[i], x_prev[i], cv->planes[face], depth, motion, mu);
+            if (normals) glm_vec3_add(normals[i], (float *)cv->planes[face], normals[i]);
+        }
+    }
+}
+
+static void project_max_distance(ClothState *s, const ClothMesh *mesh, const float *w, const ClothReference *ref,
+                                 const float *r) {
+    for (int i = 0; i < mesh->vertices; ++i) {
+        if (w[i] == 0.0F) continue;
+        vec3 offset;
+        glm_vec3_sub(s->x[i], (float *)ref[i].x, offset);
+        float distance2 = glm_vec3_norm2(offset);
+        if (distance2 > r[i] * r[i]) glm_vec3_muladds(offset, r[i] / sqrtf(distance2) - 1.0F, s->x[i]);
+    }
+}
+
+static void project_backstop(ClothState *s, const ClothMesh *mesh, const float *w, const ClothReference *ref) {
+    for (int i = 0; i < mesh->vertices; ++i) {
+        const ClothBackstop bs = mesh->backstop[i];
+        if (w[i] == 0.0F || bs.R <= 0.0F) continue;
+        vec3 center, offset;
+        glm_vec3_copy((float *)ref[i].x, center);
+        glm_vec3_muladds((float *)ref[i].b, bs.d + bs.R, center);
+        glm_vec3_sub(s->x[i], center, offset);
+        float distance2 = glm_vec3_norm2(offset);
+        if (distance2 >= bs.R * bs.R) continue;
+        float distance = sqrtf(distance2);
+        if (distance > 1e-7F) {
+            glm_vec3_scale(offset, bs.R / distance, offset);
+        } else {
+            glm_vec3_scale((float *)ref[i].b, -bs.R, offset);
+        }
+        glm_vec3_add(center, offset, s->x[i]);
+    }
+}
+
+static void project_tethers(ClothState *s, const ClothMesh *mesh, const float *w) {
     for (int i = 0; i < mesh->vertices; ++i) {
         ClothTether t = mesh->tether[i];
-        if (t.pin < 0 || mesh->inv_area[i] == 0.0F) continue;
+        if (t.pin < 0 || w[i] == 0.0F) continue;
         vec3 offset;
         glm_vec3_sub(s->x[i], s->x[t.pin], offset);
         float distance2 = glm_vec3_norm2(offset);
@@ -834,23 +508,9 @@ static void project_tethers(ClothState *s, const ClothMesh *mesh) {
     }
 }
 
-static void project_guide(float x[3], const float anchor[3], const ClothGuide *g) {
-    vec3 offset;
-    glm_vec3_sub(x, (float *)anchor, offset);
-    float inward = -glm_vec3_dot(offset, (float *)g->normal) - g->backstop;
-    if (inward > 0.0F) glm_vec3_muladds((float *)g->normal, inward, offset);
-    float length = glm_vec3_norm(offset);
-    if (length > g->travel) {
-        if (g->travel == 0.0F) glm_vec3_zero(offset);
-        else glm_vec3_scale(offset, g->travel / length, offset);
-    }
-    glm_vec3_add((float *)anchor, offset, x);
-}
-
-static void project_tangent_if_contact(float corr[3], int v, const ContactAccum *acc) {
-    if (!acc || acc->count[v] == 0) return;
+static void project_tangent_if_contact(float corr[3], const float normal_sum[3]) {
     vec3 n;
-    glm_vec3_copy((float *)acc->normal[v], n);
+    glm_vec3_copy((float *)normal_sum, n);
     float nlen = glm_vec3_norm(n);
     if (nlen <= 1e-7F) return;
     glm_vec3_scale(n, 1.0F / nlen, n);
@@ -858,8 +518,8 @@ static void project_tangent_if_contact(float corr[3], int v, const ContactAccum 
     if (into < 0.0F) glm_vec3_muladds(n, -into, corr);
 }
 
-static bool limit_strain_pass(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m,
-                              const ContactAccum *acc, bool reverse) {
+static bool limit_strain_pass(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, const float *w,
+                              const float (*normals)[3], bool reverse) {
     float warp_ratio = 1.0F + m->max_edge_strain;
     float weft_ratio = 1.0F + (m->weft_max_strain > 0.0F ? m->weft_max_strain : m->max_edge_strain);
     bool moved = false;
@@ -869,20 +529,20 @@ static bool limit_strain_pass(ClothState *s, const ClothMesh *mesh, const ClothM
         glm_vec3_sub(s->x[e->b], s->x[e->a], delta);
         float ratio = (e->kind == CLOTH_EDGE_WARP) ? warp_ratio : weft_ratio;
         float length = glm_vec3_norm(delta), target = ratio * e->length;
-        float wa = mesh->inv_area[e->a], wb = mesh->inv_area[e->b];
+        float wa = w[e->a], wb = w[e->b];
         if (length <= target || wa + wb == 0.0F) continue;
         moved = true;
         float scale = (length - target) / (length * (wa + wb));
         if (wa > 0.0F) {
             vec3 corr;
             glm_vec3_scale(delta, scale * wa, corr);
-            project_tangent_if_contact(corr, e->a, acc);
+            project_tangent_if_contact(corr, normals[e->a]);
             glm_vec3_add(s->x[e->a], corr, s->x[e->a]);
         }
         if (wb > 0.0F) {
             vec3 corr;
             glm_vec3_scale(delta, -scale * wb, corr);
-            project_tangent_if_contact(corr, e->b, acc);
+            project_tangent_if_contact(corr, normals[e->b]);
             glm_vec3_add(s->x[e->b], corr, s->x[e->b]);
         }
     }
@@ -908,56 +568,46 @@ static void compute_vertex_normals(const ClothMesh *mesh, const float pos[][3], 
     }
 }
 
-void cloth_step(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, float dt,
-                const ClothFrame *frame, const float anchors[][3], const ClothGuide *guide,
-                const ClothCapsule *body, int count) {
+static void kinematic_weights(const ClothMesh *mesh, const float *r, float *w) {
+    for (int i = 0; i < mesh->vertices; ++i) w[i] = r[i] > 0.0F ? mesh->inv_area[i] : 0.0F;
+}
+
+/* Integrate -> [max distance -> tethers -> bend, stretch -> backstop -> collision] x iterations -> strain passes ->
+   backstop -> collision -> velocity from positions: collision has the last word, since penetration is the visible
+   defect and the backstop pushes the same way. */
+void cloth_step(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, float dt, const ClothFrame *frame,
+                const ClothReference *ref, const float *max_distance, const ClothShapes *shapes) {
     if (!s) return;
-    SupportPlane plane;
-    SupportPlane *support = frame && frame->support ? &plane : NULL;
-    s->frame_valid = s->mesh == mesh && frame_motion_valid(frame) && prepare_support(frame ? frame->support : NULL, &plane) &&
-                     cloth_frame_valid(mesh, m, dt, anchors, guide, body, count);
+    s->frame_valid = s->mesh == mesh && frame_motion_valid(frame) &&
+                     cloth_frame_valid(mesh, m, dt, ref, max_distance, shapes);
     if (!s->frame_valid) return;
-
-    StepWork *w = &work.entry.step;
-    float (*x_prev)[3] = w->x_prev;
-    float (*v_normals)[3] = w->v_normals;
-    ContactAccum *acc = &w->acc;
+    const float *r = max_distance ? max_distance : mesh->max_distance;
+    StepWork *wk = &work;
+    float (*x_prev)[3] = wk->x_prev;
+    float *w = wk->w;
     size_t v_count = (size_t)mesh->vertices;
-    memset(acc->normal, 0, v_count * sizeof acc->normal[0]);
-    memset(acc->vel, 0, v_count * sizeof acc->vel[0]);
-    memset(acc->depth, 0, v_count * sizeof acc->depth[0]);
-    memset(acc->count, 0, v_count * sizeof acc->count[0]);
-
-    CapsuleBroadphase *bp = &w->bp;
-    build_broadphase(m, body, count, bp);
-    const float (*target)[3] = anchors;
+    memset(wk->normal, 0, v_count * sizeof wk->normal[0]);
+    kinematic_weights(mesh, r, w);
+    build_broadphase(shapes, m->thickness, &wk->bp);
+    prepare_convexes(shapes, wk);
+    const float (*move)[4] = shapes ? shapes->convex_move : NULL;
 
     float inv_dt = 1.0F / dt;
     float retain = expf(-m->drag * dt);
     float aero_damp = m->aero_drag > 0.0F ? (1.0F - expf(-m->aero_drag * dt)) : 0.0F;
     const float max_fict = 28.0F; /* m/s^2: a root-acceleration spike must not fling the cloth */
-
-    float anchor_shift_y = frame ? frame->anchor_shift_y : 0.0F;
-    if (anchor_shift_y != 0.0F) {
-        for (int i = 0; i < mesh->vertices; ++i)
-            if (mesh->inv_area[i] > 0.0F) s->x[i][1] += anchor_shift_y;
-    }
-    if (aero_damp > 0.0F) compute_vertex_normals(mesh, s->x, v_normals);
+    if (aero_damp > 0.0F) compute_vertex_normals(mesh, s->x, wk->v_normals);
 
     for (int i = 0; i < mesh->vertices; ++i) {
         glm_vec3_copy(s->x[i], x_prev[i]);
-        if (mesh->inv_area[i] == 0.0F) {
-            glm_vec3_copy((float *)anchors[i], s->x[i]);
-            for (int k = 0; k < 3; ++k) s->velocity[i][k] = (anchors[i][k] - x_prev[i][k]) * inv_dt;
+        if (w[i] == 0.0F) {
+            glm_vec3_copy((float *)ref[i].x, s->x[i]);
             continue;
         }
         vec3 accel = {0.0F, -9.81F, 0.0F};
         if (frame) {
-            vec3 fict = {
-                -frame->linear_inertia * frame->linear_accel[0],
-                -frame->linear_inertia * frame->linear_accel[1],
-                -frame->linear_inertia * frame->linear_accel[2]
-            };
+            vec3 fict = {-frame->linear_inertia * frame->linear_accel[0], -frame->linear_inertia * frame->linear_accel[1],
+                         -frame->linear_inertia * frame->linear_accel[2]};
             float w2 = frame->angular_vel_y * frame->angular_vel_y;
             float ay = frame->angular_accel_y;
             /* Yaw around +Y in right-handed Y-up: centrifugal (+w^2 * r_xz) and Euler (-ay * (y x r)). */
@@ -970,8 +620,8 @@ void cloth_step(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, fl
         glm_vec3_muladds(accel, dt, s->velocity[i]);
         glm_vec3_scale(s->velocity[i], retain, s->velocity[i]);
         if (aero_damp > 0.0F) {
-            float vn = glm_vec3_dot(s->velocity[i], v_normals[i]);
-            glm_vec3_muladds(v_normals[i], -aero_damp * vn, s->velocity[i]);
+            float vn = glm_vec3_dot(s->velocity[i], wk->v_normals[i]);
+            glm_vec3_muladds(wk->v_normals[i], -aero_damp * vn, s->velocity[i]);
         }
         glm_vec3_muladds(s->velocity[i], dt, s->x[i]);
     }
@@ -981,321 +631,157 @@ void cloth_step(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, fl
     float weft_s = m->weft_stretch_scale > 0.0F ? m->weft_stretch_scale : 1.0F;
     float diag_s = m->diag_stretch_scale > 0.0F ? m->diag_stretch_scale : 1.0F;
     float weft_b = m->weft_bend_scale > 0.0F ? m->weft_bend_scale : 1.0F;
-
     memset(s->stretch_lambda, 0, (size_t)mesh->edges * sizeof(float));
     memset(s->bend_lambda, 0, (size_t)mesh->edges * sizeof(float));
-    memset(s->anim_lambda, 0, (size_t)mesh->vertices * sizeof(float));
+    const float mu = m->friction;
 
     for (int pass = 0; pass < m->iterations; ++pass) {
-        for (int i = 0; mesh->drive && i < mesh->vertices; ++i) {
-            float w2 = mesh->drive[i];
-            if (mesh->inv_area[i] == 0.0F || w2 <= 0.0F) continue;
-            float alpha = 1.0F / (w2 * dt * dt);
-            vec3 dx;
-            glm_vec3_sub(s->x[i], (float *)target[i], dx);
-            float dist = glm_vec3_norm(dx);
-            if (dist < 1e-8F) continue;
-            float dl = (-dist - alpha * s->anim_lambda[i]) / (1.0F + alpha);
-            s->anim_lambda[i] += dl;
-            glm_vec3_muladds(dx, dl / dist, s->x[i]);
-        }
+        project_max_distance(s, mesh, w, ref, r);
+        if (mesh->tether) project_tethers(s, mesh, w);
         for (int k = 0; k < mesh->edges; ++k) {
             int i = (pass % 2 == 0) ? k : mesh->edges - 1 - k;
             const ClothEdge *e = mesh->edge + i;
             if (e->d >= 0) {
                 float b_scale = (e->kind == CLOTH_EDGE_WARP) ? 1.0F : weft_b;
-                bend(s, e, mesh->inv_area, m->bend * b_scale * scale, &s->bend_lambda[i]);
+                bend(s, e, w, m->bend * b_scale * scale, &s->bend_lambda[i]);
             }
         }
         for (int k = 0; k < mesh->edges; ++k) {
             int i = (pass % 2 == 0) ? k : mesh->edges - 1 - k;
             const ClothEdge *e = mesh->edge + i;
             float s_scale = e->kind == CLOTH_EDGE_WEFT ? weft_s : (e->kind == CLOTH_EDGE_DIAG ? diag_s : 1.0F);
-            stretch(s, e, mesh->inv_area, m->stretch * s_scale * scale, m->compression_limit, &s->stretch_lambda[i]);
+            stretch(s, e, w, m->stretch * s_scale * scale, m->compression_limit, &s->stretch_lambda[i]);
         }
-        if (mesh->tether) project_tethers(s, mesh);
-        if (guide) {
-            for (int i = 0; i < mesh->vertices; ++i) {
-                if (mesh->inv_area[i] != 0.0F) project_guide(s->x[i], target[i], &guide[i]);
-            }
-        }
-        project_body(s, mesh, m, x_prev, guide, body, bp, frame, inv_dt, pass == m->iterations - 1, acc);
-        project_support(s, mesh, support, m->thickness, x_prev, anchor_shift_y, acc);
+        project_backstop(s, mesh, w, ref);
+        bool last = pass == m->iterations - 1;
+        project_shapes(s, mesh, w, (const float (*)[3])x_prev, ref, &wk->bp, m->thickness, mu, last, wk->normal);
+        project_convexes(s, mesh, w, (const float (*)[3])x_prev, wk, move, m->thickness, mu, wk->normal);
     }
 
-    bool pending_contact = false;
-    for (int pass = 0; pass < m->strain_passes; ++pass) {
-        bool moved = limit_strain_pass(s, mesh, m, acc, pass % 2 != 0);
-        if (!moved && !pending_contact) break;
-        pending_contact = bp->count || support || frame;
-        if (pending_contact && (pass % 2 != 0 || pass + 1 == m->strain_passes)) {
-            /* A length projection can enter a collider that was clear on the preceding sweep. */
-            project_body(s, mesh, m, x_prev, guide, body, bp, frame, inv_dt, true, acc);
-            project_support(s, mesh, support, m->thickness, x_prev, anchor_shift_y, acc);
-            pending_contact = false;
-        }
+    bool moved = false;
+    for (int pass = 0; pass < m->strain_passes; ++pass)
+        if (limit_strain_pass(s, mesh, m, w, (const float (*)[3])wk->normal, pass % 2 != 0)) moved = true;
+        else break;
+    if (moved) {
+        project_backstop(s, mesh, w, ref);
+        project_shapes(s, mesh, w, (const float (*)[3])x_prev, ref, &wk->bp, m->thickness, mu, true, NULL);
+        project_convexes(s, mesh, w, (const float (*)[3])x_prev, wk, move, m->thickness, mu, NULL);
     }
 
     for (int i = 0; i < mesh->vertices; ++i) {
-        if (mesh->inv_area[i] == 0.0F) continue;
-        vec3 v_free, v;
-        glm_vec3_copy(s->velocity[i], v_free);
-        for (int k = 0; k < 3; ++k) v[k] = (s->x[i][k] - x_prev[i][k]) * inv_dt;
-        if (acc->count[i] > 0) {
-            vec3 cn, v_body;
-            glm_vec3_copy(acc->normal[i], cn);
-            float nlen = glm_vec3_norm(cn);
-            float inv_n = 1.0F / (float)acc->count[i];
-            for (int k = 0; k < 3; ++k) v_body[k] = acc->vel[i][k] * inv_n;
-            if (nlen > 1e-7F) {
-                glm_vec3_scale(cn, 1.0F / nlen, cn);
-                vec3 v_rel, v_tan, v_rel_free, v_free_tan;
-                glm_vec3_sub(v, v_body, v_rel);
-                float vn_rel = glm_vec3_dot(v_rel, cn);
-                glm_vec3_copy(v_rel, v_tan);
-                glm_vec3_muladds(cn, -vn_rel, v_tan);
-                /* Prevent normal collision projections from injecting spurious tangential energy. */
-                glm_vec3_sub(v_free, v_body, v_rel_free);
-                glm_vec3_copy(v_rel_free, v_free_tan);
-                glm_vec3_muladds(cn, -glm_vec3_dot(v_rel_free, cn), v_free_tan);
-                float v_tan_len = glm_vec3_norm(v_tan);
-                float max_vt = glm_vec3_norm(v_free_tan) + 60.0F * dt;
-                if (v_tan_len > max_vt && v_tan_len > 1e-6F) {
-                    glm_vec3_scale(v_tan, max_vt / v_tan_len, v_tan);
-                    v_tan_len = max_vt;
-                }
-                /* Substep-rate-invariant dynamic + Coulomb tangential friction. */
-                if (v_tan_len > 1e-6F && m->contact_friction > 0.0F) {
-                    float dyn_damp = expf(-m->contact_friction * 24.0F * dt);
-                    float dv_fric = m->contact_friction * fminf(acc->depth[i] * inv_dt, 2.0F);
-                    float slip = fmaxf(0.0F, dyn_damp - dv_fric / v_tan_len);
-                    glm_vec3_scale(v_tan, slip, v_tan);
-                }
-                /* One-sided zero restitution: suppress penetration and projection bounce without suction. */
-                float vn_body = glm_vec3_dot(v_body, cn);
-                float vn_target = fmaxf(vn_body, glm_vec3_dot(v_free, cn));
-                float vn_extra = vn_target - vn_body;
-                for (int k = 0; k < 3; ++k) v[k] = v_body[k] + v_tan[k] + vn_extra * cn[k];
-            }
-        }
-        if (m->max_speed_mps > 0.0F) {
-            float spd = glm_vec3_norm(v);
-            if (spd > m->max_speed_mps) glm_vec3_scale(v, m->max_speed_mps / spd, v);
-        }
-        glm_vec3_copy(v, s->velocity[i]);
-        if (!finite_point(s->x[i]) || !finite_point(v)) s->frame_valid = false;
+        for (int k = 0; k < 3; ++k) s->velocity[i][k] = (s->x[i][k] - x_prev[i][k]) * inv_dt;
+        if (!finite_point(s->x[i]) || !finite_point(s->velocity[i])) s->frame_valid = false;
     }
 }
 
-static float reset_support_weight(const float point[3], const ClothMaterial *m, const ClothCapsule *body,
-                                  int count, float range) {
-    float reach = 0.0F;
-    for (int i = 0; i < count; ++i) {
-        if (body[i].flags != CLOTH_COLLIDER_INSIDE) continue;
-        vec3 normal;
-        float depth = cloth_point_capsule_contact(point, &body[i], m->thickness + range, normal, NULL);
-        reach = fmaxf(reach, depth);
-    }
-    return fminf(1.0F, reach / range);
-}
-
-static void reset_contact_pose(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m,
-                               const float anchors[][3], const ClothGuide *guide,
-                               const ClothCapsule *body, int count, float carry_range, SupportPlane *support,
-                               ContactPoseWork *w) {
-    int n = mesh->vertices;
-    int *deg = w->deg, *off = w->off, *nb = w->nb, *cur = w->cur, *hop = w->hop, *order = w->order;
-    memset(deg, 0, (size_t)n * sizeof *deg);
-    for (int e = 0; e < mesh->edges; ++e) {
-        ++deg[mesh->edge[e].a];
-        ++deg[mesh->edge[e].b];
-    }
-    off[0] = 0;
-    for (int i = 0; i < n; ++i) off[i + 1] = off[i] + deg[i];
-    memcpy(cur, off, (size_t)n * sizeof cur[0]);
-    for (int e = 0; e < mesh->edges; ++e) {
-        int a = mesh->edge[e].a, b = mesh->edge[e].b;
-        nb[cur[a]++] = b;
-        nb[cur[b]++] = a;
-    }
-
-    int head = 0, tail = 0;
-    for (int i = 0; i < n; ++i) {
-        if (mesh->inv_area[i] == 0.0F) {
-            hop[i] = 0;
-            order[tail++] = i;
-        } else {
-            hop[i] = -1;
-        }
-    }
-    while (head < tail) {
-        int u = order[head++];
-        for (int k = off[u]; k < off[u + 1]; ++k) {
-            int v = nb[k];
-            if (hop[v] < 0) {
-                hop[v] = hop[u] + 1;
-                order[tail++] = v;
-            }
-        }
-    }
-    for (int i = 0; i < n; ++i) {
-        if (hop[i] < 0) {
-            hop[i] = n;
-            order[tail++] = i;
-        }
-    }
-
-    float (*disp)[3] = w->disp;
-    memset(disp, 0, (size_t)n * sizeof disp[0]);
-
-    /* Sweep outward from pinned seams so lower hem rows inherit upper-row limb lift and unroll along limbs. */
-    for (int oi = 0; oi < tail; ++oi) {
-        int v = order[oi];
-        if (mesh->inv_area[v] == 0.0F) continue;
-        vec3 avg_disp = {0.0F, 0.0F, 0.0F}, parent_avg = {0.0F, 0.0F, 0.0F};
-        float parent_rest_len = 0.0F;
-        int pcnt = 0;
-        for (int k = off[v]; k < off[v + 1]; ++k) {
-            int u = nb[k];
-            if (hop[u] < hop[v]) {
-                glm_vec3_add(avg_disp, disp[u], avg_disp);
-                glm_vec3_add(parent_avg, s->x[u], parent_avg);
-                parent_rest_len += glm_vec3_distance((float *)anchors[v], (float *)anchors[u]);
-                ++pcnt;
-            }
-        }
-        if (pcnt > 0) {
-            float inv_p = 1.0F / (float)pcnt;
-            glm_vec3_scale(avg_disp, inv_p, avg_disp);
-            glm_vec3_scale(parent_avg, inv_p, parent_avg);
-            parent_rest_len *= inv_p;
-            if (carry_range > 0.0F && glm_vec3_norm2(avg_disp) > 0.0F) {
-                float weight = reset_support_weight(anchors[v], m, body, count, carry_range);
-                glm_vec3_muladds(avg_disp, weight, s->x[v]);
-            } else {
-                glm_vec3_add(s->x[v], avg_disp, s->x[v]);
-            }
-        }
-        const float *gn = guide ? guide[v].normal : NULL;
-        vec3 cn_sum = {0.0F, 0.0F, 0.0F};
-        bool hit = false;
-        for (int pass = 0; pass < 2; ++pass) {
-            for (int c = 0; c < count; ++c) {
-                if (body[c].flags != CLOTH_COLLIDER_INSIDE) continue;
-                vec3 cn;
-                if (depenetrate_reset_vertex(s->x[v], gn, pcnt > 0, parent_avg, body + c, m->thickness, cn)) {
-                    glm_vec3_add(cn_sum, cn, cn_sum);
-                    hit = true;
-                }
-            }
-        }
-        /* When a limb lifts cloth up toward its parent row, unroll the shortened edge along the
-           guide-normal tangent over the limb surface instead of stacking vertices at the hip crease. */
-        if (hit && gn && pcnt > 0) {
-            float cn_len = glm_vec3_norm(cn_sum);
-            float cur_len = glm_vec3_distance(s->x[v], parent_avg);
-            if (cn_len > 1e-5F && cur_len < parent_rest_len) {
-                vec3 cn, tang;
-                glm_vec3_scale(cn_sum, 1.0F / cn_len, cn);
-                float along = glm_vec3_dot((float *)gn, cn);
-                glm_vec3_copy((float *)gn, tang);
-                glm_vec3_muladds(cn, -along, tang);
-                float tlen = glm_vec3_norm(tang);
-                if (tlen > 0.25F) {
-                    glm_vec3_scale(tang, 1.0F / tlen, tang);
-                    float slide = sqrtf(fmaxf(0.0F, parent_rest_len * parent_rest_len - cur_len * cur_len));
-                    glm_vec3_muladds(tang, slide, s->x[v]);
-                    for (int c = 0; c < count; ++c) {
-                        if (body[c].flags != CLOTH_COLLIDER_INSIDE) continue;
-                        vec3 cn2;
-                        depenetrate_reset_vertex(s->x[v], gn, true, parent_avg, body + c, m->thickness, cn2);
-                    }
-                }
-            }
-        }
-        glm_vec3_sub(s->x[v], (float *)anchors[v], disp[v]);
-    }
-
-    build_broadphase(m, body, count, &w->bp);
-    float scale = m->density * 60.0F * 60.0F;
-    float weft_s = m->weft_stretch_scale > 0.0F ? m->weft_stretch_scale : 1.0F;
-    float diag_s = m->diag_stretch_scale > 0.0F ? m->diag_stretch_scale : 1.0F;
-    for (int pass = 0; pass < 6; ++pass) {
-        memset(s->stretch_lambda, 0, (size_t)mesh->edges * sizeof(float));
-        for (int k = 0; k < mesh->edges; ++k) {
-            int i = (pass % 2 == 0) ? k : mesh->edges - 1 - k;
-            const ClothEdge *e = mesh->edge + i;
-            float s_scale = e->kind == CLOTH_EDGE_WEFT ? weft_s : (e->kind == CLOTH_EDGE_DIAG ? diag_s : 1.0F);
-            stretch(s, e, mesh->inv_area, m->stretch * s_scale * scale, m->compression_limit, &s->stretch_lambda[i]);
-        }
-        if (mesh->tether) project_tethers(s, mesh);
-        for (int i = 0; i < n; ++i) {
-            if (mesh->inv_area[i] == 0.0F) glm_vec3_copy((float *)anchors[i], s->x[i]);
-        }
-        project_body(s, mesh, m, s->x, guide, body, &w->bp, NULL, 1.0F, true, NULL);
-        project_support(s, mesh, support, m->thickness, NULL, 0.0F, NULL);
+/* Moves p along dir until it leaves the shape; the local sphere at the contact's axial parameter gives the exact ray
+   exit for a sphere and converges on a cone. */
+static void exit_shape_along(float p[3], const float dir[3], const ShapeBox *bx) {
+    for (int iteration = 0; iteration < 8; ++iteration) {
+        vec3 normal, q, delta;
+        float t = 0.0F;
+        if (!point_in_box(p, bx->min, bx->max) || box_point_contact(p, bx, normal, &t) <= 0.0F) return;
+        glm_vec3_lerp((float *)bx->a->c, (float *)bx->b->c, t, q);
+        glm_vec3_sub(p, q, delta);
+        float radius = bx->ra + t * (bx->rb - bx->ra);
+        float along = glm_vec3_dot(delta, (float *)dir);
+        float disc = along * along - (glm_vec3_norm2(delta) - radius * radius);
+        float step = disc > 0.0F ? -along + sqrtf(disc) : 0.0F;
+        glm_vec3_muladds((float *)dir, fmaxf(step, 0.0F) + 1e-5F, p);
     }
 }
 
-bool cloth_reset_supported(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m,
-                           const float anchors[][3], const ClothGuide *guide,
-                           const ClothCapsule *body, int count, const ClothSupport *face) {
-    const float evaluation_dt = 1.0F / 60.0F;
+static void exit_convex_along(float p[3], const float dir[3], const ConvexPlanes *cv, float thickness) {
+    float leave = FLT_MAX, nearest_d = -FLT_MAX;
+    int nearest = 0;
+    for (int f = 0; f < cv->plane_count; ++f) {
+        float d = glm_vec3_dot((float *)cv->planes[f], p) + cv->planes[f][3];
+        if (d >= thickness) return;
+        if (d > nearest_d) {
+            nearest_d = d;
+            nearest = f;
+        }
+        float rate = glm_vec3_dot((float *)cv->planes[f], (float *)dir);
+        if (rate > 1e-6F) leave = fminf(leave, (thickness - d) / rate);
+    }
+    if (leave < FLT_MAX) glm_vec3_muladds((float *)dir, leave, p);
+    else glm_vec3_muladds((float *)cv->planes[nearest], thickness - nearest_d, p);
+}
+
+bool cloth_reset(ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, const ClothReference *ref,
+                 const float *max_distance, const ClothShapes *shapes) {
     if (!s) return false;
-    SupportPlane plane;
-    SupportPlane *support = face ? &plane : NULL;
-    if (!prepare_support(face, &plane) || !cloth_frame_valid(mesh, m, evaluation_dt, anchors, guide, body, count)) {
-        s->mesh = NULL;
-        s->frame_valid = false;
-        return false;
+    s->mesh = NULL;
+    s->frame_valid = false;
+    if (!inputs_valid(mesh, m, ref, max_distance, shapes)) return false;
+    const float *r = max_distance ? max_distance : mesh->max_distance;
+    StepWork *wk = &work;
+    build_broadphase(shapes, m->thickness, &wk->bp);
+    prepare_convexes(shapes, wk);
+    for (int i = 0; i < mesh->vertices; ++i) {
+        glm_vec3_copy((float *)ref[i].x, s->x[i]);
+        glm_vec3_zero(s->velocity[i]);
+        if (r[i] <= 0.0F) continue;
+        vec3 outward;
+        glm_vec3_negate_to((float *)ref[i].b, outward);
+        for (int pass = 0; pass < 2; ++pass) {
+            for (int bi = 0; bi < wk->bp.count; ++bi) exit_shape_along(s->x[i], outward, &wk->bp.boxes[bi]);
+            for (int c = 0; c < wk->convex_count; ++c) exit_convex_along(s->x[i], outward, &wk->convex[c], m->thickness);
+        }
     }
-    ResetWork *w = &work.entry.reset;
-    /* Free cloth starts on its pushed target. */
-    build_broadphase(m, body, count, &w->pose.bp);
-    push_targets(mesh, m, anchors, guide, body, &w->pose.bp, support, NULL, w->pushed);
-    anchors = (const float (*)[3])w->pushed;
-    cloth_reset(s, mesh, anchors);
-    if (!s->frame_valid) return false;
-    if (!count && !project_support(s, mesh, support, m->thickness, NULL, 0.0F, NULL)) return true;
-    reset_contact_pose(s, mesh, m, anchors, guide, body, count, 0.0F, support, &w->pose);
-    if (!count || m->reset_carry_range_m == 0.0F) return true;
-
-    /* A deeply folded sheet can need support to propagate beyond the nearest collider. */
-    ClothMetrics propagated = cloth_measure(s, mesh, m, evaluation_dt, anchors, body, count);
-    if (propagated.finite && propagated.stretch == 0.0F) return true;
-    size_t bytes = (size_t)mesh->vertices * sizeof s->x[0];
-    memcpy(w->saved, s->x, bytes);
-    memcpy(s->x, anchors, bytes);
-    reset_contact_pose(s, mesh, m, anchors, guide, body, count, m->reset_carry_range_m, support, &w->pose);
-    ClothMetrics local = cloth_measure(s, mesh, m, evaluation_dt, anchors, body, count);
-    if (!local.finite || (propagated.finite &&
-        (local.stretch >= propagated.stretch || local.penetration > propagated.penetration + 1e-6F)))
-        memcpy(s->x, w->saved, bytes);
+    memset(s->stretch_lambda, 0, sizeof s->stretch_lambda);
+    memset(s->bend_lambda, 0, sizeof s->bend_lambda);
+    s->mesh = mesh;
+    s->frame_valid = true;
     return true;
 }
 
-ClothMetrics cloth_measure(const ClothState *s, const ClothMesh *mesh, const ClothMaterial *m, float dt,
-                           const float anchors[][3], const ClothCapsule *body, int count) {
-    if (!s || !s->frame_valid || s->mesh != mesh || !cloth_frame_valid(mesh, m, dt, anchors, NULL, body, count)) return (ClothMetrics){0};
+ClothMetrics cloth_measure(const ClothState *s, const ClothMesh *mesh, const ClothMaterial *m,
+                           const ClothReference *ref, const float *max_distance, const ClothShapes *shapes) {
+    if (!s || !s->frame_valid || s->mesh != mesh || !inputs_valid(mesh, m, ref, max_distance, shapes))
+        return (ClothMetrics){0};
+    const float *r = max_distance ? max_distance : mesh->max_distance;
+    StepWork *wk = &work;
+    build_broadphase(shapes, m->thickness, &wk->bp);
+    prepare_convexes(shapes, wk);
     ClothMetrics out = {.finite = true};
     for (int i = 0; i < mesh->vertices; ++i) {
-        for (int k = 0; k < 3; ++k) out.finite &= isfinite(s->x[i][k]) && isfinite(s->velocity[i][k]);
+        out.finite &= finite_point(s->x[i]) && finite_point(s->velocity[i]);
         out.speed = fmaxf(out.speed, glm_vec3_norm((float *)s->velocity[i]));
-        if (mesh->inv_area[i] == 0) out.pin_error = fmaxf(out.pin_error, glm_vec3_distance((float *)s->x[i], (float *)anchors[i]));
+        out.max_distance_excess_m = fmaxf(out.max_distance_excess_m,
+                                          glm_vec3_distance((float *)s->x[i], (float *)ref[i].x) - r[i]);
+        const ClothBackstop bs = mesh->backstop[i];
+        if (bs.R > 0.0F && r[i] > 0.0F) {
+            vec3 center;
+            glm_vec3_copy((float *)ref[i].x, center);
+            glm_vec3_muladds((float *)ref[i].b, bs.d + bs.R, center);
+            out.backstop_depth_m = fmaxf(out.backstop_depth_m, bs.R - glm_vec3_distance((float *)s->x[i], center));
+        }
+        float held = 0.0F;
+        for (int bi = 0; bi < wk->bp.count; ++bi) {
+            vec3 normal;
+            float t;
+            const ShapeBox *bx = &wk->bp.boxes[bi];
+            if (r[i] > 0.0F && point_in_box(s->x[i], bx->min, bx->max))
+                out.penetration = fmaxf(out.penetration, box_point_contact(s->x[i], bx, normal, &t));
+            if (point_in_box(ref[i].x, bx->min, bx->max)) held = fmaxf(held, box_point_contact(ref[i].x, bx, normal, &t));
+        }
+        if (held > r[i]) {
+            ++out.held_vertices;
+            out.held_depth_m = fmaxf(out.held_depth_m, held - r[i]);
+        }
+        for (int c = 0; c < wk->convex_count && r[i] > 0.0F; ++c) {
+            float outside = -FLT_MAX;
+            for (int f = 0; f < wk->convex[c].plane_count; ++f)
+                outside = fmaxf(outside, glm_vec3_dot(wk->convex[c].planes[f], (float *)s->x[i]) + wk->convex[c].planes[f][3]);
+            out.penetration = fmaxf(out.penetration, m->thickness - outside);
+        }
     }
     for (int i = 0; i < mesh->edges; ++i) {
         const ClothEdge *e = mesh->edge + i;
-        float length = glm_vec3_distance((float *)s->x[e->a], (float *)s->x[e->b]);
-        out.stretch = fmaxf(out.stretch, length / e->length - 1.0F);
+        out.stretch = fmaxf(out.stretch, glm_vec3_distance((float *)s->x[e->a], (float *)s->x[e->b]) / e->length - 1.0F);
     }
-    for (int j = 0; j < mesh->faces; ++j) {
-        const ClothFace face = mesh->face[j];
-        for (int i = 0; i < count; ++i) {
-            vec3 weights, normal;
-            out.penetration = fmaxf(out.penetration, cloth_face_contact(s->x[face.a], s->x[face.b], s->x[face.c],
-                                                                        body + i, m->thickness, weights, normal));
-        }
-    }
-    out.finite &= isfinite(out.speed) && isfinite(out.stretch) && isfinite(out.penetration) && isfinite(out.pin_error);
+    out.finite &= isfinite(out.speed) && isfinite(out.stretch) && isfinite(out.penetration) &&
+                  isfinite(out.max_distance_excess_m) && isfinite(out.backstop_depth_m) && isfinite(out.held_depth_m);
     return out;
 }

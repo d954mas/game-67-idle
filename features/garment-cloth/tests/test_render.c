@@ -81,9 +81,9 @@ static void test_vertex_quats_preserve_rest_rigid_and_thickness_on_hairpin_fold(
 }
 
 typedef struct {
-    int weights, tethers, capsules, bones;
+    int weights, tethers, shapes, bones;
     float weight_at_origin[3], tether_color[3];
-    const ClothCapsule *body;
+    const ClothSphere *a, *b;
 } DebugLines;
 
 static void inspect_line(void *user, unsigned layer, const float a[3], const float b[3], const float rgb[3]) {
@@ -95,11 +95,11 @@ static void inspect_line(void *user, unsigned layer, const float a[3], const flo
         ++capture->tethers;
         memcpy(capture->tether_color, rgb, sizeof capture->tether_color);
         TEST_ASSERT_TRUE(a[0] == 1 && b[0] == 0);
-    } else if (layer == CLOTH_DEBUG_CAPSULES) {
+    } else if (layer == CLOTH_DEBUG_SHAPES) {
         float normal[3];
-        ++capture->capsules;
-        TEST_ASSERT_TRUE(fabsf(0.002F - cloth_point_capsule_contact(a, capture->body, 0.002F, normal, NULL)) < 1e-5F);
-        TEST_ASSERT_TRUE(fabsf(0.002F - cloth_point_capsule_contact(b, capture->body, 0.002F, normal, NULL)) < 1e-5F);
+        ++capture->shapes;
+        TEST_ASSERT_TRUE(fabsf(0.002F - cloth_point_cone_contact(a, capture->a, capture->b, 0.002F, normal, NULL)) < 1e-5F);
+        TEST_ASSERT_TRUE(fabsf(0.002F - cloth_point_cone_contact(b, capture->a, capture->b, 0.002F, normal, NULL)) < 1e-5F);
     } else if (layer == CLOTH_DEBUG_SKELETON) {
         ++capture->bones;
         TEST_ASSERT_TRUE(a[0] == 0 && b[0] == 1);
@@ -109,11 +109,11 @@ static void inspect_line(void *user, unsigned layer, const float a[3], const flo
 }
 
 static void test_debug_draw_uses_selected_weights_live_tether_and_round_cone_surface(void) {
-    const float inv[] = {0, 1, 1, 1}, drive[] = {0, 0.3F, 0, 0}, selected[] = {1, 0, 0, 0};
+    const float inv[] = {1, 1, 1, 1}, r[] = {0, 0.3F, 0.01F, 0.01F}, selected[] = {1, 0, 0, 0};
     const ClothEdge edge = {.a=0,.b=1};
     const ClothTether tether[] = {{0,0}, {0,0.8F}, {-1,0}, {-1,0}};
     ClothMesh m = panel;
-    m.edges = 1; m.edge = &edge; m.inv_area = inv; m.drive = drive; m.tether = tether;
+    m.edges = 1; m.edge = &edge; m.inv_area = inv; m.max_distance = r; m.tether = tether;
     DebugLines lines = {0};
     cloth_debug_mesh(&m, rest, NULL, 0, inspect_line, &lines);
     TEST_ASSERT_EQUAL_INT(0, lines.weights + lines.tethers);
@@ -126,14 +126,15 @@ static void test_debug_draw_uses_selected_weights_live_tether_and_round_cone_sur
     cloth_debug_bone(rest[0], rest[1], inspect_line, &lines);
     TEST_ASSERT_EQUAL_INT(1, lines.bones);
 
-    ClothCapsule cap = {.a={0.1F,0.3F,0.1F},.b={0.2F,0.7F,0.4F},.radius=0.18F,.radius_b=0.09F};
-    lines.body = &cap;
-    cloth_debug_capsule(&cap, inspect_line, &lines);
-    TEST_ASSERT_TRUE(lines.capsules > 0);
-    cap.radius_b = 0;
-    cloth_debug_capsule(&cap, inspect_line, &lines);
-    memcpy(cap.b, cap.a, sizeof cap.b);
-    cloth_debug_capsule(&cap, inspect_line, &lines);
+    ClothSphere sa = {.c={0.1F,0.3F,0.1F},.r=0.18F}, sb = {.c={0.2F,0.7F,0.4F},.r=0.09F};
+    lines.a = &sa;
+    lines.b = &sb;
+    cloth_debug_cone(&sa, &sb, inspect_line, &lines);
+    TEST_ASSERT_TRUE(lines.shapes > 0);
+    sb.r = sa.r;
+    cloth_debug_cone(&sa, &sb, inspect_line, &lines);
+    lines.b = &sa;
+    cloth_debug_cone(&sa, &sa, inspect_line, &lines);
 }
 
 int main(void) {

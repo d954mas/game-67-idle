@@ -68,8 +68,8 @@
     {
       "id": "garment-cloth",
       "source": "features/garment-cloth",
-      "version": "1.4.0",
-      "compatibility": "validated with hinge, pinned seam, capsule contact and finite support fixtures"
+      "version": "2.0.0",
+      "compatibility": "validated with one fixture per constraint: max distance, backstop, tethers, swept cones, convexes with friction, reset and joint interpolation"
     },
     {
       "id": "net-bits",

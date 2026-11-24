@@ -30,38 +30,43 @@ static void same_edges(const ClothEdge *a, const ClothEdge *b, int count) {
     }
 }
 
-static void same_colliders(const GarmentCollider *a, const GarmentCollider *b, int count) {
-    for (int i = 0; i < count; ++i) {
-        TEST_ASSERT_TRUE(a[i].bone_a == b[i].bone_a && a[i].bone_b == b[i].bone_b && a[i].flags == b[i].flags);
-        TEST_ASSERT_EQUAL_MEMORY(a[i].point_a, b[i].point_a, 8 * sizeof(float));
-    }
-}
-
 static void same_piece(const GarmentAsset *e, const GarmentAsset *v) {
     TEST_ASSERT_EQUAL_STRING(e->id, v->id);
+    const ClothMesh *em = e->mesh, *vm = v->mesh;
+    const size_t n = (size_t)em->vertices;
+    TEST_ASSERT_TRUE(em->vertices == vm->vertices && em->faces == vm->faces && em->edges == vm->edges);
+    TEST_ASSERT_EQUAL_MEMORY(em->rest, vm->rest, n * sizeof em->rest[0]);
+    TEST_ASSERT_EQUAL_MEMORY(em->inv_area, vm->inv_area, n * sizeof em->inv_area[0]);
+    TEST_ASSERT_EQUAL_MEMORY(em->face, vm->face, (size_t)em->faces * sizeof em->face[0]);
+    same_edges(em->edge, vm->edge, em->edges);
+    TEST_ASSERT_EQUAL(em->tether == NULL, vm->tether == NULL);
+    if (em->tether) TEST_ASSERT_EQUAL_MEMORY(em->tether, vm->tether, n * sizeof em->tether[0]);
+    TEST_ASSERT_EQUAL_MEMORY(em->max_distance, vm->max_distance, n * sizeof(float));
+    TEST_ASSERT_EQUAL_MEMORY(em->backstop, vm->backstop, n * sizeof em->backstop[0]);
+    for (size_t i = 0; i < n; ++i) {
+        TEST_ASSERT_EQUAL_MEMORY(e->skin[i].bone, v->skin[i].bone, sizeof e->skin[i].bone);
+        TEST_ASSERT_EQUAL_MEMORY(e->skin[i].weight, v->skin[i].weight, sizeof e->skin[i].weight);
+    }
+    TEST_ASSERT_EQUAL_MEMORY(e->direction, v->direction, n * sizeof e->direction[0]);
+    TEST_ASSERT_EQUAL_MEMORY(&e->material, &v->material, sizeof e->material);
+    TEST_ASSERT_EQUAL_INT(e->render_vertices, v->render_vertices);
+    TEST_ASSERT_EQUAL_MEMORY(&e->linear_inertia, &v->linear_inertia, sizeof(float));
+    TEST_ASSERT_EQUAL_MEMORY(&e->angular_inertia, &v->angular_inertia, sizeof(float));
+}
+
+static void same_outfit(const GarmentSet *e, const GarmentSet *v) {
     TEST_ASSERT_EQUAL_INT(e->bone_count, v->bone_count);
     for (int i = 0; i < e->bone_count; ++i) {
         TEST_ASSERT_EQUAL_STRING(e->bones[i].name, v->bones[i].name);
         TEST_ASSERT_EQUAL_MEMORY(e->bones[i].inverse_bind, v->bones[i].inverse_bind, sizeof e->bones[i].inverse_bind);
     }
-    const ClothMesh *em = e->mesh, *vm = v->mesh;
-    TEST_ASSERT_TRUE(em->vertices == vm->vertices && em->faces == vm->faces && em->edges == vm->edges);
-    TEST_ASSERT_EQUAL_MEMORY(em->rest, vm->rest, (size_t)em->vertices * sizeof em->rest[0]);
-    TEST_ASSERT_EQUAL_MEMORY(em->inv_area, vm->inv_area, (size_t)em->vertices * sizeof em->inv_area[0]);
-    TEST_ASSERT_EQUAL_MEMORY(em->face, vm->face, (size_t)em->faces * sizeof em->face[0]);
-    same_edges(em->edge, vm->edge, em->edges);
-    TEST_ASSERT_EQUAL(em->tether == NULL, vm->tether == NULL);
-    if (em->tether) TEST_ASSERT_EQUAL_MEMORY(em->tether, vm->tether, (size_t)em->vertices * sizeof em->tether[0]);
-    TEST_ASSERT_EQUAL_MEMORY(em->drive, vm->drive, (size_t)em->vertices * sizeof(float));
-    TEST_ASSERT_EQUAL_MEMORY(e->vertices, v->vertices, (size_t)em->vertices * sizeof e->vertices[0]);
-    TEST_ASSERT_EQUAL_MEMORY(&e->material, &v->material, sizeof e->material);
-    TEST_ASSERT_EQUAL_INT(e->collider_count, v->collider_count);
-    TEST_ASSERT_EQUAL(e->colliders == NULL, v->colliders == NULL);
-    same_colliders(e->colliders, v->colliders, e->collider_count);
-    TEST_ASSERT_EQUAL_INT(e->render_vertices, v->render_vertices);
-    TEST_ASSERT_EQUAL_MEMORY(&e->linear_inertia, &v->linear_inertia, sizeof(float));
-    TEST_ASSERT_EQUAL_MEMORY(&e->angular_inertia, &v->angular_inertia, sizeof(float));
-    TEST_ASSERT_EQUAL_MEMORY(&e->downward_follow, &v->downward_follow, sizeof(float));
+    TEST_ASSERT_EQUAL_INT(e->sphere_count, v->sphere_count);
+    for (int i = 0; i < e->sphere_count; ++i) {
+        TEST_ASSERT_EQUAL_UINT16(e->spheres[i].bone, v->spheres[i].bone);
+        TEST_ASSERT_EQUAL_MEMORY(e->spheres[i].center, v->spheres[i].center, 4 * sizeof(float));
+    }
+    TEST_ASSERT_EQUAL_INT(e->cone_count, v->cone_count);
+    TEST_ASSERT_EQUAL_MEMORY(e->cones, v->cones, (size_t)e->cone_count * sizeof e->cones[0]);
 }
 
 /* shift 4 leaves the blob only 4-byte aligned, the least the format promises to work with. */
@@ -71,6 +76,7 @@ static void check_view(size_t shift) {
     const GarmentSet *set = garment_asset_view(data + shift, size);
     TEST_ASSERT_EQUAL_STRING(expected_set.id, set->id);
     TEST_ASSERT_EQUAL_INT(expected_set.piece_count, set->piece_count);
+    same_outfit(&expected_set, set);
     for (int p = 0; p < set->piece_count; ++p) {
         same_piece(&expected_set.pieces[p], &set->pieces[p]);
         /* A view, not a copy: per-vertex arrays stay in the blob. */

@@ -9,20 +9,21 @@ import struct
 import numpy as np
 
 MAGIC = int.from_bytes(b"GRMT", "little")
-VERSION = 2
+VERSION = 3
 ALIGN = 16
 OUTFIT = 0xFFFF
 HEADER = struct.Struct("<IHHIIHH")
 SECTION = struct.Struct("<IHHII")
 VERTICES_MAX, EDGES_MAX, STRAIN_PASSES_MAX = 512, 1536, 32
-PIECES_MAX, BONES_MAX, CAPSULES_MAX = 8, 160, 32
+PIECES_MAX, BONES_MAX, SHAPES_MAX = 8, 160, 64
+MAX_DISTANCE_MAX = 1.0  # m: a larger r is no longer a garment's motion around its reference
 PI32 = np.float32(math.pi)
 INT32 = (-2 ** 31, 2 ** 31 - 1)
 UINT16, UINT8 = (0, 0xFFFF), (0, 0xFF)
 
 MATERIAL_FIELDS = ("density", "stretch", "bend", "drag", "thickness", "iterations", "max_edge_strain", "strain_passes",
                    "aero_drag", "weft_stretch_scale", "diag_stretch_scale", "weft_bend_scale",
-                   "weft_max_strain", "contact_friction", "max_speed_mps", "compression_limit", "reset_carry_range_m")
+                   "weft_max_strain", "friction", "compression_limit")
 INTEGER_FIELDS = {"iterations", "strain_passes"}
 
 
@@ -31,28 +32,29 @@ def _record(fields, size):
     return np.dtype({"names": list(names), "formats": list(formats), "offsets": list(offsets), "itemsize": size})
 
 
-MATERIAL = _record([(n, "<i4" if n in INTEGER_FIELDS else "<f4", 4 * i) for i, n in enumerate(MATERIAL_FIELDS)], 68)
+MATERIAL = _record([(n, "<i4" if n in INTEGER_FIELDS else "<f4", 4 * i) for i, n in enumerate(MATERIAL_FIELDS)], 60)
 PIECE = _record([("id", "<u4", 0), ("render_vertices", "<i4", 4), ("linear_inertia", "<f4", 8),
-                 ("angular_inertia", "<f4", 12), ("downward_follow", "<f4", 16), ("material", MATERIAL, 20)], 88)
+                 ("angular_inertia", "<f4", 12), ("material", MATERIAL, 16)], 76)
 BONE = _record([("name", "<u4", 0), ("inverse_bind", ("<f4", (12,)), 4)], 52)
+SPHERE = _record([("bone", "<u2", 0), ("center", ("<f4", (3,)), 4), ("radius", "<f4", 16)], 20)
+CONE = _record([("a", "<u2", 0), ("b", "<u2", 2)], 4)
 REST = np.dtype(("<f4", (3,)))
 FACE = np.dtype(("<u2", (3,)))
 EDGE = _record([("a", "<i4", 0), ("b", "<i4", 4), ("c", "<i4", 8), ("d", "<i4", 12), ("length", "<f4", 16),
                 ("angle", "<f4", 20), ("kind", "u1", 24)], 28)
 TETHER = _record([("pin", "<i4", 0), ("max_length", "<f4", 4)], 8)
-VERTEX = _record([("bone", ("<u2", (4,)), 0), ("weight", ("<f4", (4,)), 8), ("normal", ("<f4", (3,)), 24),
-                  ("travel_m", "<f4", 36), ("backstop_m", "<f4", 40)], 44)
-COLLIDER = _record([("bone_a", "<u2", 0), ("bone_b", "<u2", 2), ("point_a", ("<f4", (3,)), 4),
-                    ("point_b", ("<f4", (3,)), 16), ("radius_m", "<f4", 28), ("radius_b_m", "<f4", 32),
-                    ("flags", "u1", 36)], 40)
+SKIN = _record([("bone", ("<u2", (4,)), 0), ("weight", ("<f4", (4,)), 8)], 24)
+BACKSTOP = _record([("d", "<f4", 0), ("R", "<f4", 4)], 8)
 
 # name: (tag, record, outfit-wide)
 SECTIONS = {
-    "strings": (b"STRS", np.dtype("u1"), True),
-    "piece": (b"PIEC", PIECE, False), "bones": (b"BONE", BONE, False), "rest": (b"REST", REST, False),
+    "strings": (b"STRS", np.dtype("u1"), True), "bones": (b"BONE", BONE, True),
+    "spheres": (b"SPHR", SPHERE, True), "cones": (b"CONE", CONE, True),
+    "piece": (b"PIEC", PIECE, False), "rest": (b"REST", REST, False),
     "inv_area": (b"INVA", np.dtype("<f4"), False), "faces": (b"FACE", FACE, False), "edges": (b"EDGE", EDGE, False),
-    "tethers": (b"TETH", TETHER, False), "drive": (b"DRIV", np.dtype("<f4"), False),
-    "vertices": (b"VERT", VERTEX, False), "colliders": (b"COLL", COLLIDER, False),
+    "tethers": (b"TETH", TETHER, False), "skin": (b"SKIN", SKIN, False),
+    "max_distance": (b"MAXD", np.dtype("<f4"), False), "backstop": (b"BKST", BACKSTOP, False),
+    "direction": (b"BDIR", REST, False),
 }
 TAGS = {int.from_bytes(tag, "little"): name for name, (tag, _, _) in SECTIONS.items()}
 
@@ -122,7 +124,7 @@ def _material(check, material):
     check(int(record["iterations"]) >= 1, "material.iterations", "must be at least 1")
     check(0 <= int(record["strain_passes"]) <= STRAIN_PASSES_MAX, "material.strain_passes",
           f"must be in [0, {STRAIN_PASSES_MAX}]")
-    highs = {"contact_friction": 1, "compression_limit": 0.5}
+    highs = {"compression_limit": 0.5}
     for name in MATERIAL_FIELDS[1:]:
         if name not in INTEGER_FIELDS:
             check.number(record[name], f"material.{name}", 0, np.float32(highs.get(name, math.inf)))
@@ -136,7 +138,7 @@ def _mesh(check, mesh, records):
     check.each(np.isfinite(rest), "mesh.rest", "must be finite")
     inv = single(mesh["inv_area"])
     check(inv.shape == (n,), "mesh.inv_area", "needs one value per vertex")
-    check.each(np.isfinite(inv) & (inv >= 0), "mesh.inv_area", "must be finite and non-negative")
+    check.each(np.isfinite(inv) & (inv > 0), "mesh.inv_area", "must be finite and positive")
     source = list(mesh["edges"])
     check(3 <= len(source) <= EDGES_MAX, "mesh.edges", f"needs 3 to {EDGES_MAX} edges, got {len(source)}")
     edges = np.zeros(len(source), EDGE)
@@ -159,7 +161,16 @@ def _mesh(check, mesh, records):
     check(1 <= len(faces) <= 2 * len(edges) // 3, "mesh.faces", f"needs 1 to {2 * len(edges) // 3} triangles")
     check.each(((faces >= 0) & (faces < n)).all(axis=1) & (faces[:, 0] != faces[:, 1]) & (faces[:, 1] != faces[:, 2]) &
                (faces[:, 2] != faces[:, 0]), "mesh.faces", "must name three distinct vertices")
-    records.update(rest=rest, inv_area=inv, faces=faces.astype("<u2"), edges=edges)
+    r = single(mesh["max_distance"])
+    check(r.shape == (n,), "mesh.max_distance", "needs one value per vertex")
+    check.each(np.isfinite(r) & (r >= 0) & (r <= MAX_DISTANCE_MAX), "mesh.max_distance",
+               f"must be finite in [0, {MAX_DISTANCE_MAX}] m")
+    values = single(mesh["backstop"])
+    check(values.shape == (n, 2), "mesh.backstop", "needs (d, R) per vertex")
+    check.each(np.isfinite(values) & (values >= 0), "mesh.backstop", "must be finite and non-negative")
+    backstop = np.zeros(n, BACKSTOP)
+    backstop["d"], backstop["R"] = values[:, 0], values[:, 1]
+    records.update(rest=rest, inv_area=inv, faces=faces.astype("<u2"), edges=edges, max_distance=r, backstop=backstop)
     if mesh.get("tethers") is not None:
         source = list(mesh["tethers"])
         check(len(source) == n, "mesh.tethers", "needs one tether per vertex")
@@ -168,66 +179,40 @@ def _mesh(check, mesh, records):
         tethers["max_length"] = single([t[1] for t in source])
         pin = tethers["pin"]
         check.each((pin >= -1) & (pin < n), "mesh.tethers.pin", "must name a vertex or be -1")
-        check.each((pin < 0) | (inv[np.maximum(pin, 0)] == 0), "mesh.tethers.pin", "must name a sewn vertex")
+        check.each((pin < 0) | (r[np.maximum(pin, 0)] == 0), "mesh.tethers.pin", "must name a kinematic vertex")
         check.each(np.isfinite(tethers["max_length"]) & (tethers["max_length"] >= 0), "mesh.tethers.max_length",
                    "must be finite and non-negative")
         records["tethers"] = tethers
-    drive = single(mesh["drive"])
-    check(drive.shape == (n,), "mesh.drive", "needs one squared angular frequency per vertex")
-    check.each(np.isfinite(drive) & (drive >= 0), "mesh.drive", "must be finite and non-negative (s^-2)")
-    records["drive"] = drive
     return n
 
 
-def _piece(check, piece, strings):
+def _piece(check, piece, strings, bone_count):
     records = {}
     n = _mesh(check, piece["mesh"], records)
-    bones = list(piece["bones"])
-    check(1 <= len(bones) <= BONES_MAX, "bones", f"needs 1 to {BONES_MAX} bones, got {len(bones)}")
-    bone = np.zeros(len(bones), BONE)
-    bone["name"] = [strings.add(name, check, f"bones[{i}].name") for i, (name, _) in enumerate(bones)]
-    bone["inverse_bind"] = single([matrix for _, matrix in bones]).reshape(-1, 12)
-    check.each(np.isfinite(bone["inverse_bind"]), "bones.inverse_bind", "must be finite")
-    records["bones"] = bone
-    source = piece["vertices"]
-    vertex = np.zeros(n, VERTEX)
-    indices = check.integers(source["bone"], "vertices.bone", UINT16).reshape(-1, 4)
-    check(indices.shape == (n, 4), "vertices.bone", "needs four influences per vertex")
-    check.each((indices >= 0) & (indices < len(bones)), "vertices.bone", "must name a piece bone")
-    vertex["bone"] = indices
-    for field, key, shape in (("weight", "weight", (n, 4)), ("normal", "normal", (n, 3)),
-                              ("travel_m", "travel", (n,)), ("backstop_m", "backstop", (n,))):
-        values = single(source[key])
-        check(values.shape == shape, f"vertices.{field}", f"needs shape {shape}")
-        check.each(np.isfinite(values) & (values >= 0 if field in ("travel_m", "backstop_m") else True),
-                   f"vertices.{field}", "must be finite" + (" and non-negative" if values.ndim == 1 else ""))
-        vertex[field] = values
-    check.each(vertex["weight"] >= 0, "vertices.weight", "must be non-negative")
-    check.each(np.abs(vertex["weight"].sum(1) - 1) <= 1e-3, "vertices.weight", "must sum to 1 within 1e-3")
-    check.each(np.linalg.norm(vertex["normal"], axis=1) > 0, "vertices.normal", "must be non-zero")
-    records["vertices"] = vertex
-    colliders = list(piece.get("colliders", ()))
-    check(len(colliders) <= CAPSULES_MAX, "colliders", f"exceed {CAPSULES_MAX} capsules")
-    if colliders:
-        collider = np.zeros(len(colliders), COLLIDER)
-        for key, column in (("bone_a", 0), ("bone_b", 1), ("flags", 6)):
-            values = check.integers([c[column] for c in colliders], f"colliders.{key}", UINT16 if column < 2 else UINT8)
-            check.each((values >= 0) & (values < (len(bones) if column < 2 else 2)), f"colliders.{key}",
-                       "must name a piece bone" if column < 2 else "must be inside (0) or outside (1)")
-            collider[key] = values
-        for key, column in (("point_a", 2), ("point_b", 3), ("radius_m", 4), ("radius_b_m", 5)):
-            values = single([c[column] for c in colliders])
-            check.each(np.isfinite(values) & ((values >= 0) if column >= 4 else True), f"colliders.{key}",
-                       "must be finite" + (" and non-negative" if column >= 4 else ""))
-            collider[key] = values
-        records["colliders"] = collider
+    source = piece["skin"]
+    skin = np.zeros(n, SKIN)
+    indices = check.integers(source["bone"], "skin.bone", UINT16).reshape(-1, 4)
+    check(indices.shape == (n, 4), "skin.bone", "needs four influences per vertex")
+    check.each((indices >= 0) & (indices < bone_count), "skin.bone", "must name an outfit bone")
+    skin["bone"] = indices
+    weight = single(source["weight"])
+    check(weight.shape == (n, 4), "skin.weight", f"needs shape {(n, 4)}")
+    check.each(np.isfinite(weight) & (weight >= 0), "skin.weight", "must be finite and non-negative")
+    check.each(np.abs(weight.sum(1) - 1) <= 1e-3, "skin.weight", "must sum to 1 within 1e-3")
+    skin["weight"] = weight
+    records["skin"] = skin
+    direction = single(piece["direction"])
+    check(direction.shape == (n, 3), "direction", "needs a unit vector per vertex")
+    check.each(np.isfinite(direction).all(axis=1) & (np.abs(np.linalg.norm(direction, axis=1) - 1) <= 1e-3),
+               "direction", "must be a finite unit vector")
+    records["direction"] = direction
     head = np.zeros(1, PIECE)
     head["id"] = strings.add(piece["id"], check, "id")
     render = piece.get("render_vertices", 0)
     check(isinstance(render, (int, np.integer)) and not isinstance(render, bool) and 0 <= render <= INT32[1],
           "render_vertices", "must be a non-negative 32-bit integer")
     head["render_vertices"] = render
-    for key in ("linear_inertia", "angular_inertia", "downward_follow"):
+    for key in ("linear_inertia", "angular_inertia"):
         head[key] = single(piece.get(key, 0.0))
         check.number(head[key][0], key, 0, 1)
     head["material"] = _material(check, piece["material"])
@@ -235,9 +220,42 @@ def _piece(check, piece, strings):
     return records
 
 
-def encode(outfit_id, pieces):
-    """Return the blob for one outfit. A piece is a dict of id, mesh, bones, vertices, material and optional
-    colliders, render_vertices and inertia weights; an outfit without cloth has no pieces."""
+def _outfit(check, strings, bones, spheres, cones):
+    records = {}
+    bones = list(bones)
+    check(1 <= len(bones) <= BONES_MAX, "bones", f"needs 1 to {BONES_MAX} bones, got {len(bones)}")
+    bone = np.zeros(len(bones), BONE)
+    bone["name"] = [strings.add(name, check, f"bones[{i}].name") for i, (name, _) in enumerate(bones)]
+    bone["inverse_bind"] = single([matrix for _, matrix in bones]).reshape(-1, 12)
+    check.each(np.isfinite(bone["inverse_bind"]), "bones.inverse_bind", "must be finite")
+    records["bones"] = bone
+    spheres, cones = list(spheres), list(cones)
+    check(len(spheres) <= SHAPES_MAX and len(cones) <= SHAPES_MAX, "shapes", f"exceed {SHAPES_MAX} spheres or cones")
+    if spheres:
+        sphere = np.zeros(len(spheres), SPHERE)
+        sphere["bone"] = check.integers([s[0] for s in spheres], "spheres.bone", UINT16)
+        check.each(sphere["bone"] < len(bones), "spheres.bone", "must name an outfit bone")
+        sphere["center"] = single([s[1] for s in spheres]).reshape(-1, 3)
+        sphere["radius"] = single([s[2] for s in spheres])
+        check.each(np.isfinite(sphere["center"]), "spheres.center", "must be finite")
+        check.each(np.isfinite(sphere["radius"]) & (sphere["radius"] >= 0), "spheres.radius",
+                   "must be finite and non-negative")
+        records["spheres"] = sphere
+    if cones:
+        cone = np.zeros(len(cones), CONE)
+        for i, key in enumerate("ab"):
+            cone[key] = check.integers([c[i] for c in cones], f"cones.{key}", UINT16)
+        check.each((cone["a"] < len(spheres)) & (cone["b"] < len(spheres)) & (cone["a"] != cone["b"]), "cones",
+                   "must join two different spheres")
+        records["cones"] = cone
+    return records
+
+
+def encode(outfit_id, pieces, bones=(), spheres=(), cones=()):
+    """Return the blob for one outfit. bones are (name, inverse bind 3x4), spheres (bone, center in bone space,
+    radius) and cones (sphere a, sphere b), shared by every piece; a piece is a dict of id, mesh (rest, inv_area,
+    faces, edges, tethers, max_distance, backstop as (d, R)), skin (bone, weight), direction, material,
+    render_vertices and inertia weights. An outfit without cloth has no pieces and no bones."""
     strings = _Strings()
     outfit = _Check(str(outfit_id))
     header_id = strings.add(outfit_id, outfit, "id")
@@ -245,9 +263,12 @@ def encode(outfit_id, pieces):
     names = [piece.get("id") for piece in pieces]
     outfit(len(set(names)) == len(names), "pieces", "need unique ids")
     sections = []
+    if pieces:
+        for name, array in _outfit(outfit, strings, bones, spheres, cones).items():
+            sections.append((name, OUTFIT, array))
     for index, piece in enumerate(pieces):
         check = _Check(f"{outfit_id}/{piece.get('id', index)}")
-        for name, array in _piece(check, piece, strings).items():
+        for name, array in _piece(check, piece, strings, len(bones)).items():
             sections.append((name, index, array))
     sections.insert(0, ("strings", OUTFIT, np.frombuffer(bytes(strings.data), "u1")))
     offset = HEADER.size + SECTION.size * len(sections)
@@ -284,13 +305,17 @@ def decode(data):
     pieces = []
     for p in range(piece_count):
         head = found["piece", p][0]
+        backstop = found["backstop", p]
         pieces.append(dict(
             id=text(int(head["id"])),
-            bones=[(text(int(b["name"])), b["inverse_bind"].copy()) for b in found["bones", p]],
             mesh=dict(rest=found["rest", p], inv_area=found["inv_area", p], faces=found["faces", p],
-                      edges=found["edges", p], tethers=found.get(("tethers", p)), drive=found["drive", p]),
-            vertices=found["vertices", p], colliders=found.get(("colliders", p), np.zeros(0, COLLIDER)),
+                      edges=found["edges", p], tethers=found.get(("tethers", p)), max_distance=found["max_distance", p],
+                      backstop=np.stack([backstop["d"], backstop["R"]], axis=1)),
+            skin=found["skin", p], direction=found["direction", p],
             material={name: head["material"][name].item() for name in MATERIAL_FIELDS},
             render_vertices=int(head["render_vertices"]), linear_inertia=head["linear_inertia"].item(),
-            angular_inertia=head["angular_inertia"].item(), downward_follow=head["downward_follow"].item()))
-    return dict(id=text(outfit_id), pieces=pieces)
+            angular_inertia=head["angular_inertia"].item()))
+    bones = found.get(("bones", OUTFIT), np.zeros(0, BONE))
+    return dict(id=text(outfit_id), bones=[(text(int(b["name"])), b["inverse_bind"].copy()) for b in bones],
+                spheres=found.get(("spheres", OUTFIT), np.zeros(0, SPHERE)),
+                cones=found.get(("cones", OUTFIT), np.zeros(0, CONE)), pieces=pieces)

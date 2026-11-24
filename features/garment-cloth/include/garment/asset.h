@@ -10,20 +10,23 @@
    GARMENT_BLOB_ALIGN from the blob start, so a 4-byte-aligned blob gives every record its alignment. */
 #define GARMENT_BLOB_TAG(a, b, c, d) ((uint32_t)(a) | (uint32_t)(b) << 8 | (uint32_t)(c) << 16 | (uint32_t)(d) << 24)
 #define GARMENT_BLOB_MAGIC GARMENT_BLOB_TAG('G', 'R', 'M', 'T')
-enum { GARMENT_BLOB_VERSION = 2, GARMENT_BLOB_ALIGN = 16, GARMENT_BLOB_OUTFIT = 0xFFFF };
+enum { GARMENT_BLOB_VERSION = 3, GARMENT_BLOB_ALIGN = 16, GARMENT_BLOB_OUTFIT = 0xFFFF };
 
 /* Outfit-wide sections carry piece = GARMENT_BLOB_OUTFIT; the others carry their piece index. */
-#define GARMENT_SECTION_STRINGS GARMENT_BLOB_TAG('S', 'T', 'R', 'S')   /* char: NUL-terminated UTF-8 */
-#define GARMENT_SECTION_PIECE GARMENT_BLOB_TAG('P', 'I', 'E', 'C')     /* GarmentBlobPiece, one */
-#define GARMENT_SECTION_BONES GARMENT_BLOB_TAG('B', 'O', 'N', 'E')     /* GarmentBlobBone */
-#define GARMENT_SECTION_REST GARMENT_BLOB_TAG('R', 'E', 'S', 'T')      /* float[3] */
-#define GARMENT_SECTION_INV_AREA GARMENT_BLOB_TAG('I', 'N', 'V', 'A')  /* float */
-#define GARMENT_SECTION_FACES GARMENT_BLOB_TAG('F', 'A', 'C', 'E')     /* ClothFace */
-#define GARMENT_SECTION_EDGES GARMENT_BLOB_TAG('E', 'D', 'G', 'E')     /* ClothEdge */
-#define GARMENT_SECTION_TETHERS GARMENT_BLOB_TAG('T', 'E', 'T', 'H')   /* ClothTether, optional */
-#define GARMENT_SECTION_DRIVE GARMENT_BLOB_TAG('D', 'R', 'I', 'V')     /* float, s^-2 */
-#define GARMENT_SECTION_VERTICES GARMENT_BLOB_TAG('V', 'E', 'R', 'T')  /* GarmentVertex */
-#define GARMENT_SECTION_COLLIDERS GARMENT_BLOB_TAG('C', 'O', 'L', 'L') /* GarmentCollider, optional */
+#define GARMENT_SECTION_STRINGS GARMENT_BLOB_TAG('S', 'T', 'R', 'S')      /* outfit: char, NUL-terminated UTF-8 */
+#define GARMENT_SECTION_BONES GARMENT_BLOB_TAG('B', 'O', 'N', 'E')        /* outfit: GarmentBlobBone */
+#define GARMENT_SECTION_SPHERES GARMENT_BLOB_TAG('S', 'P', 'H', 'R')      /* outfit: GarmentSphere, optional */
+#define GARMENT_SECTION_CONES GARMENT_BLOB_TAG('C', 'O', 'N', 'E')        /* outfit: GarmentCone, optional */
+#define GARMENT_SECTION_PIECE GARMENT_BLOB_TAG('P', 'I', 'E', 'C')        /* GarmentBlobPiece, one */
+#define GARMENT_SECTION_REST GARMENT_BLOB_TAG('R', 'E', 'S', 'T')         /* float[3] */
+#define GARMENT_SECTION_INV_AREA GARMENT_BLOB_TAG('I', 'N', 'V', 'A')     /* float */
+#define GARMENT_SECTION_FACES GARMENT_BLOB_TAG('F', 'A', 'C', 'E')        /* ClothFace */
+#define GARMENT_SECTION_EDGES GARMENT_BLOB_TAG('E', 'D', 'G', 'E')        /* ClothEdge */
+#define GARMENT_SECTION_TETHERS GARMENT_BLOB_TAG('T', 'E', 'T', 'H')      /* ClothTether, optional */
+#define GARMENT_SECTION_SKIN GARMENT_BLOB_TAG('S', 'K', 'I', 'N')         /* GarmentSkin */
+#define GARMENT_SECTION_MAX_DISTANCE GARMENT_BLOB_TAG('M', 'A', 'X', 'D') /* float, m */
+#define GARMENT_SECTION_BACKSTOP GARMENT_BLOB_TAG('B', 'K', 'S', 'T')     /* ClothBackstop */
+#define GARMENT_SECTION_DIRECTION GARMENT_BLOB_TAG('B', 'D', 'I', 'R')    /* float[3], unit */
 
 typedef struct {
     uint32_t magic;
@@ -41,7 +44,7 @@ typedef struct {
 typedef struct {
     uint32_t id; /* string offset */
     int32_t render_vertices;
-    float linear_inertia, angular_inertia, downward_follow;
+    float linear_inertia, angular_inertia;
     ClothMaterial material;
 } GarmentBlobPiece;
 typedef struct {

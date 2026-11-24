@@ -30,19 +30,19 @@ static float sphere_contact(const float p[3], const float center[3], float radiu
     return radius - d;
 }
 
-float cloth_point_capsule_contact(const float p[3], const ClothCapsule *body, float margin,
-                                  float normal[3], float *t_out) {
-    float ra = body->radius + margin;
-    float rb = cloth_capsule_radius_b(body) + margin;
+float cloth_point_cone_contact(const float p[3], const ClothSphere *sa, const ClothSphere *sb, float margin,
+                               float normal[3], float *t_out) {
+    float ra = sa->r + margin;
+    float rb = sb->r + margin;
     float r_max = fmaxf(ra, rb);
     for (int k = 0; k < 3; ++k) {
-        float low = fminf(body->a[k], body->b[k]) - r_max;
-        float high = fmaxf(body->a[k], body->b[k]) + r_max;
+        float low = fminf(sa->c[k], sb->c[k]) - r_max;
+        float high = fmaxf(sa->c[k], sb->c[k]) + r_max;
         if (p[k] < low || p[k] > high) return 0.0F;
     }
 
     vec3 ba, pa;
-    glm_vec3_sub((float *)body->b, (float *)body->a, ba);
+    glm_vec3_sub((float *)sb->c, (float *)sa->c, ba);
     float len2 = glm_vec3_norm2(ba);
     float dr = ra - rb;
 
@@ -50,16 +50,16 @@ float cloth_point_capsule_contact(const float p[3], const ClothCapsule *body, fl
     if (len2 <= 1e-12F || dr * dr >= len2) {
         if (ra >= rb) {
             if (t_out) *t_out = 0.0F;
-            return sphere_contact(p, body->a, ra, normal);
+            return sphere_contact(p, sa->c, ra, normal);
         }
         if (t_out) *t_out = 1.0F;
-        return sphere_contact(p, body->b, rb, normal);
+        return sphere_contact(p, sb->c, rb, normal);
     }
 
     float len = sqrtf(len2);
     vec3 u;
     glm_vec3_scale(ba, 1.0F / len, u);
-    glm_vec3_sub((float *)p, (float *)body->a, pa);
+    glm_vec3_sub((float *)p, (float *)sa->c, pa);
     float y = glm_vec3_dot(pa, u);
     vec3 w;
     glm_vec3_copy(pa, w);
@@ -70,11 +70,11 @@ float cloth_point_capsule_contact(const float p[3], const ClothCapsule *body, fl
     float s = (-x * dr + y * a) / len;
     if (s <= 0.0F) {
         if (t_out) *t_out = 0.0F;
-        return sphere_contact(p, body->a, ra, normal);
+        return sphere_contact(p, sa->c, ra, normal);
     }
     if (s >= a) {
         if (t_out) *t_out = 1.0F;
-        return sphere_contact(p, body->b, rb, normal);
+        return sphere_contact(p, sb->c, rb, normal);
     }
 
     float signed_dist = (x * a + y * dr) / len - ra;
@@ -91,38 +91,37 @@ float cloth_point_capsule_contact(const float p[3], const ClothCapsule *body, fl
     return -signed_dist;
 }
 
-float cloth_point_capsule_contact_swept(const float p[3], const float prev_p[3],
-                                        const ClothCapsule *body, float margin,
-                                        const float fallback_normal[3],
-                                        float normal[3], float *t_out) {
+float cloth_point_cone_contact_swept(const float p[3], const float prev_p[3], const ClothSphere *sa,
+                                     const ClothSphere *sb, float margin, const float fallback_normal[3],
+                                     float normal[3], float *t_out) {
     float t = 0.0F;
-    float depth = cloth_point_capsule_contact(p, body, margin, normal, &t);
+    float depth = cloth_point_cone_contact(p, sa, sb, margin, normal, &t);
     if (t_out) *t_out = t;
-    if (depth <= 0.0F || body->flags != CLOTH_COLLIDER_INSIDE) return depth;
-    return cloth_capsule_exit_side(p, prev_p, body, margin, fallback_normal, t, depth, normal);
+    if (depth <= 0.0F) return depth;
+    return cloth_cone_exit_side(p, prev_p, sa, sb, margin, fallback_normal, t, depth, normal);
 }
 
-float cloth_capsule_exit_side(const float p[3], const float prev_p[3], const ClothCapsule *body, float margin,
-                              const float fallback_normal[3], float t, float depth, float normal[3]) {
+float cloth_cone_exit_side(const float p[3], const float prev_p[3], const ClothSphere *sa, const ClothSphere *sb,
+                           float margin, const float fallback_normal[3], float t, float depth, float normal[3]) {
     vec3 q_curr, delta_curr;
-    glm_vec3_lerp((float *)body->a, (float *)body->b, t, q_curr);
+    glm_vec3_lerp((float *)sa->c, (float *)sb->c, t, q_curr);
     glm_vec3_sub((float *)p, q_curr, delta_curr);
     float curr_d2 = glm_vec3_norm2(delta_curr);
-    float ra = body->radius + margin;
-    float rb = cloth_capsule_radius_b(body) + margin;
+    float ra = sa->r + margin;
+    float rb = sb->r + margin;
     float r_local = ra + t * (rb - ra);
 
     vec3 recover = {0, 0, 0};
     bool use_recover = false;
 
-    if (body->has_prev && prev_p) {
+    if (prev_p) {
         vec3 prev_ba, prev_pa;
-        glm_vec3_sub((float *)body->prev_b, (float *)body->prev_a, prev_ba);
-        glm_vec3_sub((float *)prev_p, (float *)body->prev_a, prev_pa);
+        glm_vec3_sub((float *)sb->prev, (float *)sa->prev, prev_ba);
+        glm_vec3_sub((float *)prev_p, (float *)sa->prev, prev_pa);
         float prev_len2 = glm_vec3_norm2(prev_ba);
         float t_prev = prev_len2 > 1e-12F ? glm_clamp(glm_vec3_dot(prev_pa, prev_ba) / prev_len2, 0.0F, 1.0F) : 0.0F;
         vec3 q_prev, delta_prev;
-        glm_vec3_lerp((float *)body->prev_a, (float *)body->prev_b, t_prev, q_prev);
+        glm_vec3_lerp((float *)sa->prev, (float *)sb->prev, t_prev, q_prev);
         glm_vec3_sub((float *)prev_p, q_prev, delta_prev);
         float prev_d2 = glm_vec3_norm2(delta_prev);
         if (prev_d2 > 1e-8F && glm_vec3_dot(delta_curr, delta_prev) < 0.0F) {
@@ -181,24 +180,24 @@ static void edge_witness(Witness *w, vec3 p, vec3 q, int i, vec3 origin, vec3 ax
     candidate(w, delta, weights[0], weights[1], weights[2], v);
 }
 
-float cloth_face_contact(const float a[3], const float b[3], const float c[3], const ClothCapsule *body,
-                         float margin, float weights[3], float normal[3]) {
-    float ra = body->radius + margin;
-    float rb = cloth_capsule_radius_b(body) + margin;
+float cloth_face_contact(const float a[3], const float b[3], const float c[3], const ClothSphere *sa,
+                         const ClothSphere *sb, float margin, float weights[3], float normal[3]) {
+    float ra = sa->r + margin;
+    float rb = sb->r + margin;
     float r_max = fmaxf(ra, rb);
     for (int k = 0; k < 3; ++k) {
-        float low = fminf(body->a[k], body->b[k]) - r_max, high = fmaxf(body->a[k], body->b[k]) + r_max;
+        float low = fminf(sa->c[k], sb->c[k]) - r_max, high = fmaxf(sa->c[k], sb->c[k]) + r_max;
         if ((a[k] < low && b[k] < low && c[k] < low) || (a[k] > high && b[k] > high && c[k] > high)) return 0;
     }
 
-    /* For tapered capsules, sample exact round-cone SDF on triangle vertices and edge midpoints
+    /* For tapered cones, sample exact round-cone SDF on triangle vertices and edge midpoints
        first, and also check axis-to-face interior crossing. */
     float best_depth = 0.0F;
     if (fabsf(ra - rb) > 1e-6F) {
         const float *verts[3] = {a, b, c};
         for (int i = 0; i < 3; ++i) {
             vec3 n;
-            float d = cloth_point_capsule_contact(verts[i], body, margin, n, NULL);
+            float d = cloth_point_cone_contact(verts[i], sa, sb, margin, n, NULL);
             if (d > best_depth) {
                 best_depth = d;
                 weights[0] = (i == 0) ? 1.0F : 0.0F;
@@ -209,7 +208,7 @@ float cloth_face_contact(const float a[3], const float b[3], const float c[3], c
             vec3 mid;
             const float *next = verts[(i + 1) % 3];
             for (int k = 0; k < 3; ++k) mid[k] = 0.5F * (verts[i][k] + next[k]);
-            d = cloth_point_capsule_contact(mid, body, margin, n, NULL);
+            d = cloth_point_cone_contact(mid, sa, sb, margin, n, NULL);
             if (d > best_depth) {
                 best_depth = d;
                 weights[0] = weights[1] = weights[2] = 0.0F;
@@ -221,8 +220,8 @@ float cloth_face_contact(const float a[3], const float b[3], const float c[3], c
     }
 
     vec3 p[3] = {{a[0],a[1],a[2]}, {b[0],b[1],b[2]}, {c[0],c[1],c[2]}};
-    vec3 origin = {body->a[0],body->a[1],body->a[2]}, axis, ab, ac, n;
-    glm_vec3_sub((float *)body->b, origin, axis);
+    vec3 origin = {sa->c[0],sa->c[1],sa->c[2]}, axis, ab, ac, n;
+    glm_vec3_sub((float *)sb->c, origin, axis);
     float axis2 = glm_vec3_norm2(axis);
     glm_vec3_sub(p[1], p[0], ab);
     glm_vec3_sub(p[2], p[0], ac);

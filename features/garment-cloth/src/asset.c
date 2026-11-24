@@ -7,38 +7,41 @@
 
 /* The records are the wire format: these pin their layout on every target. */
 _Static_assert(sizeof(GarmentBlobHeader) == 20 && sizeof(GarmentBlobSection) == 16, "blob header layout");
-_Static_assert(sizeof(ClothMaterial) == 68 && offsetof(ClothMaterial, iterations) == 20 &&
-                   offsetof(ClothMaterial, strain_passes) == 28 && offsetof(ClothMaterial, reset_carry_range_m) == 64,
+_Static_assert(sizeof(ClothMaterial) == 60 && offsetof(ClothMaterial, iterations) == 20 &&
+                   offsetof(ClothMaterial, strain_passes) == 28 && offsetof(ClothMaterial, friction) == 52 &&
+                   offsetof(ClothMaterial, compression_limit) == 56,
                "material layout");
-_Static_assert(sizeof(GarmentBlobPiece) == 88 && offsetof(GarmentBlobPiece, material) == 20, "piece layout");
+_Static_assert(sizeof(GarmentBlobPiece) == 76 && offsetof(GarmentBlobPiece, material) == 16, "piece layout");
 _Static_assert(sizeof(GarmentBlobBone) == 52, "bone layout");
-_Static_assert(sizeof(ClothFace) == 6 && sizeof(ClothTether) == 8, "face and tether layout");
+_Static_assert(sizeof(ClothFace) == 6 && sizeof(ClothTether) == 8 && sizeof(ClothBackstop) == 8, "face, tether and backstop layout");
 _Static_assert(sizeof(ClothEdge) == 28 && offsetof(ClothEdge, length) == 16 && offsetof(ClothEdge, kind) == 24,
                "edge layout");
-_Static_assert(sizeof(GarmentVertex) == 44 && offsetof(GarmentVertex, weight) == 8 && offsetof(GarmentVertex, normal) == 24 &&
-                   offsetof(GarmentVertex, travel_m) == 36 && offsetof(GarmentVertex, backstop_m) == 40,
-               "vertex layout");
-_Static_assert(sizeof(GarmentCollider) == 40 && offsetof(GarmentCollider, point_a) == 4 && offsetof(GarmentCollider, point_b) == 16 &&
-                   offsetof(GarmentCollider, radius_m) == 28 && offsetof(GarmentCollider, flags) == 36,
-               "collider layout");
+_Static_assert(sizeof(GarmentSkin) == 24 && offsetof(GarmentSkin, weight) == 8, "skin layout");
+_Static_assert(sizeof(GarmentSphere) == 20 && offsetof(GarmentSphere, center) == 4 && offsetof(GarmentSphere, radius) == 16,
+               "sphere layout");
+_Static_assert(sizeof(GarmentCone) == 4, "cone layout");
 
-enum { STRINGS, PIECE, BONES, REST, INV_AREA, FACES, EDGES, TETHERS, DRIVE, VERTICES, COLLIDERS, KINDS };
+enum { STRINGS, BONES, SPHERES, CONES, PIECE, REST, INV_AREA, FACES, EDGES, TETHERS, SKIN, MAX_DISTANCE, BACKSTOP,
+       DIRECTION, KINDS };
 static const struct {
     uint32_t tag;
     uint16_t stride, align;
     bool outfit;
 } k_kinds[KINDS] = {
     [STRINGS] = {GARMENT_SECTION_STRINGS, 1, 1, true},
+    [BONES] = {GARMENT_SECTION_BONES, sizeof(GarmentBlobBone), _Alignof(GarmentBlobBone), true},
+    [SPHERES] = {GARMENT_SECTION_SPHERES, sizeof(GarmentSphere), _Alignof(GarmentSphere), true},
+    [CONES] = {GARMENT_SECTION_CONES, sizeof(GarmentCone), _Alignof(GarmentCone), true},
     [PIECE] = {GARMENT_SECTION_PIECE, sizeof(GarmentBlobPiece), _Alignof(GarmentBlobPiece), false},
-    [BONES] = {GARMENT_SECTION_BONES, sizeof(GarmentBlobBone), _Alignof(GarmentBlobBone), false},
     [REST] = {GARMENT_SECTION_REST, 3 * sizeof(float), _Alignof(float), false},
     [INV_AREA] = {GARMENT_SECTION_INV_AREA, sizeof(float), _Alignof(float), false},
     [FACES] = {GARMENT_SECTION_FACES, sizeof(ClothFace), _Alignof(ClothFace), false},
     [EDGES] = {GARMENT_SECTION_EDGES, sizeof(ClothEdge), _Alignof(ClothEdge), false},
     [TETHERS] = {GARMENT_SECTION_TETHERS, sizeof(ClothTether), _Alignof(ClothTether), false},
-    [DRIVE] = {GARMENT_SECTION_DRIVE, sizeof(float), _Alignof(float), false},
-    [VERTICES] = {GARMENT_SECTION_VERTICES, sizeof(GarmentVertex), _Alignof(GarmentVertex), false},
-    [COLLIDERS] = {GARMENT_SECTION_COLLIDERS, sizeof(GarmentCollider), _Alignof(GarmentCollider), false},
+    [SKIN] = {GARMENT_SECTION_SKIN, sizeof(GarmentSkin), _Alignof(GarmentSkin), false},
+    [MAX_DISTANCE] = {GARMENT_SECTION_MAX_DISTANCE, sizeof(float), _Alignof(float), false},
+    [BACKSTOP] = {GARMENT_SECTION_BACKSTOP, sizeof(ClothBackstop), _Alignof(ClothBackstop), false},
+    [DIRECTION] = {GARMENT_SECTION_DIRECTION, 3 * sizeof(float), _Alignof(float), false},
 };
 
 /* One allocation per loaded blob: the solver's pointer structs and the bone names they address. */
@@ -97,40 +100,47 @@ const GarmentSet *garment_asset_view(const void *blob, uint32_t size) {
         NT_ASSERT(*slot == NULL);
         *slot = s;
     }
-    const GarmentBlobSection *strings = section(&b, GARMENT_PIECES_MAX, STRINGS, true);
+    const int outfit = GARMENT_PIECES_MAX;
+    const GarmentBlobSection *strings = section(&b, outfit, STRINGS, true);
     b.strings = records(&b, strings);
     b.string_bytes = strings->count;
     NT_ASSERT(b.string_bytes > 0 && b.strings[b.string_bytes - 1] == '\0');
     if (h->piece_count == 0) return NULL;
-    uint32_t bone_total = 0;
-    for (int p = 0; p < h->piece_count; ++p) {
-        const uint32_t bones = section(&b, p, BONES, true)->count;
-        NT_ASSERT(bones >= 1 && bones <= GARMENT_BONES_MAX);
-        bone_total += bones;
-    }
-    AssetView *view = calloc(1, sizeof *view + bone_total * sizeof(GarmentBone));
+
+    const GarmentBlobSection *bone_section = section(&b, outfit, BONES, true);
+    const uint32_t bones = bone_section->count;
+    NT_ASSERT(bones >= 1 && bones <= GARMENT_BONES_MAX);
+    const GarmentBlobSection *sphere_section = section(&b, outfit, SPHERES, false);
+    const GarmentBlobSection *cone_section = section(&b, outfit, CONES, false);
+    const uint32_t spheres = count_of(sphere_section), cones = count_of(cone_section);
+    NT_ASSERT(spheres <= CLOTH_SHAPES && cones <= CLOTH_SHAPES);
+    const GarmentSphere *sphere = records(&b, sphere_section);
+    for (uint32_t i = 0; i < spheres; ++i) NT_ASSERT(sphere[i].bone < bones);
+    const GarmentCone *cone = records(&b, cone_section);
+    for (uint32_t i = 0; i < cones; ++i) NT_ASSERT(cone[i].a < spheres && cone[i].b < spheres);
+
+    AssetView *view = calloc(1, sizeof *view + bones * sizeof(GarmentBone));
     NT_ASSERT(view);
-    view->set = (GarmentSet){.id = string(&b, h->id), .pieces = view->pieces, .piece_count = h->piece_count};
-    GarmentBone *bone = view->bones;
+    const GarmentBlobBone *source_bones = records(&b, bone_section);
+    for (uint32_t i = 0; i < bones; ++i) {
+        view->bones[i].name = string(&b, source_bones[i].name);
+        memcpy(view->bones[i].inverse_bind, source_bones[i].inverse_bind, sizeof view->bones[i].inverse_bind);
+    }
+    view->set = (GarmentSet){.id = string(&b, h->id), .bones = view->bones, .bone_count = (int)bones,
+                             .spheres = sphere, .sphere_count = (int)spheres, .cones = cone, .cone_count = (int)cones,
+                             .pieces = view->pieces, .piece_count = h->piece_count};
     for (int p = 0; p < h->piece_count; ++p) {
         const GarmentBlobSection *piece_section = section(&b, p, PIECE, true);
         NT_ASSERT(piece_section->count == 1);
         const GarmentBlobPiece *piece = records(&b, piece_section);
-        const GarmentBlobSection *bone_section = section(&b, p, BONES, true);
-        const int bone_count = (int)bone_section->count;
-        const GarmentBlobBone *source_bones = records(&b, bone_section);
-        for (int i = 0; i < bone_count; ++i) {
-            bone[i].name = string(&b, source_bones[i].name);
-            memcpy(bone[i].inverse_bind, source_bones[i].inverse_bind, sizeof bone[i].inverse_bind);
-        }
-
         const uint32_t n = section(&b, p, REST, true)->count;
         const GarmentBlobSection *face_section = section(&b, p, FACES, true), *edge_section = section(&b, p, EDGES, true);
-        const GarmentBlobSection *tethers = section(&b, p, TETHERS, false), *drive = section(&b, p, DRIVE, true);
+        const GarmentBlobSection *tethers = section(&b, p, TETHERS, false);
         const uint32_t edges = edge_section->count, faces = face_section->count;
         NT_ASSERT(n >= 3 && n <= CLOTH_VERTICES && edges >= 3 && edges <= CLOTH_EDGES && faces >= 1 && faces <= 2 * edges / 3 &&
-                  section(&b, p, INV_AREA, true)->count == n && section(&b, p, VERTICES, true)->count == n &&
-                  (!tethers || tethers->count == n) && drive->count == n);
+                  section(&b, p, INV_AREA, true)->count == n && section(&b, p, SKIN, true)->count == n &&
+                  section(&b, p, MAX_DISTANCE, true)->count == n && section(&b, p, BACKSTOP, true)->count == n &&
+                  section(&b, p, DIRECTION, true)->count == n && (!tethers || tethers->count == n));
         const ClothFace *face = records(&b, face_section);
         for (uint32_t i = 0; i < faces; ++i) NT_ASSERT(face[i].a < n && face[i].b < n && face[i].c < n);
         const ClothEdge *edge = records(&b, edge_section);
@@ -141,29 +151,23 @@ const GarmentSet *garment_asset_view(const void *blob, uint32_t size) {
         }
         const ClothTether *tether = records(&b, tethers);
         for (uint32_t i = 0; i < count_of(tethers); ++i) NT_ASSERT(tether[i].pin >= -1 && tether[i].pin < (int)n);
-        const GarmentVertex *vertex = records(&b, section(&b, p, VERTICES, true));
+        const GarmentSkin *skin = records(&b, section(&b, p, SKIN, true));
         for (uint32_t i = 0; i < n; ++i)
-            for (int j = 0; j < 4; ++j) NT_ASSERT(vertex[i].bone[j] < bone_count);
-
-        const GarmentBlobSection *collider_section = section(&b, p, COLLIDERS, false);
-        const uint32_t colliders = count_of(collider_section);
-        NT_ASSERT(colliders <= GARMENT_CAPSULES_MAX);
-        const GarmentCollider *collider = records(&b, collider_section);
-        for (uint32_t i = 0; i < colliders; ++i) NT_ASSERT(collider[i].bone_a < bone_count && collider[i].bone_b < bone_count);
+            for (int j = 0; j < 4; ++j) NT_ASSERT(skin[i].bone[j] < bones);
         NT_ASSERT(piece->render_vertices >= 0);
 
         view->meshes[p] = (ClothMesh){
             .vertices = (int)n, .faces = (int)faces, .edges = (int)edges,
             .rest = records(&b, section(&b, p, REST, true)), .inv_area = records(&b, section(&b, p, INV_AREA, true)),
-            .face = face, .edge = edge, .tether = tether, .drive = records(&b, drive),
+            .face = face, .edge = edge, .tether = tether, .max_distance = records(&b, section(&b, p, MAX_DISTANCE, true)),
+            .backstop = records(&b, section(&b, p, BACKSTOP, true)),
         };
         view->pieces[p] = (GarmentAsset){
-            .id = string(&b, piece->id), .bones = bone, .bone_count = bone_count, .mesh = &view->meshes[p],
-            .vertices = vertex, .material = piece->material, .colliders = collider, .collider_count = (int)colliders,
+            .id = string(&b, piece->id), .mesh = &view->meshes[p], .skin = skin,
+            .direction = records(&b, section(&b, p, DIRECTION, true)), .material = piece->material,
             .render_vertices = piece->render_vertices, .linear_inertia = piece->linear_inertia,
-            .angular_inertia = piece->angular_inertia, .downward_follow = piece->downward_follow,
+            .angular_inertia = piece->angular_inertia,
         };
-        bone += bone_count;
     }
     return &view->set;
 }
