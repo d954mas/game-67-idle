@@ -1240,7 +1240,8 @@ recall of a guest's body in flight and from her hands with her late states and
 claim dropped (`recall_flight`, `recall_carry`), a removal of a guest's body in
 flight (`remove_owned`), a guest catching another guest's throw in flight at 100
 and 250 ms and two guests reaching for it at once (`catch_guest_throw_100`,
-`catch_guest_throw_250`, `catch_race`; a reach that misses: `catch_miss`), and
+`catch_guest_throw_250`, `catch_race`; a reach that misses: `catch_miss`), a
+throw at a mannequin the host walks across its line (`throw_walker`), and
 hostile bytes on every parser (seeded fuzz in the
 tests). The stand never reuses a scene body's slot, so an old packet meeting a
 reused slot is covered at the seam only (`test_body_sync_stub`, both
@@ -1250,8 +1251,7 @@ generation equal modulo 16 is refused for the quarantine). Not yet
 covered: a sleeping body moved by the host, more moving bodies than a budget allows, a record over the unfragmented limit, a reader that stalls for 10 s,
 reconnects, joins and the host leaving (the seam has no baseline yet), the
 16-bit packet number wrapping, a guest pushing a stack
-or standing on a host's body, a hit on a target that already moved on the
-host, and a host whose window is minimised.
+or standing on a host's body, and a host whose window is minimised.
 
 ## Validation
 
@@ -1388,7 +1388,8 @@ words `rate` and `expect moved`, the playback metrics and schema
 and the hold until rest (two bits on the wire), the traffic's take counts, the
 scenario word `authority`, `>=` in metric checks, the CLI and viewer flag
 `--authority`, `body_sync_is_pull_paused`, `aligned_gap`, `local_correction`, `local_turn` and the take counts in the
-metrics, `body_sync_old_owner_drops`, `body_sync_teleported`, the host's rebind quarantine, the scenario
+metrics; 0.9.0 a player's authority, contact claims and recall:
+`body_sync_check_contact`, `body_sync_contact_number`, `body_sync_contact_t` and its verdicts, the stand's impact claims, the scenario check `expect effect` and the metric `claims_ended`, `body_sync_old_owner_drops`, `body_sync_teleported`, the host's rebind quarantine, the scenario
 verbs `recall` and `remove`, the `on` trigger and `late_drops`, the scenario
 check `expect moved ... solo [interaction ...]` and the scene `mug_tables`, the
 metrics `return_jump` and `switch_jump`, a flight's age bound, a guest's flight on

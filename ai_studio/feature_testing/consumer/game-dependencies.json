@@ -98,8 +98,8 @@
     {
       "id": "body-sync",
       "source": "features/body-sync",
-      "version": "0.8.0",
-      "compatibility": "validated with the stub seam on the simulator: claims told apart by sequence, answers, withdrawals, forced moves that keep the velocity, state that moves with authority, settled holds at a contact and at rest, peer bytes bounded by the config and fuzzed through apply and a step; every catalog scene built with equal world hashes on four endpoints and bit-identical over free steps; eleven scenarios, must-fail scenarios and planted defects for every check; one seed gives byte-equal metrics in one process and in two; the real seam's playback receiver against cuts, hitches, tick-rate mismatches and two pings, with lag-aligned, path, step and jump bounds; authority following interaction against a pile, the host first, two guests and a guest that leaves, with the lag-aligned gap planted"
+      "version": "0.9.0",
+      "compatibility": "validated with the stub seam on the simulator: claims told apart by sequence, answers, withdrawals, forced moves that keep the velocity, state that moves with authority, settled holds at a contact and at rest, peer bytes bounded by the config and fuzzed through apply and a step; every catalog scene built with equal world hashes on four endpoints and bit-identical over free steps; eleven scenarios, must-fail scenarios and planted defects for every check; one seed gives byte-equal metrics in one process and in two; the real seam's playback receiver against cuts, hitches, tick-rate mismatches and two pings, with lag-aligned, path, step and jump bounds; authority following interaction against a pile, the host first, two guests and a guest that leaves, with the lag-aligned gap planted; contact claims judged against the host's evidence of the claimant (breakables, a mannequin, a door), recall and removal of a guest's body, a guest catching another guest's throw under loss, a thrown mug moving a table no farther than solo, and the return jump measured, each with planted defects"
     },
     {
       "id": "shader-programs",
