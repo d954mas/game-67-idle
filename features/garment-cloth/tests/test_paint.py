@@ -6,7 +6,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from garment_paint import FREE_FLOOR, baseline_freedom, coincident, covered, surface_distance, weld
+from garment_paint import FREE_FLOOR, baseline_freedom, coincident, surface_distance, weld
 from synthetic import grid
 
 
@@ -56,27 +56,6 @@ class Paint(unittest.TestCase):
         column = np.flatnonzero(np.isclose(self.points[:, 0], 0.15))
         self.assertTrue(np.all(np.diff(d[column[np.argsort(-self.points[column, 1])]]) > 0))
         self.assertTrue(np.isnan(d[-1]))
-
-
-class Layers(unittest.TestCase):
-    def setUp(self):
-        self.points, self.faces = grid(0, 0.3, 0, 0.6, 0, 7, 13)
-        self.normals = np.tile([0.0, 0.0, 1.0], (len(self.points), 1))
-        # An outer layer 1 cm in front of the upper half.
-        self.cover, self.cover_faces = grid(-0.05, 0.35, 0.3, 0.65, 0.01, 5, 5)
-
-    def test_the_covered_band_is_pinned_and_the_rest_stays_free(self):
-        under = covered(self.points, self.normals, self.cover, self.cover_faces, 0.05)
-        y = self.points[:, 1]
-        self.assertTrue(np.all(under[y > 0.31]) and not np.any(under[y < 0.29]))
-        f = baseline_freedom(self.points, self.faces, 0.1, (0.8, 0.2, 1.0), np.flatnonzero(under))
-        self.assertTrue(np.all(f[under] == 0) and np.all(f[y < 0.29] > 0))
-        self.assertFalse(np.any(covered(self.points, self.normals, self.cover, self.cover_faces, 0.005)))
-
-    def test_a_piece_that_names_no_cover_is_unchanged(self):
-        plain = baseline_freedom(self.points, self.faces, 0.1, (0.8, 0.2, 1.0))
-        again = baseline_freedom(self.points, self.faces, 0.1, (0.8, 0.2, 1.0), np.array([], int))
-        np.testing.assert_array_equal(plain, again)
 
 
 if __name__ == "__main__":

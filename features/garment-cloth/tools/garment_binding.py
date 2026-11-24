@@ -171,6 +171,33 @@ def surface_rows(proxy, triangles, positions, faces, take, corners, distance):
 
 
 BINDING_DISTANCE_M = 0.16
+
+
+def torn_edges(positions, faces, take, bound, proxy, triangles):
+    """Render edges whose two ends bind to proxy places farther apart along the proxy than any honest binding allows.
+
+    bound: per render vertex the proxy vertices it reads (an empty list for a skinned vertex). Two ends of one render
+    edge bind to proxy triangles that meet or lie about the edge's length apart, so a proxy path joins their nearest
+    bound vertices within the edge's length plus a proxy edge or two. A path longer by 2.5 typical (median) proxy edges
+    runs around an opening of the sheet, and the render edge would stretch across that opening as soon as it opens.
+    """
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import dijkstra
+    tri = np.asarray(triangles)
+    pairs = np.concatenate([tri[:, [0, 1]], tri[:, [1, 2]], tri[:, [2, 0]]])
+    lengths = np.linalg.norm(proxy[pairs[:, 0]] - proxy[pairs[:, 1]], axis=1)
+    graph = coo_matrix((lengths, (pairs[:, 0], pairs[:, 1])), shape=(len(proxy),) * 2).tocsr()
+    reach = 2.5 * float(np.median(lengths))
+    edges = np.unique(np.sort(np.concatenate([faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]]]), axis=1), axis=0)
+    edges = edges[take[edges].all(1) & np.array([bool(bound[a]) and bool(bound[b]) for a, b in edges], bool)]
+    if not len(edges):
+        return edges
+    span = np.linalg.norm(positions[edges[:, 0]] - positions[edges[:, 1]], axis=1)
+    sources = sorted({v for a, _ in edges for v in bound[a]})
+    index = {v: i for i, v in enumerate(sources)}
+    distance = dijkstra(graph, directed=False, indices=sources, limit=float(span.max()) + 2 * reach)
+    path = np.array([min(distance[index[u], v] for u in bound[a] for v in bound[b]) for a, b in edges])
+    return edges[path > span + reach]
 LINING_GAP_M = 0.008  # solidified shells closer than this are one fabric layer
 
 
@@ -181,7 +208,8 @@ def bind_render(positions, faces, normals, labels, freedom, pieces, palette_offs
     keep a render vertex on its own side of a cut and apply to the primitive the proxy was built from.
     A render pin (freedom 0) is skinned. A free vertex follows the cloth by the bound proxy triangle's interpolated
     "not a pin" indicator, so it is skinned where every bound proxy vertex is a pin and fully simulated where none is. Inner-lining vertices take
-    their outer shell partner's binding, which keeps a solidified shell's thickness through any fold.
+    their outer shell partner's binding, which keeps a solidified shell's thickness through any fold. A render edge
+    bound across an opening of the proxy fails the cook (`torn_edges`).
     """
     from scipy.spatial import cKDTree
     stream = np.zeros((len(positions), 4), dtype="<u2")
@@ -215,4 +243,13 @@ def bind_render(positions, faces, normals, labels, freedom, pieces, palette_offs
             amount[vertex] = (w0 * free[v0] + w1 * free[v1] + w2 * free[v2]) if freedom[vertex] > 0 else 0.0
             stream[vertex] = pack_vertex_binding_u16x4(offset + v0 + 1, offset + v1 + 1, offset + v2 + 1,
                                                        w0, w1, w2, amount[vertex])
+        bound = [[]] * len(positions)
+        for local, vertex in enumerate(take_idx):
+            if amount[vertex] > 0:
+                row = rows[int(inverse[local])]
+                bound[vertex] = [v for v, w in zip(row[:3], row[3:]) if w > 0]
+        torn = torn_edges(positions, faces, take, bound, proxy, triangles)
+        if len(torn):
+            raise ValueError(f"piece {label}: {len(torn)} render edges bind across an opening of the proxy, "
+                             f"around {np.round(positions[torn[0]].mean(0), 3).tolist()}")
     return stream, amount

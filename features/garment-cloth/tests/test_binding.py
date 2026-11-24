@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
-from garment_binding import bind_surface, surface_rows
+from garment_binding import bind_render, bind_surface, surface_rows
 from garment_proxy import corner_owners, sewn_sheet
 
 
@@ -57,6 +57,48 @@ class RenderSides(unittest.TestCase):
         inverse, rows = surface_rows(proxy, sewn, positions, faces, np.ones(len(positions), bool), corners, .1)
         for a,b in ((1,3),(2,5)):
             self.assertEqual(rows[inverse[a]], rows[inverse[b]])
+
+
+class OpeningGuard(unittest.TestCase):
+    """A sheet split from its bottom edge up to the middle, and a ribbon that lies on it below the split's top."""
+
+    def setUp(self):
+        # 9 x 9 grid over 0.4 m; the split runs up the centre column from y = 0 to y = 0.2 and doubles its vertices.
+        n, size = 9, 0.4
+        xs = np.linspace(-size / 2, size / 2, n)
+        points = [(x, y, 0.0) for y in np.linspace(0, size, n) for x in xs]
+        index = lambda i, j: j * n + i
+        split = {}
+        for j in range(n // 2 + 1):
+            if j < n // 2:
+                split[index(n // 2, j)] = len(points)
+                points.append(points[index(n // 2, j)])
+        faces = []
+        for j in range(n - 1):
+            for i in range(n - 1):
+                quad = [index(i, j), index(i + 1, j), index(i + 1, j + 1), index(i, j + 1)]
+                if i >= n // 2:
+                    quad = [split.get(v, v) for v in quad]
+                faces += [(quad[0], quad[1], quad[2]), (quad[0], quad[2], quad[3])]
+        self.proxy, self.triangles = np.array(points), np.array(faces)
+
+    def ribbon(self, x0, x1, y):
+        positions = np.array([(x0, y, 0.002), (x1, y, 0.002), (x0, y + 0.02, 0.002), (x1, y + 0.02, 0.002)])
+        faces = np.array([(0, 1, 3), (0, 3, 2)])
+        return positions, faces
+
+    def bind(self, positions, faces):
+        piece = (1, self.proxy, self.triangles, None, np.zeros(len(self.proxy), bool))
+        return bind_render(positions, faces, None, np.ones(len(positions)), np.ones(len(positions)), [piece], [0])
+
+    def test_a_ribbon_across_the_opening_fails_the_cook(self):
+        with self.assertRaisesRegex(ValueError, "across an opening"):
+            self.bind(*self.ribbon(-0.03, 0.03, 0.05))
+
+    def test_a_ribbon_beside_the_opening_or_above_it_binds(self):
+        for x0, x1, y in ((-0.12, -0.04, 0.05), (-0.03, 0.03, 0.3)):
+            stream, amount = self.bind(*self.ribbon(x0, x1, y))
+            self.assertTrue(np.all(amount > 0))
 
 
 if __name__ == "__main__":

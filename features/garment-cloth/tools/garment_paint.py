@@ -79,31 +79,6 @@ def surface_distance(points, faces, sources):
     return out
 
 
-def covered(points, normals, cover_points, cover_faces, max_distance):
-    """Vertices whose line along their normal, either way, meets the cover surface within max_distance; either way
-    because a solidified shell's inner side faces the body while the cover is still outside it."""
-    points, normals = np.asarray(points, float), np.asarray(normals, float)
-    tri = np.asarray(cover_points, float)[np.asarray(cover_faces)]
-    a, e1, e2 = tri[:, 0], tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0]
-    hit = np.zeros(len(points), bool)
-    for i, (o, d) in enumerate(zip(points, normals)):
-        length = np.linalg.norm(d)
-        if length == 0:
-            continue
-        d = d / length
-        h = np.cross(d, e2)
-        det = np.einsum("ij,ij->i", e1, h)
-        ok = np.abs(det) > 1e-12
-        inv = np.where(ok, 1 / np.where(ok, det, 1), 0)
-        s_ = o - a
-        u = np.einsum("ij,ij->i", s_, h) * inv
-        q = np.cross(s_, e1)
-        v = (q @ d) * inv
-        t = np.einsum("ij,ij->i", e2, q) * inv
-        hit[i] = np.any(ok & (u >= 0) & (v >= 0) & (u + v <= 1) & (np.abs(t) <= max_distance))
-    return hit
-
-
 def baseline_freedom(points, faces, seam_fraction, curve=None, pinned=None):
     """Freedom per vertex used by `faces` (NaN elsewhere).
 
