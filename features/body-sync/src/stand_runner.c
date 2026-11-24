@@ -458,34 +458,43 @@ static void break_on_host(body_sync_stand_t *st, body_sync_id_t id) {
     }
 }
 
-static bool apply_effect(body_sync_stand_t *st, stand_effect_t effect, body_sync_id_t target, const float origin[3]) {
+/* What an effect did on the host: refused, accepted with nothing to do (no effect, a push of a
+   body the host does not simulate), or done. */
+typedef enum applied {
+    APPLIED_REFUSED = 0,
+    APPLIED_IDLE,
+    APPLIED_DONE,
+} applied_t;
+
+static applied_t apply_effect(body_sync_stand_t *st, stand_effect_t effect, body_sync_id_t target, const float origin[3]) {
     endpoint_t *host = &st->ep[0];
     stand_slot_t *s = stand_world_slot(host->world, target);
     if (!s) {
-        return false;
+        return APPLIED_REFUSED;
     }
     const body_sync_character_tuning_t *t = &st->scene.character;
     switch (effect) {
     case STAND_EFFECT_KNOCK:
         if (!body_sync_is_local(host->sync, target)) {
-            return false;
+            return APPLIED_REFUSED;
         }
         stand_world_knock(host->world, body_sync_id_slot(target), origin, t->knock_speed);
         body_sync_set_flags(host->sync, target, (uint8_t)(body_sync_flags(host->sync, target) | KNOCK_FLAG));
         new_effect(st, STAND_EFFECT_KNOCK, target);
-        return true;
+        return APPLIED_DONE;
     case STAND_EFFECT_BREAK:
         break_on_host(st, target);
-        return true;
+        return APPLIED_DONE;
     case STAND_EFFECT_PUSH:
-        if (body_sync_is_local(host->sync, target)) {
-            stand_world_push(host->world, body_sync_id_slot(target), origin, t->punch_push);
+        if (!body_sync_is_local(host->sync, target)) {
+            return APPLIED_IDLE;
         }
-        return true;
+        stand_world_push(host->world, body_sync_id_slot(target), origin, t->punch_push);
+        return APPLIED_DONE;
     case STAND_EFFECT_NONE:
-        return true;
+        return APPLIED_IDLE;
     }
-    return false;
+    return APPLIED_REFUSED;
 }
 
 /* ---- actions ---- */
@@ -660,7 +669,7 @@ static void punch_landed(body_sync_stand_t *st, endpoint_t *ep, int32_t index) {
     if (is_host_ep(ep)) {
         stand_target_t t = target_of(st, ep, target);
         stand_effect_t effect;
-        if (stand_rules_hit(&t, origin, st->scene.character.punch_range, &effect) && apply_effect(st, effect, target, origin)) {
+        if (stand_rules_hit(&t, origin, st->scene.character.punch_range, &effect) && apply_effect(st, effect, target, origin) != APPLIED_REFUSED) {
             set_outcome(st, index, BODY_SYNC_OUTCOME_HIT);
             if (track) {
                 track->shows = true;
@@ -793,7 +802,7 @@ static void impact_origin(endpoint_t *host, body_sync_id_t agent, const stand_ta
 static bool apply_impact(body_sync_stand_t *st, stand_effect_t effect, body_sync_id_t agent, body_sync_id_t target, const stand_target_t *t) {
     float origin[3];
     impact_origin(&st->ep[0], agent, t, origin);
-    return effect != STAND_EFFECT_NONE && apply_effect(st, effect, target, origin);
+    return apply_effect(st, effect, target, origin) == APPLIED_DONE;
 }
 
 /* A guest's impact claim: once per key, through the seam's gate and the stand's limits, then the
@@ -824,7 +833,9 @@ static void judge_impact(body_sync_stand_t *st, uint8_t seat, const stand_record
 static void judge_hit(body_sync_stand_t *st, uint8_t seat, const stand_record_t *r, const stand_target_t *t) {
     endpoint_t *host = &st->ep[0];
     stand_effect_t effect;
-    bool accepted = stand_rules_hit(t, r->origin, st->scene.character.punch_range, &effect) && apply_effect(st, effect, r->target, r->origin);
+    applied_t applied = stand_rules_hit(t, r->origin, st->scene.character.punch_range, &effect) ? apply_effect(st, effect, r->target, r->origin)
+                                                                                                 : APPLIED_REFUSED;
+    bool accepted = applied != APPLIED_REFUSED;
     stand_record_t verdict = {.type = STAND_REC_VERDICT, .target = r->target, .action = r->action, .accepted = accepted ? 1 : 0};
     if (seat < st->endpoints && st->ep[seat].active) {
         queue_record(st, host, seat, &verdict);
@@ -833,8 +844,10 @@ static void judge_hit(body_sync_stand_t *st, uint8_t seat, const stand_record_t 
     if (track && accepted) {
         track->answered_on_host = true;
     }
-    if (accepted) {
+    if (applied == APPLIED_DONE) {
         st->claim_effects[seat]++;
+    } else if (accepted) {
+        st->claims_idle[seat]++;
     } else {
         st->claims_rejected[seat]++;
     }
@@ -3379,7 +3392,7 @@ bool stand_testing_effect(body_sync_stand_t *st, stand_effect_t effect, body_syn
     float origin[3], rotation[4];
     pose_of(&st->ep[0], body_sync_id_slot(target), origin, rotation);
     origin[0] -= 1.0f;
-    return apply_effect(st, effect, target, origin);
+    return apply_effect(st, effect, target, origin) != APPLIED_REFUSED;
 }
 
 void stand_testing_mark_left(body_sync_stand_t *st, uint8_t seat) { mark_left(st, seat); }

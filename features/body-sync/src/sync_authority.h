@@ -29,8 +29,12 @@
 enum { SYNC_AUTHORITY_POSES = 12 };
 typedef struct sync_authority_pose {
     float position[3];
-    float step[3]; /* metres a tick from the state before it in the ring; 0 for the first */
+    float step[3]; /* metres a tick from the state before it in the ring; 0 without a span */
     uint32_t tick, host_tick;
+    /* Ticks from the state before it: the sender's span, never more than the host's own plus the
+       jitter granted, at least one. 0 for the first state of the ring and for a step faster than
+       the box's speed: no evidence of a path into it. */
+    uint32_t span;
 } sync_authority_pose_t;
 
 typedef struct sync_authority_body {
@@ -124,12 +128,9 @@ typedef struct sync_authority_ended {
     uint8_t how;   /* sync_authority_end_t */
     bool has_pose; /* the host took a state of that ownership from the seat */
     uint32_t tick; /* the host's `now` at the end */
-    /* The seat's last state the host took, its step from the one before (metres a tick), the
-       host's `now` then and the fastest travel its taken states showed (metres a tick): the
-       evidence left once another ownership's states replaced the ring. */
-    float position[3];
-    float step[3];
-    uint32_t pose_tick;
+    /* The seat's last state the host took and the fastest step its taken states showed (metres a
+       tick): the evidence left once another ownership's states replaced the ring. */
+    sync_authority_pose_t pose;
     float travel;
 } sync_authority_ended_t;
 
@@ -164,6 +165,9 @@ typedef struct sync_authority {
        body to that seat, which skips a number (sync_authority_declared_number). */
     uint64_t refused[BODY_SYNC_SEATS_MAX][SYNC_AUTHORITY_OWED_WORDS];
     uint32_t now;
+    /* Host: `now` when the host last took a state from each seat. A resting body sends none, so
+       its last state stands only while its seat is still heard. */
+    uint32_t heard[BODY_SYNC_SEATS_MAX];
     /* Host: each seat's newest ownership of each body that ended, kept through a leave until the
        body is bound again or the seat joins after one. */
     sync_authority_ended_t ended[BODY_SYNC_SEATS_MAX][BODY_SYNC_BODIES_MAX];
@@ -172,6 +176,10 @@ typedef struct sync_authority {
     bool plant_revoked_as_arbitrated;
     /* A planted defect: every take's evidence reads an unbounded reach. Never set outside tests. */
     bool plant_take_reach_unbounded;
+    /* A planted defect: the evidence grows over gaps (a chord of any spacing on the sender's
+       span, the last state's ray and bend over its age, a resting state for ever). Never set
+       outside tests. */
+    bool plant_evidence_grows_over_gaps;
     /* Host: the shell's measure of a take's evidence (sync_policy_grant_in_t agent_gap, *reach).
        None: every take counts as touching, for the parts tested without a world. */
     float (*take_gap)(void *context, uint8_t seat, uint32_t slot, float *reach);
@@ -215,13 +223,15 @@ body_sync_result_t sync_authority_set_data(sync_authority_t *a, body_sync_id_t i
 uint32_t sync_authority_data(const sync_authority_t *a, body_sync_id_t id, void *out, uint32_t capacity);
 
 /* Host: the shell took a state of the body from its owner `seat` stamped with that sender's
-   `tick`, at the host's `now`: the evidence of that ownership's contact claims. A state of
-   another ownership starts the ring over. The time from the state before it is the sender's
-   span, but no less than the host's own span less `jitter_ticks` (the spread its playback delay
-   already absorbs), and at least a tick: a sender stamping its states close together cannot
-   shorten the host's clock past the jitter it is granted anyway. */
-void sync_authority_received_pose(sync_authority_body_t *b, uint8_t seat, uint32_t tick, uint32_t now, uint32_t jitter_ticks,
-                                  const float position[3]);
+   `tick`, at the host's `a->now`: the evidence of that ownership's contact claims. A state of
+   another ownership starts the ring over. Its step divides by the sender's span, but no less
+   than the host's own span less `jitter_ticks` (the spread its playback delay already absorbs),
+   and at least a tick: a sender stamping its states close together cannot shorten the host's
+   clock past the jitter it is granted anyway. Its span is the sender's, but no more than the
+   host's own plus `jitter_ticks`: stamps far apart buy no time. A step past `max_step` (metres a
+   tick: the box's speed) is a teleport, refused as evidence (span 0), never capped. */
+void sync_authority_received_pose(sync_authority_t *a, sync_authority_body_t *b, uint8_t seat, uint32_t tick, uint32_t jitter_ticks,
+                                  float max_step, const float position[3]);
 /* The shell stored a newer state of the body: what a take inherits from it. */
 void sync_authority_received(sync_authority_body_t *b, uint8_t hold, body_sync_id_t holder, uint8_t flags);
 /* The newest data bytes received for a copy. */
@@ -313,7 +323,9 @@ typedef struct sync_contact_scene {
     uint32_t tick_hz;
     float max_speed;
     float slack_ticks;     /* a state may cross slower than the claim behind it: the playback delay and a tick */
-    uint32_t window_ticks; /* how old a taken state may be and still place the contact: the claim's grace */
+    /* The claim's grace: the seat must be heard within it, and only a state within it extends a
+       path or pushes. */
+    uint32_t window_ticks;
     /* The least time the target may have travelled since the touch, ticks: the guest touched its
        copy of it, a one-way trip and a delay old, and the claim takes the way back. */
     float target_ticks;
@@ -325,15 +337,18 @@ typedef struct sync_contact_scene {
 
 /* Host: a contact claim measured on what the host itself took of `seat`'s ownership of the
    agent (`ended` from sync_authority_check_contact, NULL for a current one), never on the
-   velocity the owner declares. A contact lies on the path the taken states show: between two
-   consecutive ones, or on from a state along the step that led to it (a contact turns a body
-   only at the contact) for the ticks to the next one, or after the last for the ticks since it
-   was taken plus slack. *gap is the agent's box from the target's along the nearest of those
-   paths of the window; *reach is SYNC_POLICY_TAKE_SLOP_M, the target's travel over that time
-   and SYNC_POLICY_CONTACT_BEND_MS2's bend of the path, the time at most
-   SYNC_POLICY_EVIDENCE_AGE_MAX_S; *approach_max the agent's fastest travel of the window (at
-   most max_speed) plus the target's speed. False when the host took no state of that ownership
-   in the window: it has no evidence of the contact, and the claim is a missed effect. */
+   velocity the owner declares. A gap in the host's evidence is no evidence, never a wider bound.
+   Nothing stands once the seat is not heard within the window. A contact lies at one of the
+   ownership's taken states, or on the path two consecutive ones show when the later is in the
+   window and their span is at most SYNC_POLICY_CHORD_TICKS_MAX: their chord, or on from the
+   first along the step that led to it (a contact turns a body only at the contact) for that
+   span; or, for the slack after the last state while it is in the window, on along its step
+   when that step's span is as short. *gap is the agent's box from the target's at the nearest of
+   those; *reach is SYNC_POLICY_TAKE_SLOP_M, the target's travel over that path's time,
+   SYNC_POLICY_CONTACT_BEND_MS2's bend of it (none at a state) and the agent's fastest step of
+   the window over push_ticks; *approach_max the ownership's fastest step plus the target's
+   speed. False when nothing stands: the host has no evidence of the contact, and the claim is a
+   missed effect. */
 bool sync_authority_contact_measure(const sync_authority_t *a, body_sync_id_t agent, uint8_t seat, const sync_authority_ended_t *ended,
                                     const sync_contact_scene_t *scene, float *gap, float *reach, float *approach_max);
 /* The same of the body `b` itself: a take's evidence asks it of each of the claimant's agents. */

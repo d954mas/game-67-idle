@@ -193,6 +193,7 @@ static float take_gap(void *context, uint8_t seat, uint32_t slot, float *reach) 
 }
 
 void body_sync_plant_take_reach_unbounded(body_sync_t *s) { s->authority.plant_take_reach_unbounded = true; }
+void body_sync_plant_evidence_grows_over_gaps(body_sync_t *s) { s->authority.plant_evidence_grows_over_gaps = true; }
 
 body_sync_t *body_sync_create(const body_sync_config_t *config) {
     if (!config || !b3World_IsValid(config->world) || config->seats < 1 || config->seats > BODY_SYNC_SEATS_MAX ||
@@ -584,8 +585,8 @@ body_sync_result_t body_sync_receive_state(body_sync_t *s, uint8_t seat, uint32_
         sync_authority_describe(&s->authority, a, &now);
         note_received(s, a, &s->receiver.bodies[r->slot], (uint8_t)now.hold, a->flags, true);
         if (is_host(s)) {
-            sync_authority_received_pose(a, seat, tick, s->authority.now, s->playback.timelines[seat].delay,
-                                         s->receiver.bodies[r->slot].newest.position);
+            sync_authority_received_pose(&s->authority, a, seat, tick, s->playback.timelines[seat].delay,
+                                         s->config.max_speed / (float)s->config.tick_hz, s->receiver.bodies[r->slot].newest.position);
         }
     }
     return BODY_SYNC_OK;

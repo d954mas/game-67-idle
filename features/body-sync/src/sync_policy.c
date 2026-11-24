@@ -77,11 +77,6 @@ float sync_policy_evidence_ticks(float round_trip_ticks, float delay_ticks, uint
     return ticks < cap ? ticks : cap;
 }
 
-float sync_policy_contact_speed(float travel_per_tick, uint32_t tick_hz, float max_speed) {
-    float speed = travel_per_tick * (float)tick_hz;
-    return speed < max_speed ? speed : max_speed; /* NaN reads as the cap: a broken pose widens nothing past it */
-}
-
 float sync_policy_box_gap(const float lo[3], const float hi[3], const float other_lo[3], const float other_hi[3]) {
     float d2 = 0.0f;
     for (int i = 0; i < 3; i++) {

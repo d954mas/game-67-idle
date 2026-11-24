@@ -115,15 +115,12 @@ static void host_move_to(sync_authority_t *a, sync_authority_body_t *b, uint8_t 
         sync_authority_ended_t *e = &a->ended[b->seat][slot];
         *e = (sync_authority_ended_t){.number = b->number, .how = (uint8_t)end, .tick = a->now};
         if (b->pose_count > 0 && b->pose_seat == b->seat && b->pose_number == b->number) {
-            const sync_authority_pose_t *last = &b->poses[(b->pose_next + SYNC_AUTHORITY_POSES - 1u) % SYNC_AUTHORITY_POSES];
             e->has_pose = true;
-            memcpy(e->position, last->position, sizeof(e->position));
-            memcpy(e->step, last->step, sizeof(e->step));
-            e->pose_tick = last->host_tick;
+            e->pose = b->poses[(b->pose_next + SYNC_AUTHORITY_POSES - 1u) % SYNC_AUTHORITY_POSES];
             e->travel = 0.0f;
             for (uint32_t i = 0; i < b->pose_count; i++) {
                 const float *d = b->poses[i].step;
-                float travel = sqrtf(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+                float travel = b->poses[i].span > 0 ? sqrtf(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]) : 0.0f;
                 e->travel = travel > e->travel ? travel : e->travel;
             }
         }
@@ -505,8 +502,12 @@ void sync_authority_received_data(sync_authority_body_t *b, uint8_t size, const 
     memcpy(b->in_data, data, sizeof(b->in_data));
 }
 
-void sync_authority_received_pose(sync_authority_body_t *b, uint8_t seat, uint32_t tick, uint32_t now, uint32_t jitter_ticks,
-                                  const float position[3]) {
+void sync_authority_received_pose(sync_authority_t *a, sync_authority_body_t *b, uint8_t seat, uint32_t tick, uint32_t jitter_ticks,
+                                  float max_step, const float position[3]) {
+    uint32_t now = a->now;
+    if (seat < BODY_SYNC_SEATS_MAX) {
+        a->heard[seat] = now;
+    }
     if (b->pose_count == 0 || b->pose_seat != seat || b->pose_number != b->number) {
         b->pose_seat = seat;
         b->pose_number = b->number;
@@ -515,13 +516,22 @@ void sync_authority_received_pose(sync_authority_body_t *b, uint8_t seat, uint32
     }
     sync_authority_pose_t *p = &b->poses[b->pose_next];
     memset(p->step, 0, sizeof(p->step));
+    p->span = 0;
     if (b->pose_count > 0) {
         const sync_authority_pose_t *q = &b->poses[(b->pose_next + SYNC_AUTHORITY_POSES - 1u) % SYNC_AUTHORITY_POSES];
         uint32_t sent = tick - q->tick, seen = now - q->host_tick;
         uint32_t floor = seen > jitter_ticks ? seen - jitter_ticks : 0u;
         uint32_t ticks = sent > floor ? sent : floor;
+        float step[3];
         for (int i = 0; i < 3; i++) {
-            p->step[i] = (position[i] - q->position[i]) / (float)(ticks > 0 ? ticks : 1u);
+            step[i] = (position[i] - q->position[i]) / (float)(ticks > 0 ? ticks : 1u);
+        }
+        float travel = sqrtf(step[0] * step[0] + step[1] * step[1] + step[2] * step[2]);
+        if (travel <= max_step) { /* NaN fails too: a broken pose is no step */
+            uint32_t ceiling = seen + jitter_ticks >= seen ? seen + jitter_ticks : UINT32_MAX;
+            uint32_t span = sent < ceiling ? sent : ceiling;
+            p->span = span > 0 ? span : 1u;
+            memcpy(p->step, step, sizeof(step));
         }
     }
     memcpy(p->position, position, sizeof(p->position));
@@ -892,13 +902,14 @@ static void fit_ray(contact_fit_t *f, const float at[3], const float step[3], fl
     fit_path(f, at, along, ticks);
 }
 
-/* Ticks the agent may have moved past its last taken state unseen: a body moving sends a state
-   every tick, so the first state of a move would cross within the claim's grace; a body at rest
-   sends none, and its last state stands for as long as it rests. */
-static float unseen_ticks(const sync_authority_t *a, const sync_contact_scene_t *in, uint32_t taken) {
-    uint32_t age = a->now - taken;
-    return (float)(age < in->window_ticks ? age : in->window_ticks) + in->slack_ticks;
+/* A taken state alone: the slop and the target's travel, no path grown from it. */
+static void fit_point(contact_fit_t *f, const float at[3]) {
+    const float none[3] = {0.0f, 0.0f, 0.0f};
+    fit_path(f, at, none, 0.0f);
 }
+
+/* A step the host may extend along: it saw the state before within a chord's spacing. */
+static bool short_step(const sync_authority_pose_t *p) { return p->span > 0 && p->span <= SYNC_POLICY_CHORD_TICKS_MAX; }
 
 bool sync_authority_contact_measure(const sync_authority_t *a, body_sync_id_t agent, uint8_t seat, const sync_authority_ended_t *ended,
                                     const sync_contact_scene_t *in, float *gap, float *reach, float *approach_max) {
@@ -914,7 +925,7 @@ bool sync_authority_path_measure(const sync_authority_t *a, const sync_authority
     *gap = INFINITY;
     *reach = SYNC_POLICY_TAKE_SLOP_M;
     *approach_max = in->target_speed;
-    if (in->tick_hz == 0) {
+    if (in->tick_hz == 0 || seat >= BODY_SYNC_SEATS_MAX) {
         return false;
     }
     contact_fit_t f = {.in = in, .margin = INFINITY, .gap = INFINITY, .reach = SYNC_POLICY_TAKE_SLOP_M};
@@ -922,43 +933,72 @@ bool sync_authority_path_measure(const sync_authority_t *a, const sync_authority
         f.lo[i] = in->target_lo[i] - in->agent_hi[i];
         f.hi[i] = in->target_hi[i] - in->agent_lo[i];
     }
-    float travel = 0.0f;
-    /* The ring still holds that ownership unless another one's states replaced it. */
+    const bool grows = a->plant_evidence_grows_over_gaps;
+    const uint32_t window = in->window_ticks;
+    /* The ring still holds that ownership unless another one's states replaced it; then only the
+       end's last state is left. */
+    const sync_authority_pose_t *poses[SYNC_AUTHORITY_POSES];
+    uint32_t count = 0;
+    bool from_end = false;
     uint16_t number = ended ? ended->number : b->number;
-    bool ring = b->pose_count > 0 && b->pose_seat == seat && b->pose_number == number && (ended || b->seat == seat);
-    if (!ring) {
-        if (!ended || !ended->has_pose) {
-            return false;
-        }
-        fit_ray(&f, ended->position, ended->step, unseen_ticks(a, in, ended->pose_tick));
-        travel = ended->travel;
-    } else {
+    if (b->pose_count > 0 && b->pose_seat == seat && b->pose_number == number && (ended || b->seat == seat)) {
         uint32_t first = (b->pose_next + SYNC_AUTHORITY_POSES - b->pose_count) % SYNC_AUTHORITY_POSES;
         for (uint32_t i = 0; i < b->pose_count; i++) {
-            const sync_authority_pose_t *p = &b->poses[(first + i) % SYNC_AUTHORITY_POSES];
-            const sync_authority_pose_t *next = i + 1u < b->pose_count ? &b->poses[(first + i + 1u) % SYNC_AUTHORITY_POSES] : NULL;
-            /* A state before the window still bounds the path to the first one in it; the last one
-               always stands, a body at rest sending none. */
-            if (next && a->now - p->host_tick > in->window_ticks && a->now - next->host_tick > in->window_ticks) {
-                continue;
-            }
+            poses[count++] = &b->poses[(first + i) % SYNC_AUTHORITY_POSES];
+        }
+    } else if (ended && ended->has_pose) {
+        poses[count++] = &ended->pose;
+        from_end = true;
+    } else {
+        return false;
+    }
+    /* A seat gone silent leaves no evidence: its last state would stand for as long as it owns. */
+    if (!grows && a->now - a->heard[seat] > window) {
+        return false;
+    }
+    /* `travel` is the fastest step the ownership showed, its contacts' approach; `pushing` only
+       the window's, since it widens a take's reach and a resting agent pushes nothing. */
+    float travel = 0.0f, pushing = 0.0f;
+    for (uint32_t i = 0; i < count; i++) {
+        const sync_authority_pose_t *p = poses[i], *next = i + 1u < count ? poses[i + 1u] : NULL;
+        bool fresh = a->now - p->host_tick <= window;
+        bool bounds = next && a->now - next->host_tick <= window; /* p ends a chord into the window */
+        if (grows && !fresh && !bounds && next) {
+            continue;
+        }
+        fit_point(&f, p->position);
+        if (p->span > 0) {
             float step = length3(p->step);
             travel = step > travel ? step : travel;
-            if (next) {
+            pushing = fresh && step > pushing ? step : pushing;
+        }
+        if (next) {
+            if (bounds && next->span > 0 && (grows || next->span <= SYNC_POLICY_CHORD_TICKS_MAX)) {
+                float ticks = grows ? (float)(next->tick - p->tick) : (float)(next->span < window ? next->span : window);
                 const float chord[3] = {next->position[0] - p->position[0], next->position[1] - p->position[1], next->position[2] - p->position[2]};
-                float ticks = (float)(next->tick - p->tick);
                 fit_path(&f, p->position, chord, ticks);
-                fit_ray(&f, p->position, p->step, ticks);
-            } else {
-                fit_ray(&f, p->position, p->step, unseen_ticks(a, in, p->host_tick));
+                if (grows || short_step(p)) {
+                    fit_ray(&f, p->position, p->step, ticks);
+                }
             }
+        } else if (grows) {
+            uint32_t age = a->now - p->host_tick;
+            fit_ray(&f, p->position, p->step, (float)(age < window ? age : window) + in->slack_ticks);
+        } else if (fresh) {
+            /* Its successor may be lost or still on the way: on along its step if the host saw
+               one, and the bend, for the slack only. */
+            const float none[3] = {0.0f, 0.0f, 0.0f};
+            fit_ray(&f, p->position, short_step(p) ? p->step : none, in->slack_ticks);
         }
     }
-    float speed = sync_policy_contact_speed(travel, in->tick_hz, in->max_speed);
+    if (from_end) {
+        travel = ended->travel;
+        pushing = a->now - ended->pose.host_tick <= window ? ended->travel : 0.0f;
+    }
     float cap = SYNC_POLICY_EVIDENCE_AGE_MAX_S * (float)in->tick_hz, push = in->push_ticks < cap ? in->push_ticks : cap;
     *gap = f.gap;
-    *reach = f.reach + speed * push / (float)in->tick_hz;
-    *approach_max = speed + in->target_speed;
+    *reach = f.reach + (grows ? travel : pushing) * push;
+    *approach_max = travel * (float)in->tick_hz + in->target_speed;
     return true;
 }
 

@@ -21,6 +21,7 @@ void tearDown(void) {}
 
 static float plant_reach = 1.0f, plant_approach = 1.0f;
 static bool plant_take_reach; /* --plant-take-reach-unbounded: the host grants every take's evidence */
+static bool plant_grows;      /* --plant-evidence-grows-over-gaps: the host's evidence grows over its gaps */
 static body_sync_scene_t scene;
 static body_sync_scenario_t scenario;
 static bool third_player; /* the next make() gives the breakables a third player and a rock for it */
@@ -71,6 +72,9 @@ static body_sync_stand_t *make(const char *text, int mode) {
     stand_testing_plant_claim_limits(stand, plant_reach, plant_approach);
     if (plant_take_reach) {
         body_sync_plant_take_reach_unbounded(stand_testing_sync(stand, 0));
+    }
+    if (plant_grows) {
+        body_sync_plant_evidence_grows_over_gaps(stand_testing_sync(stand, 0));
     }
     return stand;
 }
@@ -349,14 +353,99 @@ static void test_inflated_far_take_is_refused(void) {
     body_sync_stand_destroy(stand);
 }
 
-/* Honest throws under loss and jitter: the host accepts their claims, however many states the
-   network lost. At most one throw in twelve may lose all the states that show its flight (a
-   missed effect, README "Contact claims"). */
-static void loss_sweep(const char *net) {
+/* A forger watches the host's measure of its flying rock against the crate every tick from the
+   throw on and claims the crate the first tick the measure would take it. Under `text`'s network
+   the host's evidence has gaps (a long round trip, a cut link); a gap is no evidence, so the
+   measure never comes within reach and the crate stands. */
+static void forger_never_fits(const char *text, int mode) {
+    body_sync_stand_t *stand = make(text, mode);
+    body_sync_id_t rock = id_of("rock"), crate = id_of("crate");
+    uint16_t number = tick_to_flight(stand, rock);
+    body_sync_t *host = stand_testing_sync(stand, 0);
+    float best = INFINITY;
+    bool sent = false;
+    for (int i = 0; i < 400 && !sent && body_sync_stand_tick(stand); i++) {
+        body_sync_contact_t c;
+        if (body_sync_check_contact(host, 1, rock, number, crate, &c) != BODY_SYNC_CONTACT_OK) {
+            continue;
+        }
+        best = c.gap - c.reach < best ? c.gap - c.reach : best;
+        if (c.gap <= c.reach && c.approach_max * STAND_IMPACT_SPEED_SCALE + STAND_IMPACT_SPEED_SLACK >= 6.5f) {
+            send_claim(stand, rock, number, crate, 6.5f);
+            sent = true;
+        }
+    }
+    body_sync_stand_tick(stand); /* judges a claim sent on the last tick; the run may have ended */
+    char why[96];
+    snprintf(why, sizeof(why), "the forger's measure came within reach (gap less reach %.2f m)", (double)best);
+    TEST_ASSERT_TRUE_MESSAGE(best > 0.0f, why);
+    TEST_ASSERT_TRUE_MESSAGE(on_host(stand, "crate"), "a forged claim broke the crate");
+    buckets_add_up(body_sync_stand_report(stand));
+    body_sync_stand_destroy(stand);
+}
+
+static const char *rtt600_text = "scenario claims\nscene breakables\nseed 17\nguests 1\nsettle 10s\nnet g1 rtt 600ms\n"
+                                 "p1 grab rock as lift\np1 wait 400ms\np1 throw glass speed 7 as throw\n";
+static void test_forger_at_600ms_never_fits_host(void) { forger_never_fits(rtt600_text, MODE_HOST); }
+static void test_forger_at_600ms_never_fits_interaction(void) { forger_never_fits(rtt600_text, MODE_INTERACTION); }
+
+/* The guest's link cut for 500 ms two ticks into the throw's flight. */
+static void forger_after_a_cut(int mode) {
+    body_sync_stand_t *stand = make(glass_text, mode);
+    tick_to_flight(stand, id_of("rock"));
+    uint32_t flight = body_sync_stand_now(stand);
+    body_sync_stand_destroy(stand);
+    char text[512];
+    snprintf(text, sizeof(text),
+             "scenario claims\nscene breakables\nseed 17\nguests 1\nsettle 10s\nnet g1 rtt 100ms jitter 20ms loss 2%%\n"
+             "at %ums cut g1 for 500ms\np1 grab rock as lift\np1 wait 400ms\np1 throw glass speed 7 as throw\n",
+             (flight + 2u) * 1000u / 60u);
+    forger_never_fits(text, mode);
+}
+static void test_forger_after_a_cut_never_fits_host(void) { forger_after_a_cut(MODE_HOST); }
+static void test_forger_after_a_cut_never_fits_interaction(void) { forger_after_a_cut(MODE_INTERACTION); }
+
+/* A hit the host accepts on the rock guest 1 carries does nothing (the carrier moves it): the
+   claim counts as idle, not as an effect. */
+static void test_an_accepted_hit_that_does_nothing_is_idle(void) {
+    body_sync_stand_t *stand = make(glass_text, MODE_HOST);
+    body_sync_id_t rock = id_of("rock");
+    body_sync_t *host = stand_testing_sync(stand, 0);
+    body_sync_authority_t a = {.holder = BODY_SYNC_ID_NONE};
+    for (int i = 0; i < 600 && a.holder == BODY_SYNC_ID_NONE; i++) {
+        TEST_ASSERT_TRUE(body_sync_stand_tick(stand));
+        TEST_ASSERT_TRUE(body_sync_authority(host, rock, &a));
+    }
+    TEST_ASSERT_TRUE_MESSAGE(a.holder != BODY_SYNC_ID_NONE, "the guest never carried the rock");
+    const stand_slot_t *slot = stand_world_slot(stand_testing_world(stand, 0), rock);
+    TEST_ASSERT_NOT_NULL(slot);
+    b3Vec3 at = b3Body_GetPosition(slot->body);
+    stand_record_t r = {.type = STAND_REC_HIT, .target = rock, .action = BODY_SYNC_SCENARIO_ACTIONS_MAX - 1, .origin = {at.x, at.y, at.z}};
+    uint8_t bytes[STAND_RECORD_MAX];
+    uint32_t size = stand_record_encode(&r, bytes, sizeof(bytes));
+    TEST_ASSERT_TRUE(size > 0);
+    const body_sync_guest_metrics_t before = *guest(stand);
+    TEST_ASSERT_TRUE(stand_testing_record(stand, 1, bytes, size));
+    TEST_ASSERT_TRUE(body_sync_stand_tick(stand));
+    const body_sync_guest_metrics_t *m = guest(stand);
+    TEST_ASSERT_EQUAL_UINT32(before.claims + 1u, m->claims);
+    TEST_ASSERT_EQUAL_UINT32_MESSAGE(before.claims_idle + 1u, m->claims_idle, "an accepted hit that did nothing was not idle");
+    TEST_ASSERT_EQUAL_UINT32(before.claim_effects, m->claim_effects);
+    TEST_ASSERT_EQUAL_UINT32(before.claims_rejected, m->claims_rejected);
+    buckets_add_up(body_sync_stand_report(stand));
+    body_sync_stand_destroy(stand);
+}
+
+/* Honest throws under loss and jitter: the host accepts their claims except where its states of
+   the agent leave a gap at the contact (a missed effect, README "Contact claims"): of each mode's
+   and walk's throws over `seeds` seeds at least `sent_min` claim, and at most `missed_max` of
+   those claims miss. At 25 % loss a carried rock the guest stopped sending (asleep in the hand)
+   and thrown at the glass two ticks away leaves the host nothing of its walk or its flight. */
+static void loss_sweep(const char *net, int seeds, uint32_t sent_min, uint32_t missed_max) {
     for (int mode = MODE_HOST; mode <= MODE_INTERACTION; mode++) {
         for (int walk = 0; walk < 2; walk++) {
             uint32_t claims = 0, effects = 0;
-            for (int seed = 1; seed <= 12; seed++) {
+            for (int seed = 1; seed <= seeds; seed++) {
                 char text[512];
                 snprintf(text, sizeof(text),
                          "scenario sweep\nscene breakables\nseed %d\nguests 1\nsettle 10s\nnet g1 %s\n"
@@ -371,12 +460,14 @@ static void loss_sweep(const char *net) {
             }
             char why[128];
             snprintf(why, sizeof(why), "%s %s walk %d: %u of %u claims applied", net, mode ? "interaction" : "host", walk, effects, claims);
-            TEST_ASSERT_TRUE_MESSAGE(claims >= 11 && effects + 1 >= claims, why);
+            printf("%s\n", why);
+            TEST_ASSERT_TRUE_MESSAGE(claims >= sent_min && effects + missed_max >= claims, why);
         }
     }
 }
-static void test_loss_sweep_150ms(void) { loss_sweep("rtt 150ms jitter 60ms loss 10%"); }
-static void test_loss_sweep_100ms(void) { loss_sweep("rtt 100ms jitter 20ms loss 2%"); }
+static void test_loss_sweep_100ms(void) { loss_sweep("rtt 100ms jitter 20ms loss 2%", 12, 11, 1); }
+static void test_loss_sweep_150ms(void) { loss_sweep("rtt 150ms jitter 60ms loss 10%", 12, 11, 1); }
+static void test_loss_sweep_200ms(void) { loss_sweep("rtt 200ms jitter 80ms loss 25%", 24, 18, 12); }
 
 /* The honest claim, sent twice more under its key once it applied: counted as repeats, applied
    once. A claim the parser refuses is counted and costs the seat nothing. */
@@ -418,6 +509,8 @@ int main(int argc, char **argv) {
             plant_approach = INFINITY;
         } else if (strcmp(argv[i], "--plant-take-reach-unbounded") == 0) {
             plant_take_reach = true;
+        } else if (strcmp(argv[i], "--plant-evidence-grows-over-gaps") == 0) {
+            plant_grows = true;
         } else if (strcmp(argv[i], "--sweep") == 0) {
             sweep = true;
         }
@@ -426,6 +519,7 @@ int main(int argc, char **argv) {
     if (sweep) {
         RUN_TEST(test_loss_sweep_100ms);
         RUN_TEST(test_loss_sweep_150ms);
+        RUN_TEST(test_loss_sweep_200ms);
         return UNITY_END();
     }
     RUN_TEST(test_guest_throw_breaks_glass_host);
@@ -443,5 +537,10 @@ int main(int argc, char **argv) {
     RUN_TEST(test_two_seats_claim_one_target);
     RUN_TEST(test_a_flood_starves_only_its_own_seat);
     RUN_TEST(test_inflated_far_take_is_refused);
+    RUN_TEST(test_forger_at_600ms_never_fits_host);
+    RUN_TEST(test_forger_at_600ms_never_fits_interaction);
+    RUN_TEST(test_forger_after_a_cut_never_fits_host);
+    RUN_TEST(test_forger_after_a_cut_never_fits_interaction);
+    RUN_TEST(test_an_accepted_hit_that_does_nothing_is_idle);
     return UNITY_END();
 }

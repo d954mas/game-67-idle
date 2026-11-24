@@ -514,8 +514,8 @@ ignores the mode.
   the claimant's agents within reach of the body, by the same rule as a contact
   claim's (below): the agent along the path the host's own taken states of it
   show, never by the velocity they declare, its last state standing while it
-  rests. The reach adds what the body travels and what the agent travels at its
-  fastest taken step over a round trip, a playback delay and a tick: the body
+  rests and its seat is heard. The reach adds what the body travels and what the agent travels at its
+  fastest step taken within the grace over a round trip, a playback delay and a tick: the body
   the guest touched was its copy of the host's, a one-way trip and a delay old,
   with the claim's way back on top, and the second layer may have pushed that
   copy ahead with the agent (`src/sync_policy.h` derives the slop). A take whose agent the host refused, or a forged claim of
@@ -632,19 +632,27 @@ ignores the mode.
   sent a faster velocity than its body showed would widen both limits). The
   host keeps the owner's last 12 taken states of each body (position, the
   sender's tick, its own), past the ownership's end until another ownership's
-  states replace them. A contact lies on the path they show: between two
-  consecutive states, on from a state along the step that led to it (only the
-  contact turns the body) until the next one, or on from the last for the
-  ticks since, at most the claim's grace (a body at rest sends no state, so its
-  last one stands; a moving one sends every tick), plus a playback delay and a
-  tick. The gap is the agent's box from
-  the target's along the nearest such path of the claim's grace; the reach is
-  the take slop, the target's travel over that time and a bend of the path of
-  `SYNC_POLICY_CONTACT_BEND_MS2` (20 m/s^2), the time capped at 1 s; the
-  approach is the agent's fastest travel between those states (a sender's
-  span between two, never under the host's own less the playback delay, capped
-  at the box's speed) plus the target's speed. With no taken state of the
-  ownership in the grace the gap is INFINITY: a throw whose every flight state
+  states replace them. A gap in them is no evidence, never a wider bound: it
+  may cost an effect, never forge one. All of it stands only while the seat is
+  heard within the claim's grace (a body at rest sends no state, so its last
+  one stands as a point; a seat gone silent leaves no evidence). A contact lies
+  at one of those states, or on the path two consecutive ones show while the
+  later is within the grace and they are at most `SYNC_POLICY_CHORD_TICKS_MAX`
+  (4) ticks apart: their chord, or on from the first along the step that led to
+  it (only the contact turns the body); or, for a playback delay and a tick
+  after the last state while it is within the grace (its successor lost, or
+  overtaken by the claim), on along its step. Two states are as far apart as
+  the sender's ticks say, never more than the host's own ticks between them plus
+  the playback delay: stamps far apart buy no time. Farther apart (a sleep, a
+  cut link, withheld states) the two count only as points, and the step that
+  led to the later one extends nothing. The gap is the agent's box from the
+  target's at the nearest of these; the reach is the take slop, the target's
+  travel over that path's time and a bend of the path of
+  `SYNC_POLICY_CONTACT_BEND_MS2` (20 m/s^2): 4.4 cm over a chord, 0.14 m over a
+  slack of 7 ticks, none at a state. The approach is the fastest step of those
+  states (over the sender's span, never under the host's own less the playback
+  delay) plus the target's speed; a step faster than the box's speed is a
+  teleport, refused as evidence, never capped. With no taken state standing the gap is INFINITY: a throw whose every flight state
   the network lost, or that ended before the host heard of it, is a missed
   effect, never a guessed one. The seam's records carry no pose, so a release
   cannot stand in. A guest that acknowledges late raises its measured round trip:
@@ -682,10 +690,16 @@ queue (64), so one seat's flood costs only its own claims, and it keeps each
 seat's judged keys apart. A guest sends its stand records only once its seam
 records of the tick are all out, so a claim never overtakes its release. Every
 claim the host parses lands in one of `claims_overflow`, `claims_repeat`,
-`claims_rejected`, `claims_idle` (accepted, nothing left to do) and
-`claim_effects`, which add up to `claims`; `claims_format` counts what the
-parser refused. Under 150 ms, 60 ms of jitter and 10 % loss every honest throw
-of the sweep is applied in both modes (`test_body_sync_claims --sweep`).
+`claims_rejected`, `claims_idle` (accepted, nothing left to do: no effect, a
+push of a body the host does not simulate) and `claim_effects`, which add up to
+`claims`; `claims_format` counts what the parser refused. The sweep
+(`test_body_sync_claims --sweep`) throws at the glass from rest and after a
+walk, in both modes: at 100 ms, 20 ms of jitter and 2 % loss, and at 150 ms,
+60 ms and 10 %, at most one honest claim in twelve misses; at 200 ms, 80 ms and
+25 % over 24 seeds, 73 of 89 apply. Most of the misses there are a carried rock
+the guest stopped sending once its rest pose was acknowledged (asleep in the
+hand) and threw at the glass two ticks away: the host took nothing of its walk
+or its flight.
 
 ## Running the stand
 

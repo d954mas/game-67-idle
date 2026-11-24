@@ -37,6 +37,11 @@ add_test(NAME test_body_sync_authority_mf_revoked_as_arbitrated
     COMMAND "${CMAKE_COMMAND}" -DEXE=$<TARGET_FILE:test_body_sync_authority> -DARGS=--plant-revoked-as-arbitrated
             "-DCASES=test_contact_revoked_by_an_assign_to_the_host|test_contact_revoked_by_an_assign_to_another_seat|test_contact_revoked_by_an_assign_to_the_same_seat|test_contact_revoked_when_the_seat_left"
             -P "${CMAKE_CURRENT_LIST_DIR}/expect_unity_fail.cmake")
+# The evidence's gap cases must each fail when the evidence grows over gaps again.
+add_test(NAME test_body_sync_authority_mf_evidence_grows_over_gaps
+    COMMAND "${CMAKE_COMMAND}" -DEXE=$<TARGET_FILE:test_body_sync_authority> -DARGS=--plant-evidence-grows-over-gaps
+            "-DCASES=test_evidence_of_a_silent_agent_does_not_grow|test_evidence_of_a_body_that_slept_has_no_long_chord|test_a_stamp_jump_buys_no_long_ray"
+            -P "${CMAKE_CURRENT_LIST_DIR}/expect_unity_fail.cmake")
 body_sync_test(test_body_sync_playback LIBS body_sync_parts)
 body_sync_test(test_body_sync_soft LIBS body_sync_parts)
 body_sync_test(test_body_sync_policy LIBS body_sync_parts)
@@ -60,6 +65,10 @@ add_test(NAME test_body_sync_claims_mf_reach_unbounded
 add_test(NAME test_body_sync_claims_mf_take_reach_unbounded
     COMMAND "${CMAKE_COMMAND}" -DEXE=$<TARGET_FILE:test_body_sync_claims> -DARGS=--plant-take-reach-unbounded
             "-DCASES=test_inflated_far_take_is_refused"
+            -P "${CMAKE_CURRENT_LIST_DIR}/expect_unity_fail.cmake")
+add_test(NAME test_body_sync_claims_mf_evidence_grows_over_gaps
+    COMMAND "${CMAKE_COMMAND}" -DEXE=$<TARGET_FILE:test_body_sync_claims> -DARGS=--plant-evidence-grows-over-gaps
+            "-DCASES=test_forger_at_600ms_never_fits_host|test_forger_after_a_cut_never_fits_host"
             -P "${CMAKE_CURRENT_LIST_DIR}/expect_unity_fail.cmake")
 add_test(NAME test_body_sync_claims_mf_approach_unbounded
     COMMAND "${CMAKE_COMMAND}" -DEXE=$<TARGET_FILE:test_body_sync_claims> -DARGS=--plant-claim-approach-unbounded
@@ -88,8 +97,10 @@ set(BODY_SYNC_IMPLS "body_sync_stand_cli|" "body_sync_stand_cli_stub|stub_")
 
 set(core_tests test_body_sync_logic test_body_sync_playback test_body_sync_soft test_body_sync_policy test_body_sync_wire test_body_sync_stub test_body_sync_seam_real test_body_sync_codec test_body_sync_sender test_body_sync_authority test_body_sync_real
     test_body_sync_stand test_body_sync_checks test_body_sync_authority_mf_revoked_as_arbitrated
+    test_body_sync_authority_mf_evidence_grows_over_gaps
     test_body_sync_claims test_body_sync_claims_mf_approach_scale0 test_body_sync_claims_mf_reach_unbounded
-    test_body_sync_claims_mf_approach_unbounded test_body_sync_claims_mf_take_reach_unbounded)
+    test_body_sync_claims_mf_approach_unbounded test_body_sync_claims_mf_take_reach_unbounded
+    test_body_sync_claims_mf_evidence_grows_over_gaps)
 set(slow_tests test_body_sync_free_step test_body_sync_claims_loss_sweep)
 foreach(impl IN LISTS BODY_SYNC_IMPLS)
     string(REPLACE "|" ";" parts "${impl}")

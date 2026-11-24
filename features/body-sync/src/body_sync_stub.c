@@ -306,7 +306,7 @@ static void store_in(body_sync_t *s, uint32_t slot, uint8_t from, uint32_t tick,
     e->in_tick = tick;
     e->in_ordered = true;
     if (is_host(s)) {
-        sync_authority_received_pose(auth_of(s, slot), from, tick, s->authority.now, 1u, b->position);
+        sync_authority_received_pose(&s->authority, auth_of(s, slot), from, tick, 1u, s->limits.max_speed / (float)s->config.tick_hz, b->position);
     }
     sync_authority_received(auth_of(s, slot), b->hold, b->holder, b->flags);
     sync_authority_received_data(auth_of(s, slot), b->data_size, b->data);

@@ -256,15 +256,16 @@ static void test_contact_after_a_voluntary_release(void) {
     contact_start();
     uint16_t n = own_by_take(&guest, 1);
     const float before[3] = {1.0f, 2.0f, 0.0f}, at[3] = {1.0f, 2.0f, 3.0f};
-    sync_authority_received_pose(sync_authority_body(&host, A), 1, 10, host.now, 0, before);
-    sync_authority_received_pose(sync_authority_body(&host, A), 1, 12, host.now + 2u, 0, at);
+    sync_authority_received_pose(&host, sync_authority_body(&host, A), 1, 10, 0, 10.0f, before);
+    host.now += 2u;
+    sync_authority_received_pose(&host, sync_authority_body(&host, A), 1, 12, 0, 10.0f, at);
     TEST_ASSERT_EQUAL(BODY_SYNC_OK, sync_authority_release(&guest, A));
     deliver(&guest, 1, &host, BODY_SYNC_SEAT_HOST);
     TEST_ASSERT_EQUAL_UINT8(BODY_SYNC_SEAT_HOST, sync_authority_body(&host, A)->seat);
     const sync_authority_ended_t *ended;
     TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_OK, sync_authority_check_contact(&host, 1, A, n, GRACE, &ended));
     TEST_ASSERT_NOT_NULL(ended);
-    TEST_ASSERT_TRUE_MESSAGE(ended->has_pose && ended->position[2] == 3.0f && fabsf(ended->travel - 1.5f) < 1e-5f, "the end lost the seat's last state");
+    TEST_ASSERT_TRUE_MESSAGE(ended->has_pose && ended->pose.position[2] == 3.0f && fabsf(ended->travel - 1.5f) < 1e-5f, "the end lost the seat's last state");
     TEST_ASSERT_EQUAL(BODY_SYNC_CONTACT_STALE, check(1, sync_authority_body(&host, A)->number)); /* the host's number now */
     expect_grace(1, n, "a voluntary end");
 }
@@ -277,33 +278,193 @@ static float ring_travel(const sync_authority_body_t *b) {
     float fastest = 0.0f;
     uint32_t first = (b->pose_next + SYNC_AUTHORITY_POSES - b->pose_count) % SYNC_AUTHORITY_POSES;
     for (uint32_t i = 1; i < b->pose_count; i++) {
-        const float *d = b->poses[(first + i) % SYNC_AUTHORITY_POSES].step;
-        float t = sqrtf(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+        const sync_authority_pose_t *p = &b->poses[(first + i) % SYNC_AUTHORITY_POSES];
+        float t = p->span > 0 ? sqrtf(p->step[0] * p->step[0] + p->step[1] * p->step[1] + p->step[2] * p->step[2]) : 0.0f;
         fastest = t > fastest ? t : fastest;
     }
     return fastest;
 }
 
+static bool plant_grows; /* --plant-evidence-grows-over-gaps: the gap cases must fail */
+static sync_authority_t *path_host;
+
+/* The host's `now`, then a state of `b` from seat 1 (2 ticks of jitter granted, the box's speed
+   50 m/s at 60 Hz). */
+static void take_pose(sync_authority_body_t *b, uint32_t tick, uint32_t now, const float p[3]) {
+    path_host->now = now;
+    sync_authority_received_pose(path_host, b, 1, tick, 2, 50.0f / 60.0f, p);
+}
+
 static void test_pose_travel_is_what_the_host_took(void) {
+    path_host = calloc(1, sizeof(*path_host));
     sync_authority_body_t *b = calloc(1, sizeof(*b));
-    const float p0[3] = {0.0f, 0.0f, 0.0f}, p1[3] = {2.0f, 0.0f, 0.0f};
+    const float p0[3] = {0.0f, 0.0f, 0.0f}, p1[3] = {0.7f, 0.0f, 0.0f};
     TEST_ASSERT_TRUE(ring_travel(b) == 0.0f);
-    sync_authority_received_pose(b, 1, 100, 500, 2, p0);
+    take_pose(b, 100, 500, p0);
     TEST_ASSERT_TRUE(ring_travel(b) == 0.0f); /* one state shows no travel */
-    sync_authority_received_pose(b, 1, 101, 512, 2, p1);
-    TEST_ASSERT_TRUE(fabsf(ring_travel(b) - 0.2f) < 1e-6f); /* 12 ticks seen, 2 of jitter */
-    sync_authority_received_pose(b, 1, 111, 513, 2, p0);
-    TEST_ASSERT_TRUE(fabsf(ring_travel(b) - 0.2f) < 1e-6f); /* the sender's longer span counts */
-    sync_authority_received_pose(b, 1, 111, 513, 2, p1);
-    TEST_ASSERT_TRUE(fabsf(ring_travel(b) - 2.0f) < 1e-6f); /* no span reads as one tick */
+    take_pose(b, 101, 512, p1);
+    TEST_ASSERT_TRUE(fabsf(ring_travel(b) - 0.07f) < 1e-6f); /* 12 ticks seen, 2 of jitter */
+    TEST_ASSERT_EQUAL_UINT32(1, b->poses[1].span);            /* the sender's span, the shorter */
+    take_pose(b, 111, 513, p0);
+    TEST_ASSERT_TRUE(fabsf(ring_travel(b) - 0.07f) < 1e-6f); /* the sender's longer span counts */
+    TEST_ASSERT_EQUAL_UINT32(3, b->poses[2].span);            /* stamps 10 apart taken 1 apart: 1 + 2 of jitter */
+    take_pose(b, 111, 513, p1);
+    TEST_ASSERT_TRUE(fabsf(ring_travel(b) - 0.7f) < 1e-6f); /* no span reads as one tick */
     for (uint32_t i = 0; i < SYNC_AUTHORITY_POSES; i++) {
-        sync_authority_received_pose(b, 1, 120 + i, 520 + i, 2, p0);
+        take_pose(b, 120 + i, 520 + i, p0);
     }
     TEST_ASSERT_TRUE(ring_travel(b) == 0.0f); /* the jump left the ring */
-    sync_authority_received_pose(b, 2, 5, 530, 2, p1);
+    path_host->now = 530;
+    sync_authority_received_pose(path_host, b, 2, 5, 2, 50.0f / 60.0f, p1);
     TEST_ASSERT_EQUAL_UINT8(1, b->pose_count);
     TEST_ASSERT_EQUAL_UINT8(2, b->pose_seat);
     free(b);
+    free(path_host);
+}
+
+/* ---- the evidence: where a seat's agent may have touched, from what the host took of it ---- */
+
+static sync_authority_body_t *path_body, *path_other;
+static float path_push; /* the scene's push_ticks: a take's, 0 for a contact */
+
+static void path_start(void) {
+    path_host = calloc(1, sizeof(*path_host));
+    path_body = calloc(1, sizeof(*path_body));
+    path_other = calloc(1, sizeof(*path_other));
+    path_host->plant_evidence_grows_over_gaps = plant_grows;
+    path_body->seat = path_other->seat = 1;
+    path_body->number = path_other->number = 3;
+    path_push = 0.0f;
+}
+
+static void path_end(void) {
+    free(path_host);
+    free(path_body);
+    free(path_other);
+}
+
+typedef struct path_verdict {
+    bool any;
+    float gap, reach, approach;
+} path_verdict_t;
+
+/* The measure of a contact of the 0.24 m agent with a resting box of half size `half` centred at
+   (x, y, z), a 20-tick window and a 7-tick slack, `path_push` ticks of push. */
+static path_verdict_t measure_box(float x, float y, float z, float half) {
+    sync_contact_scene_t in = {.tick_hz = 60, .max_speed = 50.0f, .slack_ticks = 7.0f, .window_ticks = 20, .push_ticks = path_push};
+    const float c[3] = {x, y, z};
+    for (int i = 0; i < 3; i++) {
+        in.agent_lo[i] = -0.12f;
+        in.agent_hi[i] = 0.12f;
+        in.target_lo[i] = c[i] - half;
+        in.target_hi[i] = c[i] + half;
+    }
+    path_verdict_t v;
+    v.any = sync_authority_path_measure(path_host, path_body, 1, NULL, &in, &v.gap, &v.reach, &v.approach);
+    return v;
+}
+
+static path_verdict_t measure_at(float x, float y, float z) { return measure_box(x, y, z, 0.3f); }
+
+static bool accepts(path_verdict_t v) { return v.any && v.gap <= v.reach; }
+
+/* Three states at 9 m/s along x, a tick apart. */
+static void flying_states(void) {
+    for (uint32_t i = 0; i < 3; i++) {
+        const float p[3] = {0.15f * (float)i, 0.0f, 0.0f};
+        take_pose(path_body, 100 + i, 500 + i, p);
+    }
+}
+
+/* The path the host saw: a chord over three states honest loss took, the step on from the last
+   state for the slack; a chord over five is a gap, only its two states count. Small targets, so
+   the states alone do not reach them. */
+static void test_evidence_follows_the_path_the_host_saw(void) {
+    path_start();
+    flying_states();
+    const float on[3] = {0.9f, 0.0f, 0.0f}, far[3] = {1.8f, 0.0f, 0.0f};
+    take_pose(path_body, 106, 506, on); /* the states of ticks 103-105 lost */
+    path_host->now = 507;
+    TEST_ASSERT_TRUE_MESSAGE(accepts(measure_box(0.6f, 0.0f, 0.27f, 0.05f)), "a contact beside a chord over lost states");
+    TEST_ASSERT_TRUE_MESSAGE(accepts(measure_box(1.8f, 0.0f, 0.0f, 0.05f)), "a contact on along the last step within the slack");
+    TEST_ASSERT_FALSE_MESSAGE(accepts(measure_box(2.8f, 0.0f, 0.0f, 0.05f)), "a contact past the slack");
+    TEST_ASSERT_TRUE(fabsf(measure_at(0.0f, 0.0f, 3.0f).approach - 9.0f) < 1e-3f); /* the fastest step */
+    take_pose(path_body, 112, 512, far);
+    path_host->now = 513;
+    TEST_ASSERT_FALSE_MESSAGE(accepts(measure_box(1.3f, 0.0f, 0.27f, 0.05f)), "a chord over a gap counted");
+    TEST_ASSERT_TRUE_MESSAGE(accepts(measure_box(1.8f, 0.0f, 0.27f, 0.05f)), "a state after a gap did not stand");
+    path_end();
+}
+
+/* A seat that stops sending leaves its agent's last state: after 1 s, 10 s and 100 s it is no
+   evidence at all; while the seat is still heard it stands as a point with the slop, never grown
+   by the time since. */
+static void test_evidence_of_a_silent_agent_does_not_grow(void) {
+    path_start();
+    flying_states();
+    const uint32_t after[3] = {60, 600, 6000};
+    const float elsewhere[3] = {5.0f, 0.0f, 5.0f};
+    for (int k = 0; k < 3; k++) {
+        path_host->now = 502 + after[k];
+        path_verdict_t v = measure_at(2.3f, 0.0f, 0.0f);
+        TEST_ASSERT_FALSE_MESSAGE(accepts(v), "a silent agent took a target 2 m ahead");
+        TEST_ASSERT_TRUE(v.reach <= SYNC_POLICY_TAKE_SLOP_M);
+        TEST_ASSERT_FALSE_MESSAGE(accepts(measure_at(0.3f, 0.0f, 0.5f)), "a silent agent's last state stood");
+        take_pose(path_other, 900 + after[k], path_host->now, elsewhere); /* the seat heard again */
+        path_push = 20.0f; /* a take's: the steps before the window push nothing */
+        v = measure_at(2.3f, 0.0f, 0.0f);
+        TEST_ASSERT_FALSE_MESSAGE(accepts(v), "a resting agent took a target 2 m ahead");
+        TEST_ASSERT_TRUE(v.reach <= SYNC_POLICY_TAKE_SLOP_M);
+        path_push = 0.0f;
+        TEST_ASSERT_TRUE_MESSAGE(accepts(measure_at(0.3f, 0.0f, 0.5f)), "a resting agent's last state did not stand");
+    }
+    path_end();
+}
+
+/* A body that slept (one rest state) and woke 5 s later: the two states are points, no chord
+   between them, so a contact 4 m or 8 m to their side is none of theirs. The woken state's reach
+   is the slop and the bend over the 7-tick slack after it, nothing of the 5 s. */
+static void test_evidence_of_a_body_that_slept_has_no_long_chord(void) {
+    path_start();
+    const float r0[3] = {0.0f, 0.0f, 0.0f}, r1[3] = {0.15f, 0.0f, 0.0f};
+    take_pose(path_body, 100, 500, r0);
+    take_pose(path_body, 400, 800, r1);
+    path_host->now = 801;
+    path_verdict_t v = measure_at(0.0f, 0.0f, 4.0f);
+    TEST_ASSERT_FALSE_MESSAGE(accepts(v), "a woken body took a target 4 m to its side");
+    TEST_ASSERT_FALSE_MESSAGE(accepts(measure_at(0.0f, 0.0f, 8.0f)), "a woken body took a target 8 m to its side");
+    const float slack_s = 7.0f / 60.0f;
+    TEST_ASSERT_TRUE(v.reach <= SYNC_POLICY_TAKE_SLOP_M + 0.5f * SYNC_POLICY_CONTACT_BEND_MS2 * slack_s * slack_s + 1e-4f);
+    path_end();
+}
+
+/* Stamps 60 ticks on for a state the host took a tick after the one before: the chord's time is
+   the host's span plus the jitter, so the step on from the state before runs 3 ticks, not 60. */
+static void test_a_stamp_jump_buys_no_long_ray(void) {
+    path_start();
+    flying_states();
+    const float on[3] = {0.45f, 0.0f, 0.0f};
+    take_pose(path_body, 162, 503, on);
+    path_host->now = 504;
+    TEST_ASSERT_FALSE_MESSAGE(accepts(measure_at(3.3f, 0.0f, 0.0f)), "a stamp jump stretched the step 3 m");
+    TEST_ASSERT_FALSE_MESSAGE(accepts(measure_at(0.3f, 0.0f, 4.0f)), "a stamp jump bent the chord 4 m");
+    path_end();
+}
+
+/* A step faster than the box's speed is a teleport: no evidence of a path into it and no speed.
+   The state itself is where the host took it. */
+static void test_a_teleport_step_is_refused(void) {
+    path_start();
+    const float a[3] = {0.0f, 0.0f, 0.0f}, b[3] = {5.0f, 0.0f, 0.0f};
+    take_pose(path_body, 100, 500, a);
+    take_pose(path_body, 101, 501, b);
+    TEST_ASSERT_EQUAL_UINT32(0, path_body->poses[1].span);
+    path_host->now = 502;
+    TEST_ASSERT_FALSE_MESSAGE(accepts(measure_at(2.5f, 0.0f, 0.0f)), "a teleport's chord counted");
+    path_verdict_t v = measure_at(5.0f, 0.0f, 0.5f);
+    TEST_ASSERT_TRUE(accepts(v));
+    TEST_ASSERT_TRUE_MESSAGE(v.approach == 0.0f, "a teleport's step counted as speed");
+    path_end();
 }
 
 /* After a voluntary end another seat takes the body: the past flight's claim keeps its grace,
@@ -642,6 +803,7 @@ static void test_evidence_is_capped_and_broken_boxes_never_touch(void) {
 int main(int argc, char **argv) {
     for (int i = 1; i < argc; i++) {
         plant_revoked_as_arbitrated = plant_revoked_as_arbitrated || strcmp(argv[i], "--plant-revoked-as-arbitrated") == 0;
+        plant_grows = plant_grows || strcmp(argv[i], "--plant-evidence-grows-over-gaps") == 0;
     }
     UNITY_BEGIN();
     RUN_TEST(test_routes_and_record_kinds);
@@ -653,6 +815,11 @@ int main(int argc, char **argv) {
     RUN_TEST(test_contact_of_a_body_owned_now);
     RUN_TEST(test_contact_after_a_voluntary_release);
     RUN_TEST(test_pose_travel_is_what_the_host_took);
+    RUN_TEST(test_evidence_follows_the_path_the_host_saw);
+    RUN_TEST(test_evidence_of_a_silent_agent_does_not_grow);
+    RUN_TEST(test_evidence_of_a_body_that_slept_has_no_long_chord);
+    RUN_TEST(test_a_stamp_jump_buys_no_long_ray);
+    RUN_TEST(test_a_teleport_step_is_refused);
     RUN_TEST(test_contact_after_a_take_by_another_seat);
     RUN_TEST(test_contact_after_a_flight_returns);
     RUN_TEST(test_contact_of_a_retake_before_the_release_is_heard);

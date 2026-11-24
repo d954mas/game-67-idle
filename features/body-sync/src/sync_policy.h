@@ -134,13 +134,17 @@ float sync_policy_take_reach(float agent_speed, float body_speed, float age_s);
 /* Ticks the host's copy of a guest's agent trails that guest: a round trip, a playback delay
    and a tick, at most SYNC_POLICY_EVIDENCE_AGE_MAX_S. */
 float sync_policy_evidence_ticks(float round_trip_ticks, float delay_ticks, uint32_t tick_hz);
-/* A contact claim's agent speed from what the host took of it, never from the velocity its owner
-   declares: its fastest travel between taken states (metres a tick) in m/s, at most `max_speed`. */
 /* How far a body's own path may bend from its straight line before its contact, m/s^2: gravity
-   (the stand's 12) with room for a game's stronger one and drag. Over the longest path a claim
-   reads (1 s) it allows 10 m, over a typical one (a tenth) 0.1 m. */
+   (the stand's 12) with room for a game's stronger one and drag. It applies only where the host
+   saw the path: over a short chord (4 ticks: 4.4 cm) and over the slack after the last state (a
+   playback delay and a tick: 0.14 m at 7 ticks). */
 #define SYNC_POLICY_CONTACT_BEND_MS2 20.0f
-float sync_policy_contact_speed(float travel_per_tick, uint32_t tick_hz, float max_speed);
+/* The longest spacing, ticks, of two taken states whose chord still shows the path between them.
+   A longer one is a gap in the host's evidence: its two states count only as points, never as a
+   path grown over the gap. At 25 % loss three states lost in a row come once in 64; an awake body
+   slower than SYNC_FAST_SPEED goes out every 1-4 ticks and moves at most 3.4 cm between two of its
+   states (sync_sender.h), inside the slop of its points. */
+#define SYNC_POLICY_CHORD_TICKS_MAX 4u
 /* The distance between two axis-aligned boxes given by their low and high corners, 0 where
    they overlap: the evidence's gap. INFINITY for a corner that is not finite, so a broken pose
    never reads as touching. */
