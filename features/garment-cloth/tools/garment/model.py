@@ -210,17 +210,38 @@ def clips(manifest):
 
 def seated(manifest):
     """Names of the seated clips of an animation manifest (`game.state` "seated"). An outfit is shown seated only in
-    those its declaration clears (`seated`), so they are the only seated clips its build and gates read."""
+    those its declaration clears (`seated`), so they are the only seated clips its build and gates read (`gated`)."""
     import json
     doc = json.loads(Path(manifest).read_text(encoding="utf-8"))
     return {a["name"] for a in doc["animations"] if a.get("game", {}).get("state") == "seated"}
 
 
-def shown(manifest, cleared):
-    """[(name, path)] of the clips an outfit is shown in: every clip of the manifest but the seated ones not in
-    `cleared`."""
-    drop = seated(manifest) - set(cleared)
-    return [(name, path) for name, path in clips(manifest) if name not in drop]
+def gameplay(manifest):
+    """Names of the clips a game may show on any outfit (`game.gameplay` true in the manifest): the one source both the
+    game's code and an outfit's gates read."""
+    import json
+    doc = json.loads(Path(manifest).read_text(encoding="utf-8"))
+    return {a["name"] for a in doc["animations"] if a.get("game", {}).get("gameplay")}
+
+
+def gated(manifest, cleared, places=()):
+    """Names of the clips an outfit is gated on, in manifest order: the gameplay clips and the clips the game's places
+    show it in (`places`), and the seated clips its declaration clears; a seated clip it is not cleared for is none of
+    them, wherever a place plays it (the cook reports that place). A name the manifest lacks is refused."""
+    names = [name for name, _ in clips(manifest)]
+    unknown = sorted((set(places) | set(cleared)) - set(names))
+    if unknown:
+        raise ValueError(f"clips {unknown} are not in {manifest}")
+    seats = seated(manifest)
+    wanted = (gameplay(manifest) | set(places)) - seats | set(cleared)
+    return [name for name in names if name in wanted]
+
+
+def shown(manifest, names):
+    """[(name, path)] of the named clips of a manifest, in its order: the clips an outfit is gated on (`gated`, as its
+    sidecar records them)."""
+    names = set(names)
+    return [(name, path) for name, path in clips(manifest) if name in names]
 
 
 def skin_points(points, weights, matrices):

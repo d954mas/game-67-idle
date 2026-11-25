@@ -21,6 +21,7 @@ import numpy as np
 from garment_blob import decode
 from . import body as body_maps
 from . import cook
+from . import gates as G
 from . import host as H
 from . import model as M
 
@@ -77,15 +78,115 @@ def drift(host, decoded):
     return out
 
 
+class LayerRoom:
+    """The layer rule on a corrective's configuration (README, "Correctives"). The bake drapes each piece against the
+    body alone, so an outer drape can end in the inner one; the rule the rest configuration holds must hold here too.
+    Over the outer vertices whose body direction meets the inner piece at rest (the pairs gate G8 reads), and over the
+    corrective's key and every frame of the clips the game plays on it, the narrowest gap g between the corrected
+    references must leave the inner vertex its max distance and both fabrics: g >= r_in + t. Where it is thinner the
+    outer drape moves out along its body direction by the difference, and the outer's backstop distance at the key is
+    the room left, d = g - r_in - t, so neither may reach the other at the key or anywhere in those clips."""
+
+    MARGIN = body_maps.RESOLUTION
+    PASSES = 8
+
+    def __init__(self, sc, pairs, body, thicknesses, frames):
+        index = {p.id: k for k, p in enumerate(sc.pieces)}
+        self.frames = frames
+        self.dense = []
+        for p in sc.pieces:
+            w = np.zeros((len(p.points), len(sc.joint_names)))
+            np.add.at(w, (np.arange(len(w))[:, None], p.joints.astype(int)), p.weights.astype(float))
+            self.dense.append(w)
+        self.pieces = sc.pieces
+        self.pairs = []
+        for outer, inner in pairs:
+            o, i = sc.piece(outer), sc.piece(inner)
+            t_hit, face, bary = G.layer_hits(o, i, (body.points, body.faces))
+            hit = np.flatnonzero(np.isfinite(t_hit) & (o.r > 0))
+            corners = i.faces[face[hit]]
+            room = np.einsum("nk,nk->n", bary[hit], i.r.astype(float)[corners]) + thicknesses[index[outer]] + \
+                thicknesses[index[inner]]
+            self.pairs.append(dict(name=f"{outer}>{inner}", outer=index[outer], inner=index[inner], hit=hit,
+                                   corners=corners, bary=bary[hit], room=room))
+
+    def _configuration(self, k, shape):
+        p = self.pieces[k]
+        return p.points.astype(float) + shape[0], p.b.astype(float) + shape[1]
+
+    def gaps(self, shapes, pair):
+        """(narrowest gap over the frames, the outer body direction posed at the key) at the pair's hit vertices."""
+        hit, o, i = pair["hit"], pair["outer"], pair["inner"]
+        points_o, b_o = self._configuration(o, shapes[o])
+        points_i, _ = self._configuration(i, shapes[i])
+        outer = M.skin_points(points_o[hit], self.dense[o][hit], self.frames)
+        toward = M.skin_directions(b_o[hit], self.dense[o][hit], self.frames)
+        posed = M.skin_points(points_i, self.dense[i], self.frames)
+        inner = np.einsum("nk,fnkj->fnj", pair["bary"], posed[:, pair["corners"]])
+        return np.einsum("fnj,fnj->fn", inner - outer, toward).min(0), toward[0]
+
+    def separate(self, drape, shapes):
+        """The drape with each outer vertex too close to the inner moved out at the key by what it lacks, or None when
+        every gap already holds."""
+        moved = [np.array(x, float) for x in drape]
+        short = False
+        for pair in self.pairs:
+            g, toward = self.gaps(shapes, pair)
+            lack = pair["room"] + self.MARGIN - g
+            thin = lack > 0
+            if thin.any():
+                short = True
+                moved[pair["outer"]][pair["hit"][thin]] -= (lack[thin] + self.MARGIN)[:, None] * toward[thin]
+        return moved if short else None
+
+    def distances(self, shapes, moved):
+        """The shapes with the outer key backstop distance set to the room the layer rule leaves, and per pair the
+        record: vertices moved, the largest move (mm) and vertices still short of the room."""
+        out = [tuple(np.array(a, float) for a in s) for s in shapes]
+        record = {}
+        for pair in self.pairs:
+            g, _ = self.gaps(shapes, pair)
+            key = out[pair["outer"]][2]
+            key[pair["hit"], 0] = np.maximum(g - pair["room"] - self.MARGIN, 0.0)
+            shift = moved[pair["outer"]][pair["hit"]]
+            record[pair["name"]] = dict(moved=int(np.sum(shift > 0)),
+                                        moved_mm=round(float(shift.max(initial=0)) * 1000, 2),
+                                        short=int(np.sum(g < pair["room"])), vertices=int(len(pair["hit"])))
+        return out, record
+
+
+def drape_shapes(decoded, key, skeleton, drape, maps, layers=None):
+    """The corrective configuration of a drape in the key pose, [(delta, direction delta, key backstop (d, R))] per
+    piece, with the layer rule's room made at the key (`layers`, a LayerRoom) and its record ({} without layers).
+    maps: (piece index, drape points) -> (b, d, R), the backstop rule on that configuration."""
+    drape = [np.asarray(x, float) for x in drape]
+    moved = [np.zeros(len(x)) for x in drape]
+    for k in range(LayerRoom.PASSES + 1):
+        measured = [maps(p, x) for p, x in enumerate(drape)]
+        turned = H.deltas(decoded, key, skeleton, drape, [b for b, _, _ in measured])
+        shapes = [(delta, turn, np.column_stack([d, R])) for (delta, turn), (_, d, R) in zip(turned, measured)]
+        if layers is None:
+            return shapes, {}
+        # Moving the outer turns its body direction, the line the gap is measured on: measure again until it holds.
+        again = layers.separate(drape, shapes) if k < LayerRoom.PASSES else None
+        if again is None:
+            break
+        for p, (a, b) in enumerate(zip(drape, again)):
+            moved[p] += np.linalg.norm(b - a, axis=1)
+        drape = again
+    return layers.distances(shapes, moved)
+
+
 def bake(blob, index, skeleton, rest, key, convexes, body, thicknesses, max_passes=MAX_PASSES, hold_s=2.0,
-         procedure=None, floor=FLOOR, library=None):
+         procedure=None, floor=FLOOR, library=None, layers=None):
     """Bake corrective `index` of a blob in the key pose (both model-space poses in the skeleton's order) among the
     convexes (plane rows, actor space; the floor stays put, the others rise from below): ([(delta, direction delta,
     key backstop (d, R)) per piece], record). body: the outfit's body posed in the key (body_rule measures the maps),
     or a function (piece index, drape points) -> (b, d, R), the build's own rule on that configuration;
     thicknesses: each piece's fabric thickness, the drift the corrective must reach; procedure: the spec's bake times
-    (C.2), each overridable. Every pass stores its drape with its own body direction and backstop, so the hold the
-    drift is measured in is the one the game gives."""
+    (C.2), each overridable; layers: a LayerRoom the configuration of every pass keeps (its record goes into the
+    bake's `layers`). Every pass stores its drape with its own body direction and backstop, so the hold the drift is
+    measured in is the one the game gives."""
     procedure = {**dict(settle_in_s=0.5, ramp_s=1.0, rise_s=0.5, settle_s=2.0, hz=H.POSE_HZ), **(procedure or {})}
     decoded = decode(blob)
     rising = [np.asarray(c, float).reshape(-1, 4) for c in convexes]
@@ -95,17 +196,12 @@ def bake(blob, index, skeleton, rest, key, convexes, body, thicknesses, max_pass
     thickness = np.asarray(thicknesses, float)
     maps = body if callable(body) else body_rule(decoded, body, thickness)
 
-    def shapes_of(drape):
-        measured = [maps(p, x) for p, x in enumerate(drape)]
-        moved = H.deltas(decoded, key, skeleton, drape, [b for b, _, _ in measured])
-        return [(delta, turn, np.column_stack([d, R])) for (delta, turn), (_, d, R) in zip(moved, measured)]
-
     passes = []
     with H.Host(blob, skeleton, library) as host:
         drape = H.bake(host, rest, key, rising=rising, fixed=fixed, thickness=float(thickness.max()),
                        settle_in_s=procedure["settle_in_s"], ramp_s=procedure["ramp_s"], rise_s=procedure["rise_s"],
                        settle_s=procedure["settle_s"], hz=procedure["hz"])
-        shapes = shapes_of(drape)
+        shapes, layer_record = drape_shapes(decoded, key, skeleton, drape, maps, layers)
         kept, scores = [], []
         for k in range(max_passes):
             for p, shape in enumerate(shapes):
@@ -117,16 +213,19 @@ def bake(blob, index, skeleton, rest, key, convexes, body, thicknesses, max_pass
             measured = np.asarray(drift(host, decoded))
             passes.append([round(float(v) * 1000, 2) for v in measured])
             scores.append(float(np.max(measured / thickness)))
-            kept.append((shapes, measured))
+            kept.append((shapes, measured, layer_record))
             if scores[-1] <= 1.0:
                 break
-            shapes = shapes_of([host.positions(p) for p in range(len(host.vertices))])
+            settled = [host.positions(p) for p in range(len(host.vertices))]
+            shapes, layer_record = drape_shapes(decoded, key, skeleton, settled, maps, layers)
     chosen = best_pass(scores)
-    score, (shapes, measured) = scores[chosen], kept[chosen]
+    score, (shapes, measured, layer_record) = scores[chosen], kept[chosen]
     record = dict(passes=len(passes), kept_pass=chosen + 1, converged=score <= 1.0,
                   drift_mm={p["id"]: round(float(v) * 1000, 2) for p, v in zip(decoded["pieces"], measured)},
                   thickness_mm={p["id"]: round(float(t) * 1000, 2) for p, t in zip(decoded["pieces"], thickness)},
                   drift_by_pass_mm=passes, procedure=procedure, hold_s=hold_s)
+    if layers is not None:
+        record["layers"] = layer_record
     return shapes, record
 
 
@@ -146,17 +245,38 @@ def key_of(outfit, record):
     return skeleton.pose({n: m[0] for n, m in worlds.items()}), worlds
 
 
+def played_on(outfit, name):
+    """{clip: path} of the clips the game shows the outfit in that play corrective `name` (manifest `game.corrective`)."""
+    paths = outfit.clip_paths()
+    return {clip: paths[clip] for clip, entry in outfit.clip_entries().items()
+            if entry.get("game", {}).get("corrective") == name and clip in paths}
+
+
 def bake_inputs(outfit, request):
-    """{relative path: sha256} of the files a bake reads besides the pieces: the colliders, and for a clip key the clip
-    manifest and the clip."""
+    """{relative path: sha256} of the files a bake reads besides the pieces: the colliders, for a clip key the clip
+    manifest and the clip, and the clips the game plays the corrective on (the layer rule's frames)."""
     outfit._input(outfit.colliders)
+    clips = dict(played_on(outfit, request["name"]))
     if "clip" in request:
-        outfit._input(dict(outfit.clip_paths())[request["clip"]])
+        clips[request["clip"]] = dict(outfit.clip_paths())[request["clip"]]
     names = [Path(outfit.colliders).resolve().relative_to(outfit.root).as_posix()]
-    if "clip" in request:
-        names += [Path(outfit.clips).resolve().relative_to(outfit.root).as_posix(),
-                  Path(dict(outfit.clip_paths())[request["clip"]]).resolve().relative_to(outfit.root).as_posix()]
+    if clips:
+        names.append(Path(outfit.clips).resolve().relative_to(outfit.root).as_posix())
+    for clip in sorted(clips):
+        outfit._input(clips[clip])
+        names.append(Path(clips[clip]).resolve().relative_to(outfit.root).as_posix())
     return {n: outfit.inputs[n] for n in names}
+
+
+def layer_frames(outfit, sc, name, worlds):
+    """Skin matrices (frames, joints, 4, 4) the layer rule reads at corrective `name`: its key first, then every key
+    frame of the clips the game plays it on."""
+    glb, ibm = outfit.model.glb, sc.inverse_bind_matrices()
+    frames = [M.skin_matrices(glb, sc.joint_names, ibm, worlds)]
+    for _, path in sorted(played_on(outfit, name).items()):
+        animation = M.load(path)
+        frames.append(M.skin_matrices(glb, sc.joint_names, ibm, M.clip_worlds(glb, animation, animation.key_times())))
+    return np.concatenate(frames)
 
 
 def resolve(outfit, pieces, records, request, committed):
@@ -191,8 +311,9 @@ def resolve(outfit, pieces, records, request, committed):
 
     def maps(piece, points):
         return outfit.backstop_at(pieces[piece], points, body)
+    layers = LayerRoom(sc, outfit.layer_rules, outfit.body, thicknesses, layer_frames(outfit, sc, name, worlds))         if outfit.layer_rules else None
     shapes, record = bake(blob, sc.corrective_names.index(name), skeleton, H.rest_pose(glb, skeleton), key_pose, convexes,
-                          maps, thicknesses, max_passes=request["max_passes"])
+                          maps, thicknesses, max_passes=request["max_passes"], layers=layers)
     if not record["converged"]:
         raise ValueError(f"corrective {name!r} did not converge in {record['passes']} passes: drift "
                          f"{record['drift_mm']} mm against fabric thickness {record['thickness_mm']} mm; the drape is "

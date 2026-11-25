@@ -38,18 +38,21 @@ from garment.sidecar import read  # noqa: E402
 
 
 
-def build(script):
-    """Run the script with its sidecar written to scratch: (outfit, bytes)."""
+def build(script, correctives=True):
+    """Run the script with its sidecar written to scratch: (outfit, bytes). correctives=False stops the build before
+    its correctives (Outfit.resolve), for a reader of the maps alone: the collider fit, whose colliders a bake reads."""
     with tempfile.TemporaryDirectory() as scratch:
-        previous = os.environ.get("GARMENT_SIDECAR_DIR")
-        os.environ["GARMENT_SIDECAR_DIR"] = scratch
+        settings = {"GARMENT_SIDECAR_DIR": scratch, **({} if correctives else {"GARMENT_CORRECTIVES": "0"})}
+        previous = {k: os.environ.get(k) for k in settings}
+        os.environ.update(settings)
         try:
             runpy.run_path(str(script), run_name="__main__")
         finally:
-            if previous is None:
-                del os.environ["GARMENT_SIDECAR_DIR"]
-            else:
-                os.environ["GARMENT_SIDECAR_DIR"] = previous
+            for k, v in previous.items():
+                if v is None:
+                    del os.environ[k]
+                else:
+                    os.environ[k] = v
         outfit = Outfit.instances[-1]
         written = sorted(Path(scratch).glob("*.cloth.glb"))
         if len(written) != 1:
@@ -67,6 +70,10 @@ def rebuild(fresh, committed_path, root, script):
     from garment.cook import stale
     old, new = read(committed), read(fresh)
     changed = stale(old, root, script) + [f"build record: {d}" for d in Bd.differences(old.build, new.build)]
+    # The places a game shows the outfit in are a script argument, not a hashed file: name what they changed.
+    was, now = set(old.check.get("shown", [])), set(new.check.get("shown", []))
+    if was != now:
+        changed.append(f"clips the game shows the outfit in: added {sorted(now - was)}, removed {sorted(was - now)}")
     if changed:
         return dict(finding, failed=True, reason="stale", inputs=sorted(set(changed)))
     return dict(finding, failed=True, reason="same script and inputs, different bytes: the build is not deterministic")

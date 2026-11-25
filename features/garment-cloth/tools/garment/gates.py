@@ -49,7 +49,7 @@ ALL_GATES = ("G1", "G2", "G3", "bind") + PER_FRAME + ("G9", "crossfade")
 # The first declared stage at which a finding fails the check and the cook; absent: a report.
 ENFORCED_FROM = {"rebuild": 1, "stale": 1, "G1": 1, "G3": 1, "G9": 1, "bake": 1,
                  "G2": 2, "bind": 2, "G4": 2, "G5": 2, "G6": 2, "G7": 2, "G8": 2, "G10": 2, "derive": 2,
-                 "seated": 2}
+                 "shown": 2}
 # Gates decided against the body surface itself: on the fallback body (with holes) they cannot be decided.
 NEEDS_COMPLETE_BODY = ("G4", "G10")
 # Gates the cook runs from the sidecar and the models alone; the per-frame gates need the body and the clips.
@@ -66,18 +66,18 @@ def enforced_gates(stage):
     return {g for g in ALL_GATES if enforced(g, stage)}
 
 
-def seated_uses(outfit, cleared, uses, seated, stage):
-    """The finding `seated` of an outfit on the places a game shows it (`uses`: [(where, clip)]): failed where one seats
-    it in a seated clip (`seated`: the manifest's) its declaration does not clear, decided for `stage`. The outfit's
-    gates never read such a clip, so nothing vouches for the cloth there."""
+def shown_uses(outfit, gated, uses, stage):
+    """The finding `shown` of an outfit on the places a game shows it (`uses`: [(where, clip)]): failed where one plays
+    it in a clip outside the clips its gates read (`gated`, as its sidecar records them), decided for `stage`. Nothing
+    vouches for the cloth there."""
+    gated = set(gated)
     bad = {}
     for where, clip in uses:
-        if clip in seated and clip not in cleared:
+        if clip not in gated:
             bad.setdefault(clip, []).append(where)
-    used = sorted({clip for _, clip in uses if clip in seated})
-    return decide([dict(gate="seated", piece=outfit, enforced=False, failed=bool(bad), frames=1, samples=len(uses),
+    return decide([dict(gate="shown", piece=outfit, enforced=False, failed=bool(bad), frames=1, samples=len(uses),
                         frames_failed=int(bool(bad)), clips={clip: sorted(set(w)) for clip, w in sorted(bad.items())},
-                        counts=dict(cleared=sorted(cleared), seated_in=used), worst=None)], stage, True)[0]
+                        counts=dict(gated=len(gated), uses=len(uses)), worst=None)], stage, True)[0]
 
 
 def blocking(findings, stage):
@@ -193,7 +193,7 @@ def clip_correctives(sc, manifest):
     if manifest is None:
         return {}
     have = set(sc.corrective_names)
-    shown = {name for name, _ in M.shown(manifest, sc.check.get("seated", []))}
+    shown = {name for name, _ in M.shown(manifest, sc.check["shown"])}
     clips = json.loads(Path(manifest).read_text(encoding="utf-8"))["animations"]
     return {c["name"]: c["game"]["corrective"] for c in clips
             if c.get("game", {}).get("corrective") in have and c["name"] in shown}
@@ -492,7 +492,7 @@ def corrective_coverage(sc, manifest):
     if manifest is None:
         return []
     have = set(sc.corrective_names)
-    shown = {name for name, _ in M.shown(manifest, sc.check.get("seated", []))}
+    shown = {name for name, _ in M.shown(manifest, sc.check["shown"])}
     clips = json.loads(Path(manifest).read_text(encoding="utf-8"))["animations"]
     missing = {}
     for c in clips:
@@ -768,8 +768,8 @@ def gate_data(data, root, body=None):
         body = load_body(model, spec, lambda p: root / p)
     check = sc.check
     colliders = json.loads((root / check["colliders"]).read_text(encoding="utf-8")) if check.get("colliders") else None
-    # The clips the outfit is shown in: a seated clip it is not cleared for is no clip of its gates.
-    clips = [(REST, None)] + (M.shown(root / check["clips"], check.get("seated", [])) if check.get("clips") else [])
+    # The clips the game can show the outfit in, as its build recorded them: the only clips of its gates.
+    clips = [(REST, None)] + (M.shown(root / check["clips"], check["shown"]) if check.get("clips") else [])
     fabrics = check["fabrics"]
     gd = GateData(sidecar=bytes(data), model=str(model.path), body=(body.points, body.faces, body.weights, body.complete,
                                                                    body.rim_faces),

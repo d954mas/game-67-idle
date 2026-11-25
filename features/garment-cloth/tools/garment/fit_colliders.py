@@ -3,8 +3,10 @@ the outfit's clips, and write the set (garment.colliders.v1).
 
     python features/garment-cloth/tools/garment/fit_colliders.py content/garments/<outfit>.py <segments.json> <out.json>
 
-The script runs into scratch first (as check.py does), so the fit sees the sim meshes and maps of the stage it builds;
-the segments are the rig's body segments (joint pairs). Every reference sample that fails G4 is G4's, not a shape's.
+The script runs into scratch first (as check.py does, without its correctives, which are baked on these colliders),
+so the fit sees the sim meshes and maps of the stage it builds;
+the segments are the rig's body segments (joint pairs); the clips are those the game can show the outfit in
+(`Outfit.shown`). Every reference sample that fails G4 is G4's, not a shape's.
 The fit needs the declared complete body; the set's asset record (`<out>.provenance.json`) is written beside it and
 inherits origin and license from the body's own record."""
 import hashlib
@@ -15,7 +17,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from garment import build as Bd, check, colliders as C, model as M  # noqa: E402
+from garment import build as Bd, check, colliders as C  # noqa: E402
 from garment.sidecar import read  # noqa: E402
 
 
@@ -24,7 +26,8 @@ def main(argv=None):
     if len(argv) != 3:
         raise SystemExit(__doc__)
     script, segments_path, out = (Path(a) for a in argv)
-    outfit, data = check.build(script.resolve())
+    # The maps alone: the correctives are baked on the colliders this fit makes.
+    outfit, data = check.build(script.resolve(), correctives=False)
     sc = read(data)
     if not outfit.body.complete:
         raise SystemExit(f"{script}: the fit needs the outfit's declared complete body (B.3); the script builds on the "
@@ -37,8 +40,8 @@ def main(argv=None):
         w = np.zeros((len(p.points), len(rig.joints)))
         np.add.at(w, (np.arange(len(w))[:, None], p.joints.astype(int)), p.weights.astype(float))
         pieces.append(C.Piece(p.id, p.points.astype(float), p.faces, p.r.astype(float), w, authored.thickness))
-    # The clips the outfit is shown in: a seated clip it is not cleared for is none of them.
-    clips = C.clip_poses(outfit.model.glb, rig.joints, M.shown(outfit.clips, outfit.seated))
+    # The clips the game can show the outfit in: the fit holds no reference it never shows.
+    clips = C.clip_poses(outfit.model.glb, rig.joints, list(outfit.clip_paths().items()))
     segments = C.segments_from(json.loads(segments_path.read_text(encoding="utf-8")))
     g4 = C.g4_failing(outfit.body, pieces, clips)
     shapes = C.fit(outfit.body, rig, segments, pieces, clips, g4)

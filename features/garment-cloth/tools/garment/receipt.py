@@ -16,8 +16,8 @@ the declared stage is refused by the rule `check.py`'s exit code applies (`gates
 
 What a check reads (`files`, relative to the game root, and `modules`, relative to the Studio root): the outfit's
 script and declaration, its committed sidecar, every file the build read (`extras.build.inputs`), the model and the
-declared body, the files the gates read (`extras.check`: colliders, clip manifest and every clip the outfit is shown in,
-looks), the Python
+declared body, the files the gates read (`extras.check`: colliders, clip manifest and every clip the game can show the
+outfit in, `shown`; looks), the Python
 modules the script imports (`extras.build.modules`) and those of `check.py`; `versions` holds the Python, numpy and scipy
 versions and `library` the feature version. Text files are hashed with LF line ends (garment.build.sha256)."""
 import hashlib
@@ -57,7 +57,7 @@ def _files(root, script, sidecar_path, sc):
         names.add(root / check["colliders"])
     if check.get("clips"):
         names.add(root / check["clips"])
-        names |= {Path(p).resolve() for _, p in M.shown(root / check["clips"], check.get("seated", []))}
+        names |= {Path(p).resolve() for _, p in M.shown(root / check["clips"], check["shown"])}
     names |= {root / p for p in check.get("looks", [])}
     return {p.resolve() for p in names}
 

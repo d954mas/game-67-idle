@@ -581,7 +581,11 @@ class Outfit:
     (the checks read them; a build reads the clips for the layer rule and a bake reads all but the looks); seats:
     {seated clip: the game's seat convex as (n, d) plane rows in actor space, or {"planes": rows, "source": the model
     the seat is measured on}}, the input of the game's gate G10 and of a seated bake; or a function that returns them
-    from a reader of game files (`read(relative path) -> path`), so every file the seats come from is a build input.
+    from a reader of game files (`read(relative path) -> path`), so every file the seats come from is a build input;
+    places: the clips the game's own places (a directed shot) show this outfit in besides the manifest's gameplay
+    clips (`game.gameplay`). The build, its bakes, the collider fit and the gates read exactly the clips the game can
+    show the outfit in (`shown`, recorded in `extras.check`): the gameplay clips, the places' clips and the seated clips
+    the declaration clears. The game's cook compares every place with that record.
 
     The outfit's declaration (`<script>.json` beside the script, the stage the game ships) is the one source of its
     colliders: a build input, so a changed declaration makes the sidecar stale. Its `colliders` are the body shapes
@@ -591,7 +595,7 @@ class Outfit:
     instances = []
 
     def __init__(self, script, root, model, body, fabrics, colliders=None, clips=None, looks=(), seats=None,
-                 seated=None):
+                 seated=None, places=()):
         self.root = Path(root).resolve()
         self.script = None if script is None else Path(script).resolve()
         self.inputs = {}
@@ -625,6 +629,10 @@ class Outfit:
             if set(self.seated) - known:
                 raise ValueError(f"the outfit is cleared for {sorted(set(self.seated) - known)}, which the clip manifest "
                                  f"does not mark seated (its seated clips: {sorted(known)})")
+        if places and self.clips is None:
+            raise ValueError("places name clips of a clip manifest; declare the outfit's clips")
+        # The clips the game can show the outfit in, what its build, bakes, fits and gates read.
+        self.shown = [] if self.clips is None else Mo.gated(self.clips, self.seated, places)
         self.looks = [self.root / look for look in looks]
         given = dict((seats(self._input) if callable(seats) else seats) or {})
         if self.clips is not None:
@@ -674,12 +682,12 @@ class Outfit:
         return self._input(path)
 
     def clip_paths(self):
-        """{name: path} of the clips the outfit is shown in (its manifest, read as a build input, without the seated
-        clips it is not cleared for)."""
+        """{name: path} of the clips the outfit is shown in (`shown`: its manifest's gameplay clips, the clips of its
+        places and the seated clips it is cleared for; the manifest is read as a build input)."""
         if self.clips is None:
             return {}
         self._input(self.clips)
-        return dict(Mo.shown(self.clips, self.seated))
+        return dict(Mo.shown(self.clips, self.shown))
 
     def clip_entries(self):
         if self.clips is None:
@@ -716,6 +724,9 @@ class Outfit:
             if seated and clip not in self.seated:
                 raise ValueError(f"corrective {name!r}: the outfit is not cleared for the seated clip {clip!r}; clear "
                                  "it in the declaration's seated")
+            if clip not in self.shown:
+                raise ValueError(f"corrective {name!r}: the game does not show the outfit in {clip!r} (no gameplay clip, "
+                                 "no place of the outfit plays it), so no gate would read it")
             if convexes is None:
                 if seated and clip not in self.seats:
                     raise ValueError(f"corrective {name!r}: {clip!r} is a seated clip and the outfit declares no seat "
@@ -814,8 +825,9 @@ class Outfit:
         3. the backstop b, d, R of every piece from the body (needs the final mesh and pins);
         4. the layer rule (needs the weights, b, d and r; it shares weights, sets the outer d and limits the inner r);
         5. the script's overrides of d and R, in the order it wrote them;
-        6. the correctives, in the order declared (each needs every map final)."""
-        digest = self._digest()
+        6. the correctives, in the order declared (each needs every map final; GARMENT_CORRECTIVES=0 leaves them out).
+        """
+        digest = self._digest() + os.environ.get("GARMENT_CORRECTIVES", "")
         if self._resolved is not None and self._resolved[0] == digest:
             return self._resolved[1]
         pieces = {p.id: copy.copy(p) for p in self.pieces}
@@ -850,7 +862,8 @@ class Outfit:
             _overrides(p, p.d, p.R)
         ordered = [pieces[p.id] for p in self.pieces]
         records = []
-        if self.corrective_requests:
+        # GARMENT_CORRECTIVES=0: the maps alone, for the collider fit; a bake collides with the colliders it makes.
+        if self.corrective_requests and os.environ.get("GARMENT_CORRECTIVES") != "0":
             from . import corrective as C
             committed = self._committed()
             for request in self.corrective_requests:
@@ -1040,7 +1053,7 @@ class Outfit:
         relative = lambda p: None if p is None else Path(p).resolve().relative_to(self.root).as_posix()  # noqa: E731
         return {"colliders": relative(self.colliders), "clips": relative(self.clips),
                 "fabrics": {p.id: self.fabrics[p.fabric] for p in self.pieces},
-                "looks": [relative(p) for p in self.looks], "seated": list(self.seated),
+                "looks": [relative(p) for p in self.looks], "seated": list(self.seated), "shown": list(self.shown),
                 "seats": {clip: np.asarray(planes, float).reshape(-1, 4).tolist() for clip, planes in sorted(self.seats.items())}}
 
     def sidecar(self, pieces, records, findings=()):

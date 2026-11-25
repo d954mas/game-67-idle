@@ -293,6 +293,103 @@ class TestHost(unittest.TestCase):
         finally:
             scene.close()
 
+    def test_a_layered_corrective_keeps_the_layer_order_at_its_key(self):
+        # A coat over the skirt, both on the joint that steps forward into the body's side at the key: the bake drapes
+        # each piece against the body alone (no cloth-to-cloth contact), so both end on the body and the coat in the
+        # skirt unless the bake gives the corrected configuration the room the layer rule needs.
+        import json
+        import test_authoring as A
+        from garment import gates
+        from garment import sidecar as sc
+        from garment.model import Surface
+        scene = A.Scene(A.cylinder_scene())
+        previous = os.environ.get("GARMENT_HOST")
+        try:
+            (scene.root / "colliders.json").write_text(json.dumps(A.COLLIDERS), encoding="utf-8")
+            if LIBRARY:
+                os.environ["GARMENT_HOST"] = str(LIBRARY)
+            o = Outfit(None, scene.root, "model.glb", body=["skin"], fabrics={"plain": A.FABRIC}, colliders="colliders.json")
+            inner = A.skirt(o)
+            outer = o.piece("over", 2, "plain")
+            x, f = A.tube(0.0, 0.16, 0.55, 0.88, around=24, rows=8)
+            outer.set_mesh(x, f)
+            outer.pin(outer.f.y > 0.879)
+            outer.weights_transfer(Surface(inner.x, inner.faces, inner.w, inner.joints))
+            outer.gradient(rate=0.5, cap=0.2)
+            o.layer("over", "skirt")
+            key = np.tile(np.eye(4), (3, 1, 1))
+            key[1, 2, 3] = 0.06
+            o.corrective("lean", pose=key, convexes=[])
+            data = sc.write(o.built())
+            record, = sc.read(data).correctives
+            self.assertTrue(record["converged"])
+            spec, = gates.corrective_specs(sc.read(data), [])
+            g8 = gates.clip_gates(A.gate_data(o, data), spec, ("G8",))[("G8", "over>skirt", "lean")]
+            self.assertGreater(g8["samples"], 0)
+            self.assertFalse(g8["failed"], g8["worst"])
+            self.assertEqual(record["layers"]["over>skirt"]["short"], 0)
+        finally:
+            os.environ.pop("GARMENT_HOST", None) if previous is None else os.environ.__setitem__("GARMENT_HOST", previous)
+            scene.close()
+
+    def test_a_drape_whose_outer_layer_sank_into_the_inner_is_moved_out_by_the_room_the_layer_rule_needs(self):
+        # A coat drape pushed 25 mm into the skirt over its free lower part (gravity on a lap does this: the bake has no
+        # cloth-to-cloth contact): as drawn, the layer gate fails at the key; with the layer room the coat moves out
+        # until every gap leaves the skirt its max distance and both fabrics, and its key distance is the room left.
+        import test_authoring as A
+        from garment import gates
+        from garment import model as Mo
+        from garment import sidecar as sc
+        from garment.model import Surface
+        scene = A.Scene(A.cylinder_scene())
+        try:
+            o = Outfit(None, scene.root, "model.glb", body=["skin"], fabrics={"plain": A.FABRIC})
+            inner = A.skirt(o)
+            outer = o.piece("over", 2, "plain")
+            x, f = A.tube(0.0, 0.16, 0.55, 0.88, around=24, rows=8)
+            outer.set_mesh(x, f)
+            outer.pin(outer.f.y > 0.879)
+            outer.weights_transfer(Surface(inner.x, inner.faces, inner.w, inner.joints))
+            outer.gradient(rate=0.5, cap=0.2)
+            o.layer("over", "skirt")
+            built = o.built()
+            colliders = dict(spheres=[], cones=[])
+            from garment import cook
+            blob = cook.cook_blob("synthetic", built, o.model, o.fabrics, colliders, (0.0, 0.0))[0]
+            decoded = decode(blob)
+            glb = o.model.glb
+            skeleton = Skeleton.from_glb(glb)
+            key = C.H.rest_pose(glb, skeleton)
+            frames = Mo.skin_matrices(glb, built.joint_names, built.inverse_bind_matrices(), Mo.rest_worlds(glb))
+            coat = built.piece("over")
+            sunk = coat.points.astype(float).copy()
+            free = (coat.r > 0) & (coat.points[:, 1] < 0.8)
+            radial = sunk * [1, 0, 1]
+            sunk[free] -= 0.025 * radial[free] / np.linalg.norm(radial[free], axis=1, keepdims=True)
+            drape = [built.piece("skirt").points.astype(float), sunk]
+            maps = C.body_rule(decoded, o.body, [A.FABRIC["thickness"]] * 2)
+
+            def gated(shapes):
+                for p, shape in zip(built.pieces, shapes):
+                    p.correctives["sit"] = tuple(np.asarray(a, np.float32) for a in shape)
+                built.correctives = [dict(name="sit", pose=dict(joints=A.JOINTS, matrices=np.tile(np.eye(4), (3, 1, 1)).tolist()))]
+                data = sc.write(built)
+                spec, = gates.corrective_specs(sc.read(data), [])
+                return gates.clip_gates(A.gate_data(o, data), spec, ("G8",))[("G8", "over>skirt", "sit")]
+            plain, record = C.drape_shapes(decoded, key, skeleton, drape, maps)
+            self.assertEqual(record, {})
+            self.assertTrue(gated(plain)["failed"])
+            room = C.LayerRoom(built, o.layer_rules, o.body, [A.FABRIC["thickness"]] * 2, frames)
+            layered, record = C.drape_shapes(decoded, key, skeleton, drape, maps, room)
+            self.assertGreater(record["over>skirt"]["moved"], 0)
+            self.assertEqual(record["over>skirt"]["short"], 0)
+            self.assertGreater(record["over>skirt"]["moved_mm"], 10.0)
+            result = gated(layered)
+            self.assertGreater(result["samples"], 0)
+            self.assertFalse(result["failed"], result["worst"])
+        finally:
+            scene.close()
+
     def test_a_skeleton_without_the_blob_joints_is_refused(self):
         with self.assertRaisesRegex(ValueError, "missing joints"):
             Host(self.blob, Skeleton(["other"], [-1]), LIBRARY)

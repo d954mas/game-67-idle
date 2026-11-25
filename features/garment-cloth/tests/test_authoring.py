@@ -709,7 +709,7 @@ class TestCook(unittest.TestCase):
             [("cloth", cloth_p, cloth_f, *lanes(len(cloth_p), 0), {})], JOINTS,
             animation={"left": ([0.0, 0.5, 1.0], np.array([[0, 0, 0], [0.02, 0, 0], [0, 0, 0.02]]))}))
         (self.scene.root / "clips.json").write_text(json.dumps({"animations": [
-            {"name": "moved", "resource": "moved.glb"}]}), encoding="utf-8")
+            {"name": "moved", "resource": "moved.glb", "game": {"gameplay": True}}]}), encoding="utf-8")
         o = self.scene.outfit(clips="clips.json")
         inner = skirt(o)
         outer = o.piece("over", 2, "plain")
@@ -731,7 +731,7 @@ class TestCook(unittest.TestCase):
             [("cloth", cloth_p, cloth_f, *lanes(len(cloth_p), 0), {})], JOINTS,
             animation={"left": ([0.0, 0.5, 1.0], np.zeros((3, 3)))}))
         (self.scene.root / "clips.json").write_text(json.dumps({"animations": [
-            {"name": "held", "resource": "held.glb"}]}), encoding="utf-8")
+            {"name": "held", "resource": "held.glb", "game": {"gameplay": True}}]}), encoding="utf-8")
         built = []
         for o in (self.o, self.scene.outfit(clips="clips.json")):
             inner = skirt(o)
@@ -798,6 +798,7 @@ class TestCook(unittest.TestCase):
         inward = np.where(free, (piece.points * [1, 0, 1]) * -(CLOTH_R - 0.5 * BODY_R) / CLOTH_R, 0.0)
         piece.correctives["in"] = (inward.astype(np.float32), np.zeros_like(piece.points), np.column_stack([piece.d, piece.R]))
         built.correctives = [dict(name="in", clip="held", t=0.5)]
+        built.check["shown"] = ["held", "other"]
         data = sc.write(built)
         gd = gate_data(self.o, data, complete=True)
         spec = ("held", self.scene.root / "held.glb")
@@ -929,7 +930,7 @@ class TestCook(unittest.TestCase):
     def test_a_seated_clip_without_a_seat_is_refused(self):
         (self.scene.root / "clips.json").write_text(json.dumps({"animations": [
             {"name": "sit", "resource": "model.glb", "game": {"state": "seated"}},
-            {"name": "walk", "resource": "model.glb"}]}), encoding="utf-8")
+            {"name": "walk", "resource": "model.glb", "game": {"gameplay": True}}]}), encoding="utf-8")
         (self.scene.root / "colliders.json").write_text("{}", encoding="utf-8")
         o = self.scene.outfit(colliders="colliders.json", clips="clips.json", seated=["sit"])
         skirt(o)
@@ -941,38 +942,79 @@ class TestCook(unittest.TestCase):
         o.corrective("walk", clip="walk", t=0.5)
         self.assertEqual([r["convexes"] for r in o.corrective_requests], [[], []])
 
-    def test_an_outfit_is_built_and_gated_only_on_the_seated_clips_it_is_cleared_for(self):
+    def test_an_outfit_is_built_and_gated_only_on_the_clips_the_game_can_show_it_in(self):
+        # walk is a gameplay clip (any outfit), kick and squat are not; a place shows this outfit in kick and seats it
+        # in perch, which its declaration does not clear.
         (self.scene.root / "clips.json").write_text(json.dumps({"animations": [
             {"name": "sit", "resource": "model.glb", "game": {"state": "seated"}},
             {"name": "perch", "resource": "model.glb", "game": {"state": "seated", "corrective": "perch"}},
-            {"name": "walk", "resource": "model.glb"}]}), encoding="utf-8")
+            {"name": "walk", "resource": "model.glb", "game": {"gameplay": True}},
+            {"name": "kick", "resource": "model.glb"},
+            {"name": "squat", "resource": "model.glb", "game": {"corrective": "squat"}}]}), encoding="utf-8")
         (self.scene.root / "colliders.json").write_text(json.dumps(COLLIDERS), encoding="utf-8")
         seat = [[0.0, 1.0, 0.0, -0.2]]
         with self.assertRaisesRegex(ValueError, "does not mark seated"):
             self.scene.outfit(clips="clips.json", seated=["walk"])
+        with self.assertRaisesRegex(ValueError, "not in"):
+            self.scene.outfit(clips="clips.json", places=["dance"])
         o = self.scene.outfit(colliders="colliders.json", clips="clips.json", seats={"sit": seat, "perch": seat},
-                              seated=["sit"])
+                              seated=["sit"], places=["kick", "perch"])
         skirt(o)
-        self.assertEqual(sorted(o.clip_paths()), ["sit", "walk"])
+        self.assertEqual(list(o.clip_paths()), ["sit", "walk", "kick"])
         self.assertEqual(sorted(o.seats), ["sit"])
         with self.assertRaisesRegex(ValueError, "not cleared"):
             o.corrective("perch", clip="perch", t=0.0, convexes=[])
+        with self.assertRaisesRegex(ValueError, "does not show the outfit"):
+            o.corrective("squat", clip="squat", t=0.0)
         data = sc.write(o.built())
+        self.assertEqual(sc.read(data).check["shown"], ["sit", "walk", "kick"])
         gd = gates.gate_data(data, self.scene.root)[0]
-        self.assertEqual([c[0] for c in gd.clips], [gates.REST, "sit", "walk"])
+        self.assertEqual([c[0] for c in gd.clips], [gates.REST, "sit", "walk", "kick"])
         self.assertEqual(sorted(gd.seats), ["sit"])
-        # The perch clip names a corrective the outfit lacks, but the outfit is not shown in it: nothing to report.
+        # perch and squat name correctives the outfit lacks, but the game does not show it there: nothing to report.
         self.assertEqual(gates.corrective_coverage(sc.read(data), self.scene.root / "clips.json"), [])
 
-    def test_a_game_place_that_seats_an_outfit_in_a_clip_it_is_not_cleared_for_fails_from_stage_2(self):
-        uses = [("shot a", "sit"), ("shot b", "perch"), ("shot b", "walk")]
+    def test_the_collider_fit_builds_the_maps_without_baking_the_correctives(self):
+        # The bake collides with the colliders the fit is about to make, so the fit must not need a bake: its build
+        # stops before the correctives (here no host exists at all), and every map it reads is the full build's.
+        import os
+        from garment import check
+        (self.scene.root / "colliders.json").write_text(json.dumps(COLLIDERS), encoding="utf-8")
+        script = self.scene.root / "outfit.py"
+        script.write_text(f"""import sys
+sys.path.insert(0, {str(HERE.parent / 'tools')!r})
+from garment.outfit import Outfit
+import numpy as np
+o = Outfit(__file__, {str(self.scene.root)!r}, "model.glb", body=["skin"], fabrics={{"plain": {FABRIC!r}}},
+           colliders="colliders.json")
+p = o.piece("skirt", 1, "plain")
+p.create("cloth", 120)
+p.pin(p.from_render(~p.render.labelled | (p.render.height <= 0.1)))
+p.weights_transfer(p.render.surface(), nearest=4)
+p.gradient(rate=0.5, cap=0.2)
+o.corrective("lean", pose=np.tile(np.eye(4), (3, 1, 1)), convexes=[])
+o.write()
+""", encoding="utf-8")
+        previous = os.environ.get("GARMENT_HOST")
+        os.environ["GARMENT_HOST"] = str(self.scene.root / "no-such-host.dll")
+        try:
+            outfit, data = check.build(script, correctives=False)
+        finally:
+            os.environ.pop("GARMENT_HOST") if previous is None else os.environ.__setitem__("GARMENT_HOST", previous)
+        built = sc.read(data)
+        self.assertEqual(built.correctives, [])
+        self.assertTrue((built.piece("skirt").r > 0).any())
+        self.assertNotIn("GARMENT_CORRECTIVES", os.environ)
+
+    def test_a_game_place_that_shows_an_outfit_in_a_clip_its_gates_did_not_read_fails_from_stage_2(self):
+        uses = [("gameplay", "walk"), ("shot a", "sit"), ("shot b", "perch"), ("shot b", "kick")]
         for stage, blocks in ((1, False), (2, True)):
-            finding = gates.seated_uses("office", ["sit"], uses, {"sit", "perch"}, stage)
+            finding = gates.shown_uses("office", ["walk", "sit"], uses, stage)
             self.assertTrue(finding["failed"])
-            self.assertEqual(finding["clips"], {"perch": ["shot b"]})
+            self.assertEqual(finding["clips"], {"kick": ["shot b"], "perch": ["shot b"]})
             self.assertEqual(bool(gates.blocking([finding], stage)), blocks)
-        cleared = gates.seated_uses("office", ["sit", "perch"], uses, {"sit", "perch"}, 2)
-        self.assertFalse(gates.blocking([cleared], 2))
+        gated = gates.shown_uses("office", ["walk", "sit", "perch", "kick"], uses, 2)
+        self.assertFalse(gates.blocking([gated], 2))
 
 
 COLLIDERS = dict(schema="garment.colliders.v1", body_sha256="", cones=[[0, 1]],
